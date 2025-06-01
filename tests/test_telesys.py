@@ -1,0 +1,105 @@
+from unittest import TestCase
+
+
+class TestTelePySys(TestCase):
+    def test_telepysys_version(self):
+        import telepy
+
+        v = telepy.__version__
+        self.assertTrue(v is not None and v != "")
+
+    def test_telepysys_current_stacks(self):
+        import telepy
+
+        call_stack = telepy.current_stacks()
+
+        self.assertGreater(len(call_stack), 0)
+        for _, val in call_stack.items():
+            self.assertTrue(val is not None and len(val) > 0)
+
+    def test_telepysys_pretty_stack(self):
+        import threading
+
+        import telepy
+
+        def fib(n: int) -> int:
+            if n <= 1:
+                return n
+            else:
+                return fib(n - 1) + fib(n - 2)
+
+        tids = set()
+        t = threading.Thread(target=fib, args=(30,))
+        t.start()
+        tids.add(t.ident)
+        tids.add(threading.get_ident())
+        call_stack = telepy.current_stacks()
+        for key, value in telepy.join_current_stacks(call_stack).items():
+            self.assertIn("fib", value)
+            self.assertIn("tests/test_telesys.py", value)
+            break
+        t.join()
+        self.assertEqual(tids, set(call_stack.keys()))
+
+    def test_current_frames(self):
+        import threading
+
+        import telepy
+
+        def fib(n: int) -> int:
+            if n <= 1:
+                return n
+            return fib(n - 1) + fib(n - 2)
+
+        t = threading.Thread(target=fib, args=(10,))
+        t.start()
+        frames = telepy.current_frames()
+        for tid, frame in frames.items():
+            self.assertIn(tid, [t.ident, threading.get_ident()])
+            if "telepy" not in frame.f_code.co_filename:
+                self.assertIn("tests/test_telesys.py", frame.f_code.co_filename)
+                self.assertIn("fib", frame.f_code.co_name)
+
+    def test_static_cls_method(self):
+        import threading
+
+        import telepy
+
+        class Fib:
+            @staticmethod
+            def fib(n):
+                if n < 2:
+                    return n
+                return Fib.fib(n - 1) + Fib.fib(n - 2)
+
+            @classmethod
+            def bar(cls, n: int) -> int:
+                if n < 2:
+                    return n
+                return cls.bar(n - 1) + cls.bar(n - 2)
+
+        tids = set()
+        t = threading.Thread(target=Fib.fib, args=(30,))
+        t.start()
+        tids.add(t.ident)
+        tids.add(threading.get_ident())
+        call_stack = telepy.current_stacks()
+        for tid, value in telepy.join_current_stacks(call_stack).items():
+            if tid != threading.get_ident():
+                self.assertIn("Fib.fib", value)
+            break
+        t.join()
+        self.assertEqual(tids, set(call_stack.keys()))
+
+        tids.clear()
+        t = threading.Thread(target=Fib.bar, args=(30,))
+        t.start()
+        tids.add(t.ident)
+        tids.add(threading.get_ident())
+        call_stack = telepy.current_stacks()
+        for tid, value in telepy.join_current_stacks(call_stack).items():
+            if tid != threading.get_ident():
+                self.assertIn("Fib.bar", value)
+            break
+        t.join()
+        self.assertEqual(tids, set(call_stack.keys()))
