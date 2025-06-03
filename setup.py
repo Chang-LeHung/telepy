@@ -2,6 +2,8 @@ import sys
 
 from setuptools import Extension, find_packages, setup  # type: ignore
 
+import telepy
+
 ext_modules = [
     Extension(
         name="telepy._telepysys",
@@ -14,7 +16,7 @@ ext_modules = [
 
 setup(
     name="telepy",
-    version="0.1.0",
+    version=telepy.__version__,
     description="A Python diagnostic tool.",
     author="changlehung",
     author_email="changlehung@gmail.com",
