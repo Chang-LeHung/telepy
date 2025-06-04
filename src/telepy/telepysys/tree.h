@@ -20,6 +20,10 @@ AddCallStack(struct StackTree* tree, const char* callstack);
 void
 Dump(struct StackTree* tree, const char* filename);
 
+// returns a string that should be freed by caller (ownership returned )
+char*
+Dumps(struct StackTree* tree);
+
 #ifdef __cplusplus
 }
 #endif

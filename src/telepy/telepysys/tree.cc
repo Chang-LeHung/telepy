@@ -6,12 +6,15 @@
 #include <sstream>
 #include <cassert>
 #include <utility>
-#include <cstdio>
 #include <iostream>
+#include <fstream>
+#include <cstdlib>
+
 
 struct Node {
-    int idx;   // name idx in symbol table
-    long cnt;  // called count
+    std::string name;
+    unsigned long cnt;      // called count
+    unsigned long acc_cnt;  // accumulated count
     Node* child;
     Node* sibling;
 
@@ -34,89 +37,93 @@ split(const char* s, char delim, std::vector<std::string>& elems) {
 
 
 struct StackTree {
-    std::unordered_map<std::string, int> symbols;
     Node* root;
-
-#define ContainSymbol(s) (symbols.find(s) != symbols.end())
+#define NAME "root"
+#define DLIM ';'
 
     StackTree() {
         root = new Node();
         root->child = nullptr;
         root->sibling = nullptr;
-        AddNode(root, "root");
-    }
-
-    void AddNode(Node* node, const std::string& name) {
-        auto it = symbols.find(name);
-        if (it == symbols.end()) {
-            symbols[name] = symbols.size();
-        }
-        node->idx = symbols[name];
+        root->name = NAME;
     }
 
     // callstack exmplae: main.py:hello:world
     void AddCallStack(const char* callstack) {
         std::vector<std::string> names;
-        split(callstack, ':', names);
-        auto& node = root;
+        split(callstack, DLIM, names);
+        auto node = root;
         for (const auto& s : names) {
             assert(node != nullptr);
-            if (__builtin_expect(!ContainSymbol(s), false)) {
-                // fast path
-                // insert new node instead of searching
-                Node* new_node = new Node();
-                if (node->child == nullptr) {
-                    node->child = new_node;
-                } else {
-                    new_node->sibling = node->child->sibling;
-                    node->child->sibling = new_node;
+            node->acc_cnt++;
+            if (node->child != nullptr) {
+                Node* next = node->child;
+                Node* prev = nullptr;
+                while (next != nullptr && next->name != s) {
+                    // optimize for most common case
+                    if (prev != nullptr && prev->acc_cnt < next->acc_cnt) {
+                        std::swap(prev->name, next->name);
+                        std::swap(prev->cnt, next->cnt);
+                        std::swap(prev->acc_cnt, next->acc_cnt);
+                        std::swap(prev->child, next->child);
+                    }
+                    prev = next;
+                    next = next->sibling;
                 }
-                AddNode(new_node, s);
-                node = new_node;
-            } else {
-                // slow path
-                if (node->child != nullptr) {
-                    Node* next = node->child;
-                    Node* prev = nullptr;
-                    while (next != nullptr && next->idx != symbols[s]) {
-                        // optimize for most common case
-                        if (prev != nullptr && prev->cnt < next->cnt) {
-                            std::swap(node->idx, next->idx);
-                            std::swap(node->cnt, next->cnt);
-                            std::swap(node->child, next->child);
-                        }
-
-                        prev = next;
-                        next = next->sibling;
-                    }
-                    if (next != nullptr) {
-                        node = next;
-                    } else {
-                        assert(prev != nullptr);
-                        Node* new_node = new Node();
-                        prev->sibling = new_node;
-                        AddNode(new_node, s);
-                        node = new_node;
-                    }
+                if (next != nullptr) {
+                    node = next;
                 } else {
+                    assert(prev != nullptr);
                     Node* new_node = new Node();
-                    node->child = new_node;
-                    AddNode(new_node, s);
+                    prev->sibling = new_node;
                     node = new_node;
+                    node->name = s;
                 }
+            } else {
+                Node* new_node = new Node();
+                node->child = new_node;
+                node = new_node;
+                node->name = s;
             }
         }
         node->cnt++;  // only leaf node can increment count
+        node->acc_cnt++;
     }
 
-    void traverse(Node* node, std::function<void(Node*)> func) {
-        func(node);
-        if (node->child != nullptr) {
-            traverse(node->child, func);
-        }
-        if (node->sibling != nullptr) {
-            traverse(node->sibling, func);
-        }
+    void Save(std::ostream& out) {
+        std::vector<std::string> res;
+        std::vector<int> lens;
+        std::function<void(Node*)> f = [&](Node* node) {
+            if (node == nullptr) {
+                return;
+            }
+
+            // ignore root
+            if (node->name != NAME) {
+                lens.emplace_back(node->name.size());
+                res.emplace_back(node->name);
+            }
+
+            f(node->child);
+
+            if (node->cnt > 0) {
+                for (size_t i = 0; i < res.size(); ++i) {
+                    out << res[i];
+                    if (i + 1 < res.size()) {
+                        out << DLIM;
+                    }
+                }
+                out << ' ' << node->cnt << '\n';
+            }
+
+            if (node->name != NAME) {
+                res.pop_back();
+                lens.pop_back();
+            }
+
+            f(node->sibling);
+        };
+        f(root);
     }
 
     virtual ~StackTree() { delete root; }
@@ -134,7 +141,19 @@ FreeTree(StackTree* tree) {
 
 void
 Dump(StackTree* tree, const char* filename) {
-    // TODO
+    std::ofstream out(filename);
+    tree->Save(out);
+    out.close();
+}
+
+char*
+Dumps(StackTree* tree) {
+    std::ostringstream s;
+    tree->Save(s);
+    char* res = (char*)malloc(s.str().size() + 1);
+    // use memcpy
+    memcpy(res, s.str().c_str(), s.str().size() + 1);
+    return res;  // move res to caller
 }
 
 void
@@ -144,22 +163,106 @@ AddCallStack(StackTree* tree, const char* callstack) {
 
 
 #ifdef TELEPY_TEST
-void
-TestCase1() {}
+
+
+#define Green "\033[32m"
+#define Reset "\033[0m"
+#define SuccessMessage(msg) Green msg Reset
 
 
 void
-TestCase2() {}
+TestCaseSingle() {
+    auto tree = new StackTree();
+    tree->AddCallStack("main.py;hello;world");
+    tree->AddCallStack("main.py;hello;world");
+    tree->AddCallStack("main.py;hello;world");
+    tree->AddCallStack("main.py;hello;world");
+    std::ostringstream s;
+    tree->Save(s);
+    assert(s.str() == "main.py;hello;world 4\n");
+    std::cout << SuccessMessage("Test case single stack trace passed")
+              << std::endl;
+    delete tree;
+}
 
 
 void
-TestCase3() {}
+TestCaseMultiply() {
+    auto tree = new StackTree();
+    tree->AddCallStack("main.py;hello;world");
+    tree->AddCallStack("main.py;hello;world");
+    tree->AddCallStack("main.py;hello;x");
+    tree->AddCallStack("main.py;hello;world");
+    std::ostringstream s;
+    tree->Save(s);
+    assert(s.str() == "main.py;hello;world 3\nmain.py;hello;x 1\n");
+    std::cout << SuccessMessage("Test case multiply stack traces passed")
+              << std::endl;
+    delete tree;
+}
+
+
+void
+TestCaseOrderExchange() {
+    auto tree = new StackTree();
+    tree->AddCallStack("main.py;hello;world");
+    tree->AddCallStack("main.py;hello;world");
+    tree->AddCallStack("main.py;hello;x");
+    tree->AddCallStack("main.py;hello;world");
+    tree->AddCallStack("main.py;hello;b");
+    tree->AddCallStack("main.py;hello;b");
+    tree->AddCallStack("main.py;hello;b");
+    tree->AddCallStack("main.py;hello;b");
+    tree->AddCallStack("main.py;hello;b");
+    tree->AddCallStack("main.py;hello;x");
+    tree->AddCallStack("main.py;hello;x");
+    tree->AddCallStack("main.py;hello;x");
+    tree->AddCallStack("main.py;hello;x");
+    tree->AddCallStack("main.py;hello;x");
+    tree->AddCallStack("main.py;hello;x");
+    tree->AddCallStack("main.py;hello;x");
+    tree->AddCallStack("main.py;hello;b");
+    tree->AddCallStack("main.py;hello;c");
+    std::ostringstream s;
+    tree->Save(s);
+    std::string res = "main.py;hello;x 8\n";
+    res += "main.py;hello;b 6\n";
+    res += "main.py;hello;world 3\n";
+    res += "main.py;hello;c 1\n";
+    assert(s.str() == res);
+    std::cout << SuccessMessage("Test case order exchange passed")
+              << std::endl;
+    delete tree;
+}
+
+
+void
+TestCaseComplicated() {
+    auto tree = new StackTree();
+    tree->AddCallStack("MainThread;main.py;hello;world");
+    tree->AddCallStack("main.py;hello;world");
+    tree->AddCallStack("main.py;hello;x");
+    tree->AddCallStack("main.py;hello;world");
+    tree->AddCallStack("main.py;hello;b");
+    tree->AddCallStack("MainThread;main.py;hello;world");
+
+    std::ostringstream s;
+    tree->Save(s);
+    std::string res = "MainThread;main.py;hello;world 2\n";
+    res += "main.py;hello;world 2\n";
+    res += "main.py;hello;x 1\n";
+    res += "main.py;hello;b 1\n";
+    assert(s.str() == res);
+    std::cout << SuccessMessage("Test case complicated passed") << std::endl;
+    delete tree;
+}
 
 
 int
 main() {
-    TestCase1();
-    TestCase2();
-    TestCase3();
+    TestCaseSingle();
+    TestCaseMultiply();
+    TestCaseOrderExchange();
+    TestCaseComplicated();
 }
 #endif
