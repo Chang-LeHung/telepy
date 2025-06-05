@@ -1,3 +1,3 @@
-recursive-include src/telepy/telepysys *.h
+recursive-include src/telepy *.h *.c *.cc *.pyi py.typed
 include README.md
 include LICENSE
