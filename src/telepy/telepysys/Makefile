@@ -1,7 +1,7 @@
 
 
 CXX ?= $(if $(shell which g++),g++)
-CXXFLAGS = -Wall -Wextra -std=c++11 -DTELEPY_TEST
+CXXFLAGS = -Wall -Wextra -std=c++11 -DTELEPY_TEST -g
 
 TEST_SRC = tree.cc
 
@@ -12,10 +12,10 @@ TEST_TARGET = tree_test
 all: $(TEST_TARGET)
 
 $(TEST_TARGET): $(TEST_SRC)
-	$(CXX) $(CXXFLAGS) $< -o $@
+	@$(CXX) $(CXXFLAGS) $< -o $@
 
 test: $(TEST_TARGET)
-	./$(TEST_TARGET)
+	@./$(TEST_TARGET)
 
 clean:
 	rm -f $(TEST_TARGET)
