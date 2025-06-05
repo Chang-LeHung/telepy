@@ -33,9 +33,11 @@ typedef struct {
     PyObject_HEAD;
     PyObject* sampling_thread;
     PyObject* sampling_interval;  // in microseconds
+    PyObject* debug;              // to switch to verbose mode
     struct StackTree* tree;
     unsigned long sampling_tid;  // thread id of the sampling thread
-    unsigned long sampling_times;
+    unsigned long
+        sampling_times;  //  number of times the sampling thread has run
 
     // profiling data
     Telepy_time acc_sampling_time;  // accumulated sampling time

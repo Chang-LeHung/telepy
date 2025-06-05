@@ -167,9 +167,9 @@ get_thread_name(PyObject* threads, PyObject* thread_id) {
         if (PyErr_Occurred()) {
             return NULL;
         }
+        Py_DECREF(ident);
         if (PyObject_RichCompareBool(ident, thread_id, Py_EQ)) {
             PyObject* name = PyObject_GetAttrString(thread, "name");
-            Py_DECREF(ident);
             return name;
         }
     }
@@ -253,6 +253,15 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
         Py_DECREF(threads);
         Telepy_time sampler_end = unix_micro_time();
         self->acc_sampling_time += sampler_end - sampler_start;
+        if (Py_IsTrue(self->debug)) {
+            printf("Telepysys Debug Info: sampling cnt: %ld, interval: %ld, "
+                   "overhead time: %llu stack: "
+                   "%s\n",
+                   self->sampling_times,
+                   PyLong_AsLong(self->sampling_interval),
+                   sampler_end - sampler_start,
+                   buf);
+        }
     }
     free(buf);
     Py_DECREF(self);
@@ -402,6 +411,47 @@ Sampler_get_acc_sampling_time(SamplerObject* self, void* Py_UNUSED(closure)) {
     return PyLong_FromLongLong(self->acc_sampling_time);
 }
 
+static PyObject*
+Sampler_get_debug(SamplerObject* self, void* Py_UNUSED(closure)) {
+    assert(self->debug);
+    Py_INCREF(self->debug);
+    return self->debug;
+}
+
+
+static int
+Sampler_set_debug(SamplerObject* self,
+                  PyObject* value,
+                  void* Py_UNUSED(closure)) {
+    if (!PyBool_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "debug must be a bool");
+        return -1;
+    }
+    Py_CLEAR(self->debug);
+    Py_INCREF(value);
+    self->debug = value;
+    return 0;
+}
+
+
+static PyObject*
+Sampler_get_sampling_times(SamplerObject* self, void* Py_UNUSED(closure)) {
+    return PyLong_FromLong(self->sampling_times);
+}
+
+
+static int
+Sampler_set_sampling_times(SamplerObject* self,
+                           PyObject* value,
+                           void* Py_UNUSED(closure)) {
+    if (!PyLong_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "sampling_times must be an integer");
+        return -1;
+    }
+    self->sampling_times = PyLong_AsLong(value);
+    return 0;
+}
+
 
 static PyGetSetDef Sampler_getset[] = {
     {"sampling_interval",
@@ -426,6 +476,20 @@ static PyGetSetDef Sampler_getset[] = {
      NULL,
      "accumulated sampling time in nanoseconds",
      NULL},
+    {
+        "debug",
+        (getter)Sampler_get_debug,
+        (setter)Sampler_set_debug,
+        "debug or not",
+        NULL,
+    },
+    {
+        "sampling_times",
+        (getter)Sampler_get_sampling_times,
+        (setter)Sampler_set_sampling_times,
+        "sampling times of the sampler",
+        NULL,
+    },
     {NULL, NULL, NULL, NULL, NULL}  // Sentinel
 };
 
@@ -442,6 +506,7 @@ static void
 Sampler_dealloc(SamplerObject* self) {
     Py_CLEAR(self->sampling_thread);
     Py_CLEAR(self->sampling_interval);
+    Py_CLEAR(self->debug);
     if (self->tree) {
         FreeTree(self->tree);
     }
@@ -453,6 +518,7 @@ static int
 Sampler_clear(SamplerObject* self) {
     Py_CLEAR(self->sampling_thread);
     Py_CLEAR(self->sampling_interval);
+    Py_CLEAR(self->debug);
     if (self->tree) {
         FreeTree(self->tree);
         self->tree = NULL;
@@ -469,6 +535,8 @@ Sampler_new(PyTypeObject* type,
     self = (SamplerObject*)type->tp_alloc(type, 0);
     if (self != NULL) {
         self->sampling_thread = NULL;
+        Py_INCREF(Py_False);
+        self->debug = Py_False;
         self->sampling_interval = PyLong_FromLong(10000);  // 10ms
         if (!self->sampling_interval) {
             Py_DECREF(self);
