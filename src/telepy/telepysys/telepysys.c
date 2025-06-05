@@ -167,11 +167,12 @@ get_thread_name(PyObject* threads, PyObject* thread_id) {
         if (PyErr_Occurred()) {
             return NULL;
         }
-        Py_DECREF(ident);
         if (PyObject_RichCompareBool(ident, thread_id, Py_EQ)) {
             PyObject* name = PyObject_GetAttrString(thread, "name");
+            Py_DECREF(ident);
             return name;
         }
+        Py_DECREF(ident);
     }
     return NULL;
 }
