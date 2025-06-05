@@ -92,7 +92,6 @@ struct StackTree {
 
     void Save(std::ostream& out) {
         std::vector<std::string> res;
-        std::vector<int> lens;
         std::function<void(Node*)> f = [&](Node* node) {
             if (node == nullptr) {
                 return;
@@ -100,7 +99,6 @@ struct StackTree {
 
             // ignore root
             if (node->name != NAME) {
-                lens.emplace_back(node->name.size());
                 res.emplace_back(node->name);
             }
 
@@ -118,7 +116,6 @@ struct StackTree {
 
             if (node->name != NAME) {
                 res.pop_back();
-                lens.pop_back();
             }
 
             f(node->sibling);
