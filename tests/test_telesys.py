@@ -186,7 +186,7 @@ class TestSampler(TestCase):
 
         sampler = telepy.TelepySysSampler(ignore_frozen=True)
         sampler.start()
-        self.assertTrue(sampler.stared())
+        self.assertTrue(sampler.stared)
 
         def fib(n: int) -> int:
             if n < 2:
@@ -197,7 +197,7 @@ class TestSampler(TestCase):
         t1.start()
         t1.join()
         sampler.stop()
-        self.assertFalse(sampler.stared())
+        self.assertFalse(sampler.stared)
         content = sampler.dumps()
         self.assertIn("fib", content)
         self.assertNotIn("frozen", content)
