@@ -177,8 +177,7 @@ TestCaseSingle() {
     std::ostringstream s;
     tree->Save(s);
     assert(s.str() == "main.py;hello;world 4\n");
-    std::cout << SuccessMessage("Test case single stack trace passed")
-              << std::endl;
+    std::cout << SuccessMessage("Test case single stack trace passed") << std::endl;
     delete tree;
 }
 
@@ -193,8 +192,7 @@ TestCaseMultiply() {
     std::ostringstream s;
     tree->Save(s);
     assert(s.str() == "main.py;hello;world 3\nmain.py;hello;x 1\n");
-    std::cout << SuccessMessage("Test case multiply stack traces passed")
-              << std::endl;
+    std::cout << SuccessMessage("Test case multiply stack traces passed") << std::endl;
     delete tree;
 }
 
@@ -227,8 +225,7 @@ TestCaseOrderExchange() {
     res += "main.py;hello;world 3\n";
     res += "main.py;hello;c 1\n";
     assert(s.str() == res);
-    std::cout << SuccessMessage("Test case order exchange passed")
-              << std::endl;
+    std::cout << SuccessMessage("Test case order exchange passed") << std::endl;
     delete tree;
 }
 

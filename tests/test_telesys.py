@@ -103,3 +103,74 @@ class TestTelePySys(TestCase):
             break
         t.join()
         self.assertEqual(tids, set(call_stack.keys()))
+
+
+class TestSampler(TestCase):
+    def test_sampler(self):
+        import telepy
+
+        sampler = telepy.TelepySysSampler()
+        self.assertEqual(sampler.sampling_interval, 10_000)
+        sampler.sampling_interval = 1000
+        self.assertEqual(sampler.sampling_interval, 1000)
+
+    def test_sampler_start(self):
+        import threading
+
+        import telepy
+
+        def fib(n: int) -> int:
+            if n <= 1:
+                return n
+            return fib(n - 1) + fib(n - 2)
+
+        sampler = telepy.TelepySysSampler()
+        sampler.start()
+        t = threading.Thread(target=fib, args=(30,))
+        t.start()
+        t.join()
+        sampler.stop()
+
+    def test_sampler_dump(self):
+        import threading
+
+        import telepy
+
+        def fib(n: int) -> int:
+            if n < 2:
+                return 1
+            return fib(n - 1) + fib(n - 2)
+
+        sampler = telepy.TelepySysSampler()
+        sampler.sampling_interval = 500
+        sampler.adjust_interval()
+        sampler.start()
+        t1 = threading.Thread(target=fib, args=(35,))
+        t1.start()
+
+        t2 = threading.Thread(target=fib, args=(35,))
+        t2.start()
+
+        t1.join()
+        t2.join()
+        sampler.stop()
+        sampler.join_sampling_thread()
+        result = sampler.dumps()
+        self.assertIn("fib", result)
+        self.assertIn("MainThread", result)
+        self.assertIn("Thread-2", result)
+        self.assertIn("Thread-3", result)
+        self.assertLess(sampler.sampling_time_rate, 0.2)
+
+    def test_adjust(self):
+        import sys
+
+        import telepy
+
+        sampler = telepy.TelepySysSampler()
+        sampler.sampling_interval = 1000  # 1ms
+        sys.setswitchinterval(0.005)  # 5ms
+        self.assertTrue(sampler.adjust_interval())
+
+        sys.setswitchinterval(0.001 / 4)
+        self.assertFalse(sampler.adjust_interval())

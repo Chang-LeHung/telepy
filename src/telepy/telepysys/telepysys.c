@@ -1,10 +1,9 @@
 
-#include <time.h>
-#include <stdlib.h>
-#include <Python.h>
 #include "telepysys.h"
 #include "tree.h"
-#include "methodobject.h"
+#include <Python.h>
+#include <stdlib.h>
+#include <time.h>
 
 
 #define TELEPYSYS_VERSION "0.1.0"
@@ -189,7 +188,8 @@ unix_micro_time() {
 static PyObject*
 _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     Py_INCREF(self);
-    char* buf = (char*)malloc(4 KiB);
+    const size_t buf_size = 16 KiB;
+    char* buf = (char*)malloc(buf_size);
     PyObject* threading = PyImport_ImportModule("threading");
     Telepy_time sampling_start = unix_micro_time();
     while (Sample_Enabled(self)) {
@@ -206,8 +206,9 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
         Py_END_ALLOW_THREADS;
         Telepy_time sampler_start = unix_micro_time();
         PyObject* frames = _PyThread_CurrentFrames();  // New reference
-        PyObject* threads = PyObject_CallMethod(
-            threading, "enumerate", NULL);  // New reference
+        PyObject* threads = PyObject_CallMethod(threading,
+                                                "enumerate",
+                                                NULL);  // New reference
         if (frames == NULL) {
             PyErr_Format(PyExc_RuntimeError,
                          "telepysys: _PyThread_CurrentFrames() failed");
@@ -239,10 +240,10 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
                 goto error;
             }
             Py_ssize_t size =
-                snprintf(buf, 4 KiB, "%s;", PyUnicode_AsUTF8(name));
+                snprintf(buf, buf_size, "%s;", PyUnicode_AsUTF8(name));
             Py_DECREF(name);
             int overflow =
-                call_stack((PyFrameObject*)value, buf + size, 4 KiB - size);
+                call_stack((PyFrameObject*)value, buf + size, buf_size - size);
             if (overflow) {
                 Py_DECREF(frames);
                 Py_DECREF(threads);

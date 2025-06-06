@@ -1,5 +1,6 @@
 """."""
 
+import sys
 from types import FrameType
 
 from . import _telepysys  # type: ignore
@@ -56,3 +57,29 @@ def join_current_stacks(stack_dict: dict[int, list[str]]) -> dict[int, str]:
     for f_id, stack in stack_dict.items():
         res[f_id] = "\n".join(stack)
     return res
+
+
+class TelepySysSampler(_telepysys.Sampler):
+    """
+    Inherited sampler for TelepySys.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def adjust_interval(self) -> bool:
+        """
+        Adjusts sys's interval to match TelepySys's interval.
+        Returns:
+            bool: True if sys's interval adjusted, False otherwise
+        """
+        interval = self.sampling_interval / 1000_000
+        sys_interval = sys.getswitchinterval()
+        if interval < sys_interval * 4:
+            sys.setswitchinterval(interval / 4)
+            return True
+        return False
+
+    @property
+    def sampling_time_rate(self):
+        return self.acc_sampling_time / self.sampler_life_time

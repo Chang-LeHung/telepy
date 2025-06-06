@@ -36,4 +36,4 @@ test:
 	make -C src/$(PKG_NAME)/telepysys test
 	@python -m unittest discover -s tests -v
 
-.PHONY: build clean install uninstall docs
+.PHONY: build clean install uninstall docs coverage

@@ -19,8 +19,7 @@ PointerAlignment: Left
 SpaceBeforeParens: ControlStatements
 
 # Includes
-IncludeBlocks: Preserve
-SortIncludes: false
+SortIncludes: true
 
 # Control flow spacing
 SpacesBeforeTrailingComments: 2
