@@ -79,7 +79,7 @@ Sampler_start(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
 
 static PyObject*
 Sampler_stop(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
-    if (!self->enabled) {
+    if (!(CHECK_FALG(self, ENABLED))) {
         PyErr_SetString(PyExc_RuntimeError, "Sampler not started");
         return NULL;
     }
@@ -97,7 +97,10 @@ Sampler_stop(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
 
 // return 0 on success, other on failure and set python error
 static int
-call_stack(PyFrameObject* frame, char* buf, size_t buf_size) {
+call_stack(SamplerObject* self,
+           PyFrameObject* frame,
+           char* buf,
+           size_t buf_size) {
     size_t pos = 0;
     Py_INCREF(frame);
     PyObject* list = PyList_New(0);
@@ -117,14 +120,12 @@ call_stack(PyFrameObject* frame, char* buf, size_t buf_size) {
         PyCodeObject* code = PyFrame_GetCode(frame);  // New reference
         PyObject* filename = code->co_filename;
         PyObject* name = code->co_name;
-        Py_DECREF(code);
 
         if (filename == NULL || name == NULL) {
             PyErr_Format(PyExc_RuntimeError,
                          "telepysys: failed to get filename or name");
-            Py_DECREF(frame);
-            Py_DECREF(list);
-            return 1;
+            Py_DECREF(code);
+            goto error;
         }
 
         int lineno = PyFrame_GetLineNumber(frame);
@@ -138,23 +139,37 @@ call_stack(PyFrameObject* frame, char* buf, size_t buf_size) {
         } else {
             format = "%s:%s:%d";
         }
-        ret = snprintf(buf + pos,
-                       buf_size - pos,
-                       format,
-                       PyUnicode_AsUTF8(filename),
-                       PyUnicode_AsUTF8(name),
-                       lineno);
-        if (ret >= (int)buf_size - pos) {
-            overflow = 1;
-            PyErr_Format(PyExc_RuntimeError,
-                         "telepysys: buffer overflow, call stack too deep");
-            break;
+        PyObject* result =
+            PyObject_CallMethod(filename, "startswith", "s", "<frozen");
+        if (result == NULL) {
+            Py_DECREF(code);
+            goto error;
         }
-        pos += ret;
+        if (!(IGNORE_FROZEN_ENABLED(self) && Py_IsTrue(result))) {
+            ret = snprintf(buf + pos,
+                           buf_size - pos,
+                           format,
+                           PyUnicode_AsUTF8(filename),
+                           PyUnicode_AsUTF8(name),
+                           lineno);
+            if (ret >= (int)buf_size - pos) {
+                overflow = 1;
+                PyErr_Format(
+                    PyExc_RuntimeError,
+                    "telepysys: buffer overflow, call stack too deep");
+                Py_DECREF(code);
+                goto error;
+            }
+            pos += ret;
+        }
+        Py_DECREF(code);
     }
 
     Py_DECREF(list);
     return overflow;
+error:
+    Py_DECREF(list);
+    return -1;
 }
 
 static PyObject*
@@ -242,8 +257,8 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
             Py_ssize_t size =
                 snprintf(buf, buf_size, "%s;", PyUnicode_AsUTF8(name));
             Py_DECREF(name);
-            int overflow =
-                call_stack((PyFrameObject*)value, buf + size, buf_size - size);
+            int overflow = call_stack(
+                self, (PyFrameObject*)value, buf + size, buf_size - size);
             if (overflow) {
                 Py_DECREF(frames);
                 Py_DECREF(threads);
@@ -255,7 +270,7 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
         Py_DECREF(threads);
         Telepy_time sampler_end = unix_micro_time();
         self->acc_sampling_time += sampler_end - sampler_start;
-        if (Py_IsTrue(self->debug)) {
+        if (CHECK_FALG(self, VERBOSE)) {
             printf("Telepysys Debug Info: sampling cnt: %ld, interval: %ld, "
                    "overhead time: %llu stack: "
                    "%s\n",
@@ -320,7 +335,7 @@ Sampler_dumps(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
 
 static PyObject*
 Sampler_get_enabled(SamplerObject* self, void* Py_UNUSED(closure)) {
-    if (self->enabled) {
+    if (CHECK_FALG(self, ENABLED)) {
         Py_RETURN_TRUE;
     }
     Py_RETURN_FALSE;
@@ -415,9 +430,9 @@ Sampler_get_acc_sampling_time(SamplerObject* self, void* Py_UNUSED(closure)) {
 
 static PyObject*
 Sampler_get_debug(SamplerObject* self, void* Py_UNUSED(closure)) {
-    assert(self->debug);
-    Py_INCREF(self->debug);
-    return self->debug;
+    if (CHECK_FALG(self, VERBOSE))
+        Py_RETURN_TRUE;
+    Py_RETURN_FALSE;
 }
 
 
@@ -429,9 +444,11 @@ Sampler_set_debug(SamplerObject* self,
         PyErr_SetString(PyExc_TypeError, "debug must be a bool");
         return -1;
     }
-    Py_CLEAR(self->debug);
-    Py_INCREF(value);
-    self->debug = value;
+    if (Py_IsTrue(value)) {
+        ENABLE_DEBUG(self);
+    } else {
+        DISABLE_DEBUG(self);
+    }
     return 0;
 }
 
@@ -451,6 +468,31 @@ Sampler_set_sampling_times(SamplerObject* self,
         return -1;
     }
     self->sampling_times = PyLong_AsLong(value);
+    return 0;
+}
+
+static PyObject*
+Sampler_get_ignore_frozen(SamplerObject* self, void* Py_UNUSED(closure)) {
+    if (DEBUG_ENABLED(self)) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
+
+static int
+Sampler_set_ignore_frozen(SamplerObject* self,
+                          PyObject* value,
+                          void* Py_UNUSED(closure)) {
+    if (!PyBool_Check(value)) {
+        PyErr_Format(PyExc_TypeError, "ignore_frozen must be a bool");
+        return -1;
+    }
+    if (Py_IsTrue(value)) {
+        ENABLE_IGNORE_FROZEN(self);
+    } else {
+        DISABLE_IGNORE_FROZEN(self);
+    }
     return 0;
 }
 
@@ -485,6 +527,11 @@ static PyGetSetDef Sampler_getset[] = {
         "debug or not",
         NULL,
     },
+    {"ignore_frozen",
+     (getter)Sampler_get_ignore_frozen,
+     (setter)Sampler_set_ignore_frozen,
+     "ignore frozen frames or not",
+     NULL},
     {
         "sampling_times",
         (getter)Sampler_get_sampling_times,
@@ -508,7 +555,6 @@ static void
 Sampler_dealloc(SamplerObject* self) {
     Py_CLEAR(self->sampling_thread);
     Py_CLEAR(self->sampling_interval);
-    Py_CLEAR(self->debug);
     if (self->tree) {
         FreeTree(self->tree);
     }
@@ -520,7 +566,6 @@ static int
 Sampler_clear(SamplerObject* self) {
     Py_CLEAR(self->sampling_thread);
     Py_CLEAR(self->sampling_interval);
-    Py_CLEAR(self->debug);
     if (self->tree) {
         FreeTree(self->tree);
         self->tree = NULL;
@@ -538,7 +583,6 @@ Sampler_new(PyTypeObject* type,
     if (self != NULL) {
         self->sampling_thread = NULL;
         Py_INCREF(Py_False);
-        self->debug = Py_False;
         self->sampling_interval = PyLong_FromLong(10000);  // 10ms
         if (!self->sampling_interval) {
             Py_DECREF(self);
@@ -546,7 +590,6 @@ Sampler_new(PyTypeObject* type,
                             "Failed to initialize sampling_interval");
             return NULL;
         }
-        self->enabled = 0;
         self->tree = NewTree();
         if (!self->tree) {
             Py_DECREF(self);
