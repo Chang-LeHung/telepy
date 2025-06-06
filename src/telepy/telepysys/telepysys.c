@@ -172,12 +172,16 @@ error:
     return -1;
 }
 
+
+// return a new reference
 static PyObject*
 get_thread_name(PyObject* threads, PyObject* thread_id) {
     Py_ssize_t len = PyList_Size(threads);
     for (Py_ssize_t i = 0; i < len; ++i) {
         PyObject* thread = PyList_GetItem(threads, i);
+        printf("thread = %ld\n", (long)thread);
         PyObject* ident = PyObject_GetAttrString(thread, "ident");
+        printf("ident = %ld\n", (long)ident);
         if (PyErr_Occurred()) {
             return NULL;
         }
@@ -202,10 +206,14 @@ unix_micro_time() {
 
 static PyObject*
 _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
-    Py_INCREF(self);
+    PyObject* threading = PyImport_ImportModule("threading");
+    if (threading == NULL) {
+        PyErr_SetString(PyExc_ImportError,
+                        "threading module can not be imported");
+        return NULL;
+    }
     const size_t buf_size = 16 KiB;
     char* buf = (char*)malloc(buf_size);
-    PyObject* threading = PyImport_ImportModule("threading");
     Telepy_time sampling_start = unix_micro_time();
     while (Sample_Enabled(self)) {
         self->sampling_times++;
@@ -221,13 +229,19 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
         Py_END_ALLOW_THREADS;
         Telepy_time sampler_start = unix_micro_time();
         PyObject* frames = _PyThread_CurrentFrames();  // New reference
-        PyObject* threads = PyObject_CallMethod(threading,
-                                                "enumerate",
-                                                NULL);  // New reference
         if (frames == NULL) {
             PyErr_Format(PyExc_RuntimeError,
                          "telepysys: _PyThread_CurrentFrames() failed");
             return NULL;
+        }
+        PyObject* threads = PyObject_CallMethod(threading,
+                                                "enumerate",
+                                                NULL);  // New reference
+        if (threads == NULL) {
+            PyErr_SetString(PyExc_RuntimeError,
+                            "telepysys: threading.enumerate() failed");
+            Py_DECREF(frames);
+            goto error;
         }
         // iterate over frames
         PyObject* key = NULL;
@@ -281,7 +295,6 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
         }
     }
     free(buf);
-    Py_DECREF(self);
     Py_DECREF(threading);
     Telepy_time sampling_end = unix_micro_time();
     self->life_time = sampling_end - sampling_start;
@@ -289,7 +302,6 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
 
 error:
     free(buf);
-    Py_DECREF(self);
     Py_DECREF(threading);
     return NULL;
 }
@@ -350,32 +362,54 @@ Sampler_join(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
 
 
 static PyMethodDef Sampler_methods[] = {
-    {"start", (PyCFunction)Sampler_start, METH_NOARGS, "Start the sampler"},
-    {"stop", (PyCFunction)Sampler_stop, METH_NOARGS, "Stop the sampler"},
-    {"clear",
-     (PyCFunction)Sampler_clear_tree,
-     METH_NOARGS,
-     "Clear the stack tree"},
-    {"_sampling_routine",
-     (PyCFunction)_sampling_routine,
-     METH_NOARGS,
-     _sampling_routine_doc},
-    {"save",
-     _PyCFunction_CAST(Sampler_save),
-     METH_FASTCALL,
-     "Save the stack tree to a file"},
-    {"dumps",
-     (PyCFunction)Sampler_dumps,
-     METH_NOARGS,
-     "Dumps the stack tree to a string"},
-    {"enabled",
-     (PyCFunction)Sampler_get_enabled,
-     METH_NOARGS,
-     "Get the sampling interval"},
-    {"join_sampling_thread",
-     (PyCFunction)Sampler_join,
-     METH_NOARGS,
-     "Join the sampling thread"},
+    {
+        "start",
+        (PyCFunction)Sampler_start,
+        METH_NOARGS,
+        "Start the sampler",
+    },
+    {
+        "stop",
+        (PyCFunction)Sampler_stop,
+        METH_NOARGS,
+        "Stop the sampler",
+    },
+    {
+        "clear",
+        (PyCFunction)Sampler_clear_tree,
+        METH_NOARGS,
+        "Clear the stack tree",
+    },
+    {
+        "_sampling_routine",
+        (PyCFunction)_sampling_routine,
+        METH_NOARGS,
+        _sampling_routine_doc,
+    },
+    {
+        "save",
+        _PyCFunction_CAST(Sampler_save),
+        METH_FASTCALL,
+        "Save the stack tree to a file",
+    },
+    {
+        "dumps",
+        (PyCFunction)Sampler_dumps,
+        METH_NOARGS,
+        "Dumps the stack tree to a string",
+    },
+    {
+        "enabled",
+        (PyCFunction)Sampler_get_enabled,
+        METH_NOARGS,
+        "Get the sampling interval",
+    },
+    {
+        "join_sampling_thread",
+        (PyCFunction)Sampler_join,
+        METH_NOARGS,
+        "Join the sampling thread",
+    },
     {NULL, NULL, 0, NULL},
 };
 
@@ -459,18 +493,6 @@ Sampler_get_sampling_times(SamplerObject* self, void* Py_UNUSED(closure)) {
 }
 
 
-static int
-Sampler_set_sampling_times(SamplerObject* self,
-                           PyObject* value,
-                           void* Py_UNUSED(closure)) {
-    if (!PyLong_Check(value)) {
-        PyErr_SetString(PyExc_TypeError, "sampling_times must be an integer");
-        return -1;
-    }
-    self->sampling_times = PyLong_AsLong(value);
-    return 0;
-}
-
 static PyObject*
 Sampler_get_ignore_frozen(SamplerObject* self, void* Py_UNUSED(closure)) {
     if (DEBUG_ENABLED(self)) {
@@ -498,16 +520,20 @@ Sampler_set_ignore_frozen(SamplerObject* self,
 
 
 static PyGetSetDef Sampler_getset[] = {
-    {"sampling_interval",
-     (getter)Sampler_get_sampling_interval,
-     (setter)Sampler_set_sampling_interval,
-     "sampling interval in nanoseconds",
-     NULL},
-    {"sampling_thread",
-     (getter)Sampler_get_sample_thread,
-     NULL,
-     "sampling thread",
-     NULL},
+    {
+        "sampling_interval",
+        (getter)Sampler_get_sampling_interval,
+        (setter)Sampler_set_sampling_interval,
+        "sampling interval in nanoseconds",
+        NULL,
+    },
+    {
+        "sampling_thread",
+        (getter)Sampler_get_sample_thread,
+        NULL,
+        "sampling thread",
+        NULL,
+    },
     {
         "sampler_life_time",
         (getter)Sampler_get_life_time,
@@ -515,11 +541,13 @@ static PyGetSetDef Sampler_getset[] = {
         "life time of the sampler in nanoseconds",
         NULL,
     },
-    {"acc_sampling_time",
-     (getter)Sampler_get_acc_sampling_time,
-     NULL,
-     "accumulated sampling time in nanoseconds",
-     NULL},
+    {
+        "acc_sampling_time",
+        (getter)Sampler_get_acc_sampling_time,
+        NULL,
+        "accumulated sampling time in nanoseconds",
+        NULL,
+    },
     {
         "debug",
         (getter)Sampler_get_debug,
@@ -527,15 +555,17 @@ static PyGetSetDef Sampler_getset[] = {
         "debug or not",
         NULL,
     },
-    {"ignore_frozen",
-     (getter)Sampler_get_ignore_frozen,
-     (setter)Sampler_set_ignore_frozen,
-     "ignore frozen frames or not",
-     NULL},
+    {
+        "ignore_frozen",
+        (getter)Sampler_get_ignore_frozen,
+        (setter)Sampler_set_ignore_frozen,
+        "ignore frozen frames or not",
+        NULL,
+    },
     {
         "sampling_times",
         (getter)Sampler_get_sampling_times,
-        (setter)Sampler_set_sampling_times,
+        NULL,
         "sampling times of the sampler",
         NULL,
     },
@@ -582,7 +612,6 @@ Sampler_new(PyTypeObject* type,
     self = (SamplerObject*)type->tp_alloc(type, 0);
     if (self != NULL) {
         self->sampling_thread = NULL;
-        Py_INCREF(Py_False);
         self->sampling_interval = PyLong_FromLong(10000);  // 10ms
         if (!self->sampling_interval) {
             Py_DECREF(self);
@@ -608,10 +637,7 @@ static PyType_Slot Sampler_slots[] = {
     {Py_tp_methods, Sampler_methods},
     {Py_tp_getset, Sampler_getset},
     {Py_tp_new, Sampler_new},
-    {
-        Py_tp_traverse,
-        Sampler_traverse,
-    },
+    {Py_tp_traverse, Sampler_traverse},
     {0, NULL},
 };
 
@@ -621,6 +647,443 @@ static PyType_Spec sampler_spec = {
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
     .slots = Sampler_slots,
 };
+
+
+static PyObject*
+AsyncSampler_get_sampling_tid(SamplerObject* self, void* Py_UNUSED(closure)) {
+    return PyLong_FromLong(self->sampling_tid);
+}
+
+
+static int
+AsyncSampler_set_sampling_tid(SamplerObject* self,
+                              PyObject* value,
+                              void* Py_UNUSED(closure)) {
+    if (!PyLong_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "sampling_tid must be an integer");
+        return -1;
+    }
+
+    long tid = PyLong_AsLong(value);
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    self->sampling_tid = tid;
+    return 0;
+}
+
+
+static PyObject*
+AsyncSampler_get_start_time(AsyncSamplerObject* self,
+                            void* Py_UNUSED(closure)) {
+    return PyLong_FromLong(self->start);
+}
+
+
+static PyObject*
+AsyncSampler_get_end_time(AsyncSamplerObject* self, void* Py_UNUSED(closure)) {
+    return PyLong_FromLong(self->end);
+}
+
+
+static PyGetSetDef AsyncSampler_getset[] = {
+    {
+        "start_time",
+        (getter)AsyncSampler_get_start_time,
+        NULL,
+        "The tid of the thread that is being sampled",
+        NULL,
+    },
+    {
+        "end_time",
+        (getter)AsyncSampler_get_end_time,
+        NULL,
+        "The tid of the thread that is being sampled",
+        NULL,
+    },
+    {
+        "sampling_tid",
+        (getter)AsyncSampler_get_sampling_tid,
+        (setter)AsyncSampler_set_sampling_tid,
+        "The tid of the thread that is being sampled",
+        NULL,
+    },
+    {
+        "sampling_interval",
+        (getter)Sampler_get_sampling_interval,  // share it
+        (setter)Sampler_set_sampling_interval,  // share it
+        "sampling interval in nanoseconds",
+        NULL,
+    },
+    {
+        "acc_sampling_time",
+        (getter)Sampler_get_acc_sampling_time,  // share it
+        NULL,
+        "accumulated sampling time in nanoseconds",
+        NULL,
+    },
+    {
+        "debug",
+        (getter)Sampler_get_debug,  // share it
+        (setter)Sampler_set_debug,  // share it
+        "debug or not",
+        NULL,
+    },
+    {
+        "ignore_frozen",
+        (getter)Sampler_get_ignore_frozen,  // share it
+        (setter)Sampler_set_ignore_frozen,  // share it
+        "ignore frozen frames or not",
+        NULL,
+    },
+    {
+        "sampling_times",
+        (getter)Sampler_get_sampling_times,  // share it
+        NULL,
+        "sampling times of the sampler",
+        NULL,
+    },
+    {
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+    }  // Sentinel
+};
+
+
+// we can not call a python function to get the results, such as threading.enumerate()
+static PyObject*
+get_all_threads(PyObject* threading) {
+
+    PyObject *active = NULL, *limbo = NULL;
+    PyObject *active_values = NULL, *limbo_values = NULL;
+    PyObject *active_list = NULL, *limbo_list = NULL;
+    PyObject* result = NULL;
+
+    // threading._active
+    active = PyObject_GetAttrString(threading, "_active");
+    if (!active)
+        goto error;
+
+    // threading._limbo
+    limbo = PyObject_GetAttrString(threading, "_limbo");
+    if (!limbo)
+        goto error;
+
+    // _active.values()
+    active_values = PyObject_CallMethod(active, "values", NULL);
+    if (!active_values)
+        goto error;
+
+    // _limbo.values()
+    limbo_values = PyObject_CallMethod(limbo, "values", NULL);
+    if (!limbo_values)
+        goto error;
+
+    // list(_active.values())
+    active_list = PySequence_List(active_values);
+    if (!active_list)
+        goto error;
+
+    // list(_limbo.values())
+    limbo_list = PySequence_List(limbo_values);
+    if (!limbo_list)
+        goto error;
+
+    // result = active_list + limbo_list
+    result = PySequence_Concat(active_list, limbo_list);
+    if (!result)
+        goto error;
+
+    // clean up
+    Py_DECREF(active);
+    Py_DECREF(limbo);
+    Py_DECREF(active_values);
+    Py_DECREF(limbo_values);
+    Py_DECREF(active_list);
+    Py_DECREF(limbo_list);
+
+    return result;
+
+error:
+    Py_XDECREF(threading);
+    Py_XDECREF(active);
+    Py_XDECREF(limbo);
+    Py_XDECREF(active_values);
+    Py_XDECREF(limbo_values);
+    Py_XDECREF(active_list);
+    Py_XDECREF(limbo_list);
+    Py_XDECREF(result);
+    return NULL;
+}
+
+// we must ensure that do not eval PyFrames in AsyncSampler_async_routine
+// SIGPROF signal handler may be called before last call finished
+static PyObject*
+AsyncSampler_async_routine(AsyncSamplerObject* self,
+                           PyObject* const* args,
+                           Py_ssize_t nargs) {
+    printf("called\n");
+    if (nargs != 2) {
+        PyErr_Format(
+            PyExc_TypeError,
+            "async_routine() takes 2 positional arguments but %zd were given",
+            nargs);
+        return NULL;
+    }
+    SamplerObject* base = (SamplerObject*)self;
+    if (base->sampling_tid == 0) {
+        PyErr_SetString(PyExc_RuntimeError, "AsyncSampler's tid is not set");
+        return NULL;
+    }
+    PyObject* threading = self->threading;
+    if (threading == NULL) {
+        PyErr_SetString(PyExc_ImportError, "Failed to import threading");
+        return NULL;
+    }
+
+    PyObject* main_frame = args[1];
+
+    const size_t buf_size = self->buf_size;
+    char* buf = self->buf;
+
+    Telepy_time sampling_start = self->start = unix_micro_time();
+
+    PyObject* frames = _PyThread_CurrentFrames();  // New reference
+    if (frames == NULL) {
+        PyErr_Format(PyExc_RuntimeError,
+                     "telepysys: _PyThread_CurrentFrames() failed");
+        return NULL;
+    }
+    PyObject* threads = get_all_threads(threading);  // New reference
+    if (threads == NULL || PyErr_Occurred()) {
+        PyErr_Format(PyExc_RuntimeError,
+                     "telepysys: get_all_threads() failed");
+        Py_DECREF(frames);
+        return NULL;
+    }
+
+    // iterate over frames
+    PyObject* key = NULL;
+    PyObject* value = NULL;
+    Py_ssize_t pos = 0;
+    PyObject* main_thread_tid = NULL;
+    while (PyDict_Next(frames, &pos, &key, &value)) {
+        // key is a thread id
+        // value is a frame object
+        unsigned long tid = PyLong_AsUnsignedLong(key);
+        if (PyErr_Occurred()) {
+            goto error;
+        }
+        // ignore self
+        if (tid == base->sampling_tid) {
+            main_thread_tid = key;
+            continue;
+        }
+        PyObject* name = get_thread_name(threads, key);
+        if (name == NULL) {
+            PyErr_Format(PyExc_RuntimeError,
+                         "telepysys: failed to get thread name");
+            goto error;
+        }
+        Py_ssize_t size =
+            snprintf(buf, buf_size, "%s;", PyUnicode_AsUTF8(name));
+        Py_DECREF(name);
+        int overflow = call_stack(
+            base, (PyFrameObject*)value, buf + size, buf_size - size);
+        if (overflow) {
+            goto error;
+        }
+        AddCallStack(base->tree, buf);
+    }
+
+    if (main_frame) {
+        PyObject* name = get_thread_name(threads, main_thread_tid);
+        if (name == NULL) {
+            PyErr_Format(PyExc_RuntimeError,
+                         "telepysys: failed to get thread name");
+            goto error;
+        }
+        Py_ssize_t size =
+            snprintf(buf, buf_size, "%s;", PyUnicode_AsUTF8(name));
+        Py_DECREF(name);
+        int overflow = call_stack(
+            base, (PyFrameObject*)main_frame, buf + size, buf_size - size);
+        if (overflow) {
+            goto error;
+        }
+        AddCallStack(base->tree, buf);
+    }
+
+    Py_DECREF(frames);
+    Py_DECREF(threads);
+
+    // ====================== printf IS NOT async safe ======================
+    // if (CHECK_FALG(base, VERBOSE)) {
+    //     printf("Telepysys Debug Info: sampling cnt: %ld, interval: %ld, "
+    //            "overhead time: %llu stack: "
+    //            "%s\n",
+    //            base->sampling_times,
+    //            PyLong_AsLong(base->sampling_interval),
+    //            sampler_end - sampler_start,
+    //            buf);
+    // }
+    // =======================================================================
+
+    Telepy_time sampling_end = self->end = unix_micro_time();
+    base->life_time = sampling_end - sampling_start;
+    base->sampling_times++;
+    printf("normal exit\n");
+    Py_RETURN_NONE;
+
+error:
+    Py_XDECREF(frames);
+    Py_XDECREF(threads);
+    return NULL;
+}
+
+
+static PyObject*
+AsyncSampler_start(AsyncSamplerObject* self, PyObject* Py_UNUSED(ignore)) {
+    SamplerObject* base = (SamplerObject*)self;
+    Sample_Enable(base);
+    self->start = unix_micro_time();
+    Py_RETURN_NONE;
+}
+
+static PyObject*
+AsyncSampler_stop(AsyncSamplerObject* self, PyObject* Py_UNUSED(ignore)) {
+    SamplerObject* base = (SamplerObject*)self;
+    Sample_Disable(base);
+    self->end = unix_micro_time();
+    Py_RETURN_NONE;
+}
+
+
+static PyMethodDef AsyncSampler_methods[] = {
+    {
+        "start",
+        (PyCFunction)AsyncSampler_start,
+        METH_NOARGS,
+        "Start the sampler",
+    },
+    {
+        "stop",
+        (PyCFunction)AsyncSampler_stop,
+        METH_NOARGS,
+        "Stop the sampler",
+    },
+    {
+        "_async_routine",
+        _PyCFunction_CAST(AsyncSampler_async_routine),
+        METH_FASTCALL,
+        "Async sampler routine",
+    },
+    {
+        "save",
+        _PyCFunction_CAST(Sampler_save),  // share it
+        METH_FASTCALL,
+        "Save the stack tree to a file",
+    },
+    {
+        "clear",
+        (PyCFunction)Sampler_clear_tree,  // share it
+        METH_NOARGS,
+        "Clear the stack tree",
+    },
+    {
+        "dumps",
+        (PyCFunction)Sampler_dumps,  // share it
+        METH_NOARGS,
+        "Dumps the stack tree to a string",
+    },
+    {
+        "enabled",
+        (PyCFunction)Sampler_get_enabled,  // share it
+        METH_NOARGS,
+        "Get the sampling interval",
+    },
+    {NULL, NULL, 0, NULL},
+};
+
+
+static int
+AsyncSampler_clear(AsyncSamplerObject* self) {
+    Py_CLEAR(self->base.sampling_interval);
+    Py_CLEAR(self->threading);
+    if (self->base.tree) {
+        FreeTree(self->base.tree);
+        self->base.tree = NULL;
+    }
+    if (self->buf) {
+        free(self->buf);
+        self->buf = NULL;
+    }
+    return 0;
+}
+
+
+static void
+AsyncSampler_dealloc(AsyncSamplerObject* self) {
+    AsyncSampler_clear(self);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static PyObject*
+AsyncSampler_new(PyTypeObject* type,
+                 PyObject* Py_UNUSED(args),
+                 PyObject* Py_UNUSED(kwds)) {
+    AsyncSamplerObject* self = NULL;
+    self = (AsyncSamplerObject*)type->tp_alloc(type, 0);
+    if (self != NULL) {
+        self->base.sampling_tid = 0;
+        self->base.sampling_interval = PyLong_FromLong(10000);  // 10ms
+        if (!self->base.sampling_interval) {
+            Py_DECREF(self);
+            PyErr_SetString(PyExc_RuntimeError,
+                            "Failed to initialize sampling_interval");
+            return NULL;
+        }
+        self->base.tree = NewTree();
+        if (!self->base.tree) {
+            Py_DECREF(self);
+            PyErr_SetString(PyExc_RuntimeError, "Failed to create StackTree");
+            return NULL;
+        }
+        self->buf_size = 16 KiB;
+        self->buf = malloc(self->buf_size);
+        self->threading = PyImport_ImportModule("threading");
+        return (PyObject*)self;
+    }
+    return NULL;
+}
+
+
+static int
+AsyncSampler_traverse(AsyncSamplerObject* self, visitproc visit, void* arg) {
+    Py_VISIT(self->base.sampling_interval);
+    return 0;
+}
+
+static PyType_Slot AsyncSampler_slots[] = {
+    {Py_tp_dealloc, AsyncSampler_dealloc},
+    {Py_tp_clear, AsyncSampler_clear},
+    {Py_tp_methods, AsyncSampler_methods},
+    {Py_tp_getset, AsyncSampler_getset},
+    {Py_tp_new, AsyncSampler_new},
+    {Py_tp_traverse, AsyncSampler_traverse},
+    {0, NULL},
+};
+
+static PyType_Spec async_sampler_spec = {
+    .name = "_telepysys.AsyncSampler",
+    .basicsize = sizeof(AsyncSamplerObject),
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
+    .slots = AsyncSampler_slots,
+};
+
 
 PyDoc_STRVAR(telepysys_doc, "An utility module for telepysys");
 
@@ -635,13 +1098,35 @@ telepysys_current_frames(PyObject* Py_UNUSED(module),
     return _PyThread_CurrentFrames();
 }
 
+PyDoc_STRVAR(telepysys_unix_microtime_doc,
+             "Returns the current time in microseconds since the epoch.");
+
+static PyObject*
+telepysys_unix_microtime(PyObject* Py_UNUSED(module),
+                         PyObject* Py_UNUSED(args)) {
+    return PyLong_FromLongLong((long long)unix_micro_time());
+}
+
 
 static PyMethodDef telepysys_methods[] = {
-    {"current_frames",
-     (PyCFunction)telepysys_current_frames,
-     METH_NOARGS,
-     telepysys_current_frames_doc},
-    {NULL, NULL, 0, NULL},
+    {
+        "current_frames",
+        (PyCFunction)telepysys_current_frames,
+        METH_NOARGS,
+        telepysys_current_frames_doc,
+    },
+    {
+        "unix_micro_time",
+        (PyCFunction)telepysys_unix_microtime,
+        METH_NOARGS,
+        telepysys_unix_microtime_doc,
+    },
+    {
+        NULL,
+        NULL,
+        0,
+        NULL,
+    },
 };
 
 static int
@@ -650,18 +1135,27 @@ telepysys_exec(PyObject* m) {
         return -1;
     }
     TelePySysState* state = PyModule_GetState(m);
-    if (PyModule_AddFunctions(m, telepysys_methods)) {
-        return -1;
-    }
     PyObject* sampler_type = PyType_FromSpec(&sampler_spec);
     if (sampler_type == NULL) {
         return -1;
     }
     state->sampler_type = (PyTypeObject*)sampler_type;
-    if (PyModule_AddObject(m, "Sampler", sampler_type) < 0) {
+    if (PyModule_AddObjectRef(m, "Sampler", sampler_type) < 0) {
         Py_DECREF(sampler_type);
         return -1;
     }
+    PyObject* async_sampler_type = PyType_FromSpec(&async_sampler_spec);
+    if (async_sampler_type == NULL) {
+        Py_DECREF(sampler_type);
+        return -1;
+    }
+    state->async_sampler_type = (PyTypeObject*)async_sampler_type;
+    if (PyModule_AddObjectRef(m, "AsyncSampler", async_sampler_type) < 0) {
+        Py_DECREF(sampler_type);
+        Py_DECREF(async_sampler_type);
+        return -1;
+    }
+    PyModule_AddObjectRef(m, "async_sampler", Py_None);  // singleton
     return 0;
 }
 
@@ -669,6 +1163,7 @@ static int
 telepysys_clear(PyObject* module) {
     TelePySysState* state = PyModule_GetState(module);
     Py_CLEAR(state->sampler_type);
+    Py_CLEAR(state->async_sampler_type);
     return 0;
 }
 
@@ -692,6 +1187,7 @@ static struct PyModuleDef telepysys = {
     .m_slots = telepysys_slots,
     .m_clear = telepysys_clear,
     .m_free = telepysys_free,
+    .m_methods = telepysys_methods,
 };
 
 

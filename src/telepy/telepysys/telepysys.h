@@ -24,6 +24,7 @@ typedef unsigned long long Telepy_time;
 
 typedef struct TelePySysState {
     PyTypeObject* sampler_type;
+    PyTypeObject* async_sampler_type;
 } TelePySysState;
 
 #define BIT_SET(x, n) (x |= (1 << n))
@@ -55,8 +56,8 @@ typedef struct SamplerObject {
 
     struct StackTree* tree;
     unsigned long sampling_tid;  // thread id of the sampling thread
-    unsigned long
-        sampling_times;  //  number of times the sampling thread has run
+    //  number of times the sampling thread has run
+    unsigned long sampling_times;
 
     // profiling data
     Telepy_time acc_sampling_time;  // accumulated sampling time
@@ -64,6 +65,18 @@ typedef struct SamplerObject {
 
     uint32_t flags;
 } SamplerObject;
+
+typedef struct AsyncSamplerObject {
+    SamplerObject base;
+    // ------------------------------------------------------
+    // do not make any changes to the above field
+    Telepy_time start;    // start time in microseconds
+    Telepy_time end;      // end time in microseconds
+    PyObject* threading;  // we can not import it in singal function
+    // log buffer, we can not allocate memory in singal function, malloc is not async safe.
+    char* buf;
+    Py_ssize_t buf_size;
+} AsyncSamplerObject;
 
 #ifdef __cplusplus
 }
