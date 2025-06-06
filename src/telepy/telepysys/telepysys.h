@@ -2,8 +2,8 @@
 #ifndef TelepySys_h
 #define TelepySys_h
 
-#include "tree.h"
 #include "pytypedefs.h"
+#include "tree.h"
 
 #ifdef __cplusplus
 extern "C" {
