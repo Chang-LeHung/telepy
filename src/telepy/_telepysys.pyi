@@ -18,6 +18,8 @@ class Sampler:
         self.sampling_thread: None | Thread
         self.sampler_life_time: int
         self.acc_sampling_time: int
+        self.sampling_times: int
+        self.debug: bool = False
 
     def start(self) -> None:
         """start the sampler"""
