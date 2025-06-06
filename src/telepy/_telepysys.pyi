@@ -20,24 +20,28 @@ class Sampler:
         self.acc_sampling_time: int
         self.sampling_times: int
         self.debug: bool = False
+        self.ignore_frozen: bool = False
 
     def start(self) -> None:
         """start the sampler"""
         ...
 
     def stop(self) -> None:
-        """stop the sampler"""
+        """stop the sampler and join the sampling thread"""
         ...
 
     def clear(self) -> None:
         """clear the sampler"""
+        ...
 
     def enabled(self) -> bool:
         """check if the sampler is enabled"""
         ...
 
     def join_sampling_thread(self) -> None:
-        """join the sampling thread"""
+        """join the sampling thread, you should not call
+        this method unless you know what you are doing
+        """
         ...
 
     def save(self, path: str) -> None:
