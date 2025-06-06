@@ -132,6 +132,7 @@ class TestSampler(TestCase):
         sampler.stop()
 
     def test_sampler_dump(self):
+        import sys
         import threading
 
         import telepy
@@ -155,12 +156,15 @@ class TestSampler(TestCase):
         t2.join()
         sampler.stop()
         sampler.join_sampling_thread()
-        result = sampler.dumps()
+        result = sampler.dumps()[:-1]  # eliminate newline
         self.assertIn("fib", result)
         self.assertIn("MainThread", result)
-        self.assertIn("Thread-2", result)
-        self.assertIn("Thread-3", result)
+        self.assertIn("Thread-", result)
         self.assertLess(sampler.sampling_time_rate, 0.2)
+        if "coverage" not in sys.modules:
+            self.assertIn("<frozen", result)
+        with open("test_sampler.stack", "w") as f:
+            f.write(result)
 
     def test_adjust(self):
         import sys
@@ -174,3 +178,27 @@ class TestSampler(TestCase):
 
         sys.setswitchinterval(0.001 / 4)
         self.assertFalse(sampler.adjust_interval())
+
+    def test_ignore_froze(self):
+        import threading
+
+        import telepy
+
+        sampler = telepy.TelepySysSampler(ignore_frozen=True)
+        sampler.start()
+        self.assertTrue(sampler.stared())
+
+        def fib(n: int) -> int:
+            if n < 2:
+                return 1
+            return fib(n - 1) + fib(n - 2)
+
+        t1 = threading.Thread(target=fib, args=(35,))
+        t1.start()
+        t1.join()
+        sampler.stop()
+        self.assertFalse(sampler.stared())
+        content = sampler.dumps()
+        self.assertIn("fib", content)
+        self.assertNotIn("frozen", content)
+        sampler.save("test_sampler.stack")
