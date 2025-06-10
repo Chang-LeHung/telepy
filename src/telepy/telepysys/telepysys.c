@@ -179,9 +179,7 @@ get_thread_name(PyObject* threads, PyObject* thread_id) {
     Py_ssize_t len = PyList_Size(threads);
     for (Py_ssize_t i = 0; i < len; ++i) {
         PyObject* thread = PyList_GetItem(threads, i);
-        printf("thread = %ld\n", (long)thread);
         PyObject* ident = PyObject_GetAttrString(thread, "ident");
-        printf("ident = %ld\n", (long)ident);
         if (PyErr_Occurred()) {
             return NULL;
         }
@@ -825,7 +823,6 @@ static PyObject*
 AsyncSampler_async_routine(AsyncSamplerObject* self,
                            PyObject* const* args,
                            Py_ssize_t nargs) {
-    printf("called\n");
     if (nargs != 2) {
         PyErr_Format(
             PyExc_TypeError,
@@ -857,6 +854,16 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
                      "telepysys: _PyThread_CurrentFrames() failed");
         return NULL;
     }
+    if (main_frame) {
+        Py_ssize_t size = snprintf(buf, buf_size, "%s;", "MainThread");
+        int overflow = call_stack(
+            base, (PyFrameObject*)main_frame, buf + size, buf_size - size);
+        if (overflow) {
+            Py_XDECREF(frames);
+            return NULL;
+        }
+        AddCallStack(base->tree, buf);
+    }
     PyObject* threads = get_all_threads(threading);  // New reference
     if (threads == NULL || PyErr_Occurred()) {
         PyErr_Format(PyExc_RuntimeError,
@@ -869,7 +876,6 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     PyObject* key = NULL;
     PyObject* value = NULL;
     Py_ssize_t pos = 0;
-    PyObject* main_thread_tid = NULL;
     while (PyDict_Next(frames, &pos, &key, &value)) {
         // key is a thread id
         // value is a frame object
@@ -879,7 +885,6 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
         }
         // ignore self
         if (tid == base->sampling_tid) {
-            main_thread_tid = key;
             continue;
         }
         PyObject* name = get_thread_name(threads, key);
@@ -893,24 +898,6 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
         Py_DECREF(name);
         int overflow = call_stack(
             base, (PyFrameObject*)value, buf + size, buf_size - size);
-        if (overflow) {
-            goto error;
-        }
-        AddCallStack(base->tree, buf);
-    }
-
-    if (main_frame) {
-        PyObject* name = get_thread_name(threads, main_thread_tid);
-        if (name == NULL) {
-            PyErr_Format(PyExc_RuntimeError,
-                         "telepysys: failed to get thread name");
-            goto error;
-        }
-        Py_ssize_t size =
-            snprintf(buf, buf_size, "%s;", PyUnicode_AsUTF8(name));
-        Py_DECREF(name);
-        int overflow = call_stack(
-            base, (PyFrameObject*)main_frame, buf + size, buf_size - size);
         if (overflow) {
             goto error;
         }
@@ -935,7 +922,6 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     Telepy_time sampling_end = self->end = unix_micro_time();
     base->life_time = sampling_end - sampling_start;
     base->sampling_times++;
-    printf("normal exit\n");
     Py_RETURN_NONE;
 
 error:
