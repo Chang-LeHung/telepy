@@ -63,7 +63,7 @@ class AsyncSampler:
         self.debug: bool = False
         self.ignore_frozen: bool = False
         self.sampling_tid: int
-        self.start_tiem: int
+        self.start_time: int
         self.end_time: int
 
     def start(self) -> None:
