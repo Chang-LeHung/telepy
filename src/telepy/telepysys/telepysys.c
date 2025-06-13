@@ -1,6 +1,5 @@
 
 #include "telepysys.h"
-#include "objimpl.h"
 #include "tree.h"
 #include <Python.h>
 #include <stdlib.h>

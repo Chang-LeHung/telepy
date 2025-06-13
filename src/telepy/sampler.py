@@ -140,6 +140,6 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler):
         """
         Stop the sampler.
         """
-        super().stop()
         signal.setitimer(signal.ITIMER_PROF, 0, 0)
         signal.signal(signal.SIGPROF, signal.SIG_IGN)
+        super().stop()
