@@ -1,5 +1,6 @@
 
 #include "telepysys.h"
+#include "objimpl.h"
 #include "tree.h"
 #include <Python.h>
 #include <stdlib.h>
@@ -1050,6 +1051,9 @@ AsyncSampler_new(PyTypeObject* type,
 static int
 AsyncSampler_traverse(AsyncSamplerObject* self, visitproc visit, void* arg) {
     Py_VISIT(self->base.sampling_interval);
+    // we do need to visit self->base.sampling_thread
+    // we do use it in async profiler
+    Py_VISIT(self->threading);
     return 0;
 }
 
