@@ -10,117 +10,136 @@ from . import _telepysys
 
 class TelepySysSampler(_telepysys.Sampler):
     """
-    A sampler that uses the TelepySys library to sample the current stack.
+    Inherited sampler for TelepySys.
     """
 
     def __init__(
         self,
-        sampling_interval: int = 10000,
+        sampling_interval: int = 10_000,
         debug: bool = False,
         ignore_frozen: bool = False,
-    ):
+    ) -> None:
         """
-        Parameters:
-            sampling_interval: int = 10000
-                The interval between samples in microseconds.
-                Defaults to 10ms.
-            debug: bool = False
-                Whether to enable debug mode.
-            ignore_frozen: bool = False
-                Whether to ignore frozen frames.
-        """
-        super().__init__()
-        self.sampling_interval = sampling_interval
-        self.debug = debug
-        self.ignore_frozen = ignore_frozen
-
-    @property
-    def started(self):
-        return self.enabled()
-
-    @override
-    def save(self, path: str) -> None:
-        with open(path, "w") as f:
-            f.write(self.dumps())
-
-    @override
-    def dumps(self) -> str:
-        return super().dumps()[:-1]  # remove the last newline
-
-    def adjust_interval(self):
-        """
-        Adjust the sampling interval to the system's switch interval.
-        Returns:
-            bool: True if the interval is adjusted, False otherwise.
-        """
-        sys_interval = sys.getswitchinterval()
-        interval = self.sampling_interval * 1e-6
-        if sys_interval * 4 > interval:
-            sys.setswitchinterval(interval / 4)
-            return True
-        return False
-
-    @property
-    def sampling_time_rate(self):
-        if not self.started:
-            return self.acc_sampling_time / self.sampler_life_time
-        raise RuntimeError("Sampler is not is running")
-
-
-class TelepySysAsyncSampler(_telepysys.AsyncSampler):
-    """
-    TelepySysAsyncSampler is used to profile the system asynchronously.
-    """
-
-    def __init__(
-        self,
-        sampling_interval: int = 10000,
-        debug: bool = False,
-        ignore_frozen: bool = False,
-    ):
-        """
-        Initialize the TelepySysAsyncSampler.
-        Parameters:
-            sampling_interval: int = 10000
-                The interval between each sampling in microseconds.
-            debug: bool = False
-                Whether to enable debug mode.
-            ignore_frozen: bool = False
+        Args:
+            sampling_interval:
+                The interval at which the sampler will sample the current stack trace.
+            debug:
+                Whether to print debug messages.
+            ignore_frozen:
                 Whether to ignore frozen threads.
         """
         super().__init__()
         self.sampling_interval = sampling_interval
         self.debug = debug
         self.ignore_frozen = ignore_frozen
-        self.old: Callable[[int, FrameType | None], Any]
+
+    def adjust_interval(self) -> bool:
+        """
+        Adjusts sys's interval to match TelepySys's interval.
+        Returns:
+            bool: True if sys's interval adjusted, False otherwise
+        """
+        interval = self.sampling_interval / 1000_000
+        sys_interval = sys.getswitchinterval()
+        if interval < sys_interval * 4:
+            sys.setswitchinterval(interval / 4)
+            return True
+        return False
 
     @property
-    def started(self) -> bool:
+    def sampling_time_rate(self):
         """
-        Returns whether the sampler is started.
-        Returns:
-        bool
-            Whether the sampler is started.
+        sampling time rate
+        """
+        return self.acc_sampling_time / self.sampler_life_time
+
+    @override
+    def save(self, filename: str) -> None:
+        """
+        Save the sampler data to a file.
+        """
+        content = self.dumps()
+        with open(filename, "w") as f:
+            f.write(content[:-1])  #   remove the last new line
+
+    @property
+    def started(self):
+        """
+        Return True if the sampler is started.
         """
         return self.enabled()
 
-    def start(self):
+
+class TelepySysAsyncSampler(_telepysys.AsyncSampler):
+    """
+    AsyncSampler class.
+    """
+
+    def __init__(
+        self,
+        sampling_interval: int = 10_000,
+        debug: bool = False,
+        ignore_frozen: bool = False,
+    ) -> None:
         """
-        Starts the sampler. You only can start the sampler in the
-        main thread. SIGPROF signal will be sent to the main thread
-        every `sampling_interval` microseconds.
+        Args:
+            sampling_interval:
+                The interval at which the sampler will sample the current stack trace.
+            debug:
+                Whether to print debug messages.
+            ignore_frozen:
+                Whether to ignore frozen threads.
         """
-        self.old = signal.getsignal(signal.SIGPROF)
-        if self.old not in (None, signal.SIG_DFL, signal.SIG_IGN):
-            raise RuntimeError("signal.SIGPROF already used")
-        if threading.current_thread() is not threading.main_thread():
-            raise RuntimeError("AsyncSampler can only be started in main thread")
-        self.sampling_tid = threading.get_ident()
+        super().__init__()
+        self.sampling_interval = sampling_interval
+        self.debug = debug
+        self.ignore_frozen = ignore_frozen
+
+    @override
+    def save(self, filename: str) -> None:
+        """
+        Save the sampler data to a file.
+        """
+        content = self.dumps()
+        with open(filename, "w") as f:
+            f.write(content[:-1])  #   remove the last new line
+
+    @property
+    def started(self):
+        """
+        Return True if the sampler is started.
+        """
+        return self.enabled()
+
+    @override
+    def start(self) -> None:
+        """
+        Start the sampler.
+        """
+        if self.started:
+            raise RuntimeError("Sampler is already started")
+
+        if threading.current_thread() != threading.main_thread():
+            raise RuntimeError(
+                "TelepySysAsyncSampler must be started from the main thread"
+            )
+
+        current = signal.getsignal(signal.SIGPROF)
+        if current not in (signal.SIG_DFL, signal.SIG_IGN):
+            raise RuntimeError("signal.SIGPROF is already in use by another handler")
+
         signal.signal(signal.SIGPROF, self._async_routine)
-        interval = self.sampling_interval * 1e-6
-        signal.setitimer(signal.ITIMER_PROF, interval, interval)
+        interval_sec = self.sampling_interval * 1e-6
+
+        signal.setitimer(signal.ITIMER_PROF, interval_sec, interval_sec)
+        self.sampling_tid = threading.get_ident()  # required for base class
         super().start()
 
-    def stop(self):
+    @override
+    def stop(self) -> None:
+        """
+        Stop the sampler.
+        """
+        super().stop()
         signal.setitimer(signal.ITIMER_PROF, 0, 0)
-        signal.signal(signal.SIGPROF, self.old)
+        signal.signal(signal.SIGPROF, signal.SIG_IGN)
