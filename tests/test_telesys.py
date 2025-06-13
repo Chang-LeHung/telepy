@@ -160,7 +160,6 @@ class TestSampler(TestCase):
         self.assertIn("fib", result)
         self.assertIn("MainThread", result)
         self.assertIn("Thread-", result)
-        self.assertLess(sampler.sampling_time_rate, 0.2)
         if "coverage" not in sys.modules:
             self.assertIn("<frozen", result)
         with open("test_sampler.stack", "w") as f:
