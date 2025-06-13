@@ -22,24 +22,5 @@ class TestAsyncSampler(unittest.TestCase):
         t.start()
         t.join()
         async_sampler.stop()
-        print(async_sampler.dumps())
+        async_sampler.save("test_async_sampler.stack")
         print(f"{async_sampler.sampling_times = }")
-
-
-def fib(n: int) -> int:
-    if n < 2:
-        return n
-    return fib(n - 1) + fib(n - 2)
-
-
-async_sampler = telepy.TelepySysAsyncSampler(
-    sampling_interval=5000,
-    ignore_frozen=True,
-)
-async_sampler.start()
-t = threading.Thread(target=fib, args=(38,))
-t.start()
-t.join()
-async_sampler.stop()
-print(async_sampler.dumps())
-print(f"{async_sampler.sampling_times = }")
