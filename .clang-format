@@ -46,6 +46,5 @@ ReflowComments: false
 # Try to preserve as much of existing formatting as possible
 DerivePointerAlignment: false
 
-AllowShortStructsOnASingleLine: Never
 BinPackArguments: false
 BinPackParameters: false
