@@ -61,7 +61,7 @@ Sampler_start(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
     }
     Py_DECREF(result);
 
-    PyObject* tid = PyObject_GetAttrString(thread_obj, "ident");
+    PyObject* tid = PyObject_GetAttrString(thread_obj, "_ident");
     if (tid == NULL) {
         return NULL;
     }
@@ -179,12 +179,12 @@ get_thread_name(PyObject* threads, PyObject* thread_id) {
     Py_ssize_t len = PyList_Size(threads);
     for (Py_ssize_t i = 0; i < len; ++i) {
         PyObject* thread = PyList_GetItem(threads, i);
-        PyObject* ident = PyObject_GetAttrString(thread, "ident");
+        PyObject* ident = PyObject_GetAttrString(thread, "_ident");
         if (PyErr_Occurred()) {
             return NULL;
         }
         if (PyObject_RichCompareBool(ident, thread_id, Py_EQ)) {
-            PyObject* name = PyObject_GetAttrString(thread, "name");
+            PyObject* name = PyObject_GetAttrString(thread, "_name");
             Py_DECREF(ident);
             return name;
         }
