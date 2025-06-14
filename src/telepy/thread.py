@@ -22,6 +22,9 @@ class PyMainTrampoline:
         """
         if not callable(self.func):
             raise RuntimeError(f"{self.func} is not callable")  # pragma: no cover
+        if threading.current_thread() is threading.main_thread():
+            self.func(*args, **kwds)
+            return
         _telepysys.register_main(self.main_thread, *args, **kwds)
         self.event.wait()  # wait for the main thread to finish
 
