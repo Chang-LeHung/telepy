@@ -1,14 +1,55 @@
 import signal
 import sys
 import threading
-from collections.abc import Callable
-from types import FrameType
-from typing import Any, override
+from abc import ABC, abstractmethod
+from typing import override
 
 from . import _telepysys
+from .thread import in_main_thread
 
 
-class TelepySysSampler(_telepysys.Sampler):
+class SamplerMixin(ABC):
+    @abstractmethod
+    def adjust(self) -> bool:
+        """Adjust the sampler's parameters and return whether updates occurred.
+
+        Returns:
+            bool: True if updates occurred, False otherwise.
+        """
+        pass  # pragma: no cover
+
+    @abstractmethod
+    def start(self) -> None:
+        """
+        Start the sampler. This is an abstract method that
+        must be implemented by subclasses.
+        """
+        pass  # pragma: no cover
+
+    @abstractmethod
+    def stop(self) -> None:
+        """Stop the sampler and release any resources."""
+        pass  # pragma: no cover
+
+    @staticmethod
+    def setswitchinterval(val: float) -> None:
+        """
+        Sets the interval between switching between threads.
+        Args:
+            val (float): The interval(in seconds) between switching between threads.
+        """
+        sys.setswitchinterval(val)
+
+    @staticmethod
+    def getswitchinterval() -> float:
+        """
+        Returns:
+            float: The interval(in seconds) between switching between threads.
+        """
+        return sys.getswitchinterval()
+
+
+class TelepySysSampler(_telepysys.Sampler, SamplerMixin):
     """
     Inherited sampler for TelepySys.
     """
@@ -46,10 +87,16 @@ class TelepySysSampler(_telepysys.Sampler):
             return True
         return False
 
+    @override
+    def adjust(self):
+        return self.adjust_interval()
+
     @property
     def sampling_time_rate(self):
-        """
-        sampling time rate
+        """Get the ratio of accumulated sampling time to total program lifetime.
+
+        Returns:
+            float: The ratio of time spent sampling versus total program runtime.
         """
         return self.acc_sampling_time / self.sampler_life_time
 
@@ -70,7 +117,7 @@ class TelepySysSampler(_telepysys.Sampler):
         return self.enabled()
 
 
-class TelepySysAsyncSampler(_telepysys.AsyncSampler):
+class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin):
     """
     AsyncSampler class.
     """
@@ -91,6 +138,9 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler):
                 Whether to ignore frozen threads.
         """
         super().__init__()
+        if sampling_interval < 10:
+            # this line is hard to be coveraged
+            sampling_interval = 10  # pragma: no cover
         self.sampling_interval = sampling_interval
         self.debug = debug
         self.ignore_frozen = ignore_frozen
@@ -126,7 +176,9 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler):
 
         current = signal.getsignal(signal.SIGPROF)
         if current not in (signal.SIG_DFL, signal.SIG_IGN):
-            raise RuntimeError("signal.SIGPROF is already in use by another handler")
+            raise RuntimeError(
+                "signal.SIGPROF is already in use by another handler"
+            )  # pragma: no cover
 
         signal.signal(signal.SIGPROF, self._async_routine)
         interval_sec = self.sampling_interval * 1e-6
@@ -143,3 +195,36 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler):
         signal.setitimer(signal.ITIMER_PROF, 0, 0)
         signal.signal(signal.SIGPROF, signal.SIG_IGN)
         super().stop()
+
+    @override
+    def adjust(self) -> bool:
+        interval = self.sampling_interval / 1000_000
+        if interval < sys.getswitchinterval():
+            sys.setswitchinterval(interval)  # be careful of bus error
+            return True
+        return False
+
+    @property
+    def sampling_time_rate(self):
+        """Get the ratio of accumulated sampling time to total program lifetime.
+
+        Returns:
+            float: The ratio of time spent sampling versus total program runtime.
+        """
+        return self.acc_sampling_time / self.sampler_life_time
+
+
+class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
+    """
+    TelepyAsyncWorkerSampler is a TelepySysAsyncSampler that runs in the non-main threads.
+    """
+
+    @override
+    @in_main_thread
+    def start(self):
+        return super().start()
+
+    @override
+    @in_main_thread
+    def stop(self):
+        return super().stop()
