@@ -144,7 +144,7 @@ class TestSampler(TestCase):
 
         sampler = telepy.TelepySysSampler()
         sampler.sampling_interval = 500
-        sampler.adjust_interval()
+        sampler.adjust()
         sampler.start()
         t1 = threading.Thread(target=fib, args=(35,))
         t1.start()
@@ -201,3 +201,41 @@ class TestSampler(TestCase):
         self.assertIn("fib", content)
         self.assertNotIn("frozen", content)
         sampler.save("test_sampler.stack")
+        self.assertLessEqual(sampler.sampling_time_rate, 1)
+
+
+class TelepyMainThread(TestCase):
+    def test_main_thread(self):
+        import io
+        import threading
+
+        from telepy import in_main_thread
+
+        def bar():
+            @in_main_thread
+            def main_thread(buf: io.StringIO):
+                print(threading.current_thread().name, file=buf)
+
+            file = io.StringIO()
+            main_thread(file)
+            self.assertEqual(file.getvalue(), "MainThread\n")
+
+        t = threading.Thread(target=bar)
+        t.start()
+        t.join()
+
+    def test_in_main_thread_runtime_error(self):
+        from telepy import in_main_thread
+
+        try:
+            in_main_thread([1, 2, 3])()
+        except RuntimeError:
+            pass
+        else:
+            self.fail("RuntimeError not raised")
+        try:
+            in_main_thread([1, 2, 3])
+        except RuntimeError:
+            pass
+        else:
+            self.fail("RuntimeError not raised")

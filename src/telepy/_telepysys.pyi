@@ -4,6 +4,7 @@
 An utility module for telepysys
 """
 
+from collections.abc import Callable
 from threading import Thread
 from types import FrameType
 
@@ -11,6 +12,13 @@ __version__: str
 
 def current_frames() -> dict[int, FrameType]: ...
 def unix_micro_time() -> int: ...
+def register_main(callable: Callable, /, *args, **kwargs) -> None:
+    """
+    register a callable object to be called when the main thread is available
+    Raises:
+        RuntimeError: if the callable is not callable or failed to register
+    """
+    ...
 
 class Sampler:
     def __init__(self) -> None:

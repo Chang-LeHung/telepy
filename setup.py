@@ -45,7 +45,10 @@ class Builder(build_ext):
 ext_modules = [
     Extension(
         name="telepy._telepysys",
-        sources=["src/telepy/telepysys/telepysys.c"],
+        sources=[
+            "src/telepy/telepysys/telepysys.c",
+            "src/telepy/telepysys/inject.c",
+        ],
         include_dirs=["src/telepy/telepysys"],
         extra_compile_args=flags,
         extra_link_args=["build/tree.o"],
