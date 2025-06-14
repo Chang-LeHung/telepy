@@ -1,6 +1,9 @@
 
+#include "inject.h"
+#include "object.h"
 #include "telepysys.h"
 #include "tree.h"
+#include "tupleobject.h"
 #include <Python.h>
 #include <stdlib.h>
 #include <time.h>
@@ -210,7 +213,7 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
                         "threading module can not be imported");
         return NULL;
     }
-    const size_t buf_size = 16 KiB;
+    const size_t buf_size = BUF_SIZE;
     char* buf = (char*)malloc(buf_size);
     Telepy_time sampling_start = unix_micro_time();
     while (Sample_Enabled(self)) {
@@ -721,6 +724,13 @@ static PyGetSetDef AsyncSampler_getset[] = {
         NULL,
     },
     {
+        "sampler_life_time",
+        (getter)Sampler_get_life_time,
+        NULL,
+        "life time of the sampler in nanoseconds",
+        NULL,
+    },
+    {
         "debug",
         (getter)Sampler_get_debug,  // share it
         (setter)Sampler_set_debug,  // share it
@@ -823,6 +833,10 @@ static PyObject*
 AsyncSampler_async_routine(AsyncSamplerObject* self,
                            PyObject* const* args,
                            Py_ssize_t nargs) {
+    if (SAMPLING_ENABLED((SamplerObject*)self)) {
+        Py_RETURN_NONE;
+    }
+    ENABLE_SAMPLING((SamplerObject*)self);
     if (nargs != 2) {
         PyErr_Format(
             PyExc_TypeError,
@@ -920,11 +934,13 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     // =======================================================================
 
     Telepy_time sampling_end = self->end = unix_micro_time();
-    base->life_time = sampling_end - sampling_start;
+    base->acc_sampling_time = sampling_end - sampling_start;
     base->sampling_times++;
+    DISABLE_SAMPLING(base);
     Py_RETURN_NONE;
 
 error:
+    DISABLE_SAMPLING(base);
     Py_XDECREF(frames);
     Py_XDECREF(threads);
     return NULL;
@@ -944,6 +960,7 @@ AsyncSampler_stop(AsyncSamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     SamplerObject* base = (SamplerObject*)self;
     Sample_Disable(base);
     self->end = unix_micro_time();
+    base->life_time = self->end - self->start;
     Py_RETURN_NONE;
 }
 
@@ -1038,7 +1055,7 @@ AsyncSampler_new(PyTypeObject* type,
             PyErr_SetString(PyExc_RuntimeError, "Failed to create StackTree");
             return NULL;
         }
-        self->buf_size = 16 KiB;
+        self->buf_size = BUF_SIZE;
         self->buf = malloc(self->buf_size);
         self->threading = PyImport_ImportModule("threading");
         return (PyObject*)self;
@@ -1096,6 +1113,44 @@ telepysys_unix_microtime(PyObject* Py_UNUSED(module),
     return PyLong_FromLongLong((long long)unix_micro_time());
 }
 
+static PyObject*
+telepysys_register_main(PyObject* Py_UNUSED(module),
+                        PyObject* args,
+                        PyObject* kwargs) {
+    if (PyTuple_Size(args) < 1) {
+        PyErr_SetString(PyExc_TypeError,
+                        "telepysys.register_main() takes at least one "
+                        "argument (the callable)");
+        return NULL;
+    }
+    PyObject* callable = PyTuple_GetItem(args, 0);
+    if (!PyCallable_Check(callable)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "telepysys.register_main() first argument must be callable");
+        return NULL;
+    }
+    PyObject* new_args = PyTuple_GetSlice(args, 1, PyTuple_Size(args));
+    Py_XINCREF(kwargs);
+    Py_INCREF(callable);
+    int result = register_func_in_main(
+        callable, new_args, kwargs);  // pass ownship of new_args and kwArgs
+    if (result) {
+        PyErr_Format(
+            PyExc_RuntimeError,
+            "telepysysy: Failed to register a callable in main thread");
+        goto error;
+    }
+    Py_RETURN_NONE;
+error:
+    Py_XDECREF(kwargs);
+    Py_XDECREF(new_args);
+    return NULL;
+}
+
+PyDoc_STRVAR(telepysys_register_main_doc,
+             "Register a callable in the main thread.");
+
 
 static PyMethodDef telepysys_methods[] = {
     {
@@ -1109,6 +1164,12 @@ static PyMethodDef telepysys_methods[] = {
         (PyCFunction)telepysys_unix_microtime,
         METH_NOARGS,
         telepysys_unix_microtime_doc,
+    },
+    {
+        "register_main",
+        _PyCFunction_CAST(telepysys_register_main),
+        METH_VARARGS | METH_KEYWORDS,
+        telepysys_register_main_doc,
     },
     {
         NULL,
@@ -1156,6 +1217,15 @@ telepysys_clear(PyObject* module) {
     return 0;
 }
 
+static int
+telepysys_traverse(PyObject* module, visitproc visit, void* arg) {
+    TelePySysState* state = PyModule_GetState(module);
+    Py_VISIT(state->sampler_type);
+    Py_VISIT(state->async_sampler_type);
+    return 0;
+}
+
+
 static void
 telepysys_free(void* module) {
 
@@ -1177,6 +1247,7 @@ static struct PyModuleDef telepysys = {
     .m_clear = telepysys_clear,
     .m_free = telepysys_free,
     .m_methods = telepysys_methods,
+    .m_traverse = telepysys_traverse,
 };
 
 

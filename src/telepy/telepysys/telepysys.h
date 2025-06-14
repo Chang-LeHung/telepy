@@ -2,7 +2,6 @@
 #ifndef TelepySys_h
 #define TelepySys_h
 
-#include "pytypedefs.h"
 #include "tree.h"
 #include <Python.h>
 #include <stdint.h>
@@ -12,6 +11,8 @@ extern "C" {
 #endif
 
 #define KiB *(1024)
+
+#define BUF_SIZE 16 KiB
 
 typedef unsigned long long Telepy_time;
 
@@ -34,6 +35,7 @@ typedef struct TelePySysState {
 #define VERBOSE 0
 #define ENABLED 1
 #define IGNORE_FROZEN 2
+#define SAMPLING 3
 
 #define Sample_Enabled(s) (BIT_CHECK((s)->flags, ENABLED))
 #define Sample_Disable(s) (BIT_CLEAR((s)->flags, ENABLED))
@@ -46,6 +48,10 @@ typedef struct TelePySysState {
 #define ENABLE_IGNORE_FROZEN(s) (BIT_SET((s)->flags, IGNORE_FROZEN))
 #define DISABLE_IGNORE_FROZEN(s) (BIT_CLEAR((s)->flags, IGNORE_FROZEN))
 #define IGNORE_FROZEN_ENABLED(s) (BIT_CHECK((s)->flags, IGNORE_FROZEN))
+
+#define ENABLE_SAMPLING(s) (BIT_SET((s)->flags, SAMPLING))
+#define DISABLE_SAMPLING(s) (BIT_CLEAR((s)->flags, SAMPLING))
+#define SAMPLING_ENABLED(s) (BIT_CHECK((s)->flags, SAMPLING))
 
 #define CHECK_FALG(s, flag) (BIT_CHECK((s)->flags, flag))
 
