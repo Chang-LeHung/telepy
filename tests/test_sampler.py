@@ -87,7 +87,7 @@ class TestAsyncSampler(unittest.TestCase):
             self.fail("RuntimeError not raised")
         async_sampler.stop()
 
-        def swpawn_sampler():
+        def spawn_sampler():
             async_sampler = telepy.TelepySysAsyncSampler()
 
             try:
@@ -97,6 +97,6 @@ class TestAsyncSampler(unittest.TestCase):
             else:
                 self.fail("RuntimeError not raised")
 
-        t = threading.Thread(target=swpawn_sampler)
+        t = threading.Thread(target=spawn_sampler)
         t.start()
         t.join()
