@@ -4,14 +4,17 @@ from types import FrameType
 
 from . import _telepysys  # type: ignore
 from ._telepysys import unix_micro_time
-from .sampler import TelepySysAsyncSampler, TelepySysSampler
+from .sampler import TelepySysAsyncSampler, TelepySysAsyncWorkerSampler, TelepySysSampler
+from .thread import in_main_thread
 
 __all__: list[str] = [
     "TelepySysAsyncSampler",
+    "TelepySysAsyncWorkerSampler",
     "TelepySysSampler",
     "__version__",
     "current_frames",
     "current_stacks",
+    "in_main_thread",
     "unix_micro_time",
     "version",
 ]
