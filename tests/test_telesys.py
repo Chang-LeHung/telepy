@@ -239,3 +239,14 @@ class TelepyMainThread(TestCase):
             pass
         else:
             self.fail("RuntimeError not raised")
+
+    def test_in_main_thread_in_main(self):
+        from telepy import in_main_thread
+
+        @in_main_thread
+        def bar():
+            import threading
+
+            assert threading.current_thread().name == "MainThread"
+
+        bar()
