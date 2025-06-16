@@ -95,7 +95,10 @@ class AsyncSampler:
         ...
 
     def dumps(self) -> str:
-        """dump the sampled frames to a string"""
+        """
+        dump the sampled frames to a string
+        a stack trace per line, last line is empty.
+        """
         ...
 
     def _async_routine(self, sig_num: int, frame: FrameType | None) -> None:
