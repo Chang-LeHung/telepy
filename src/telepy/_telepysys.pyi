@@ -83,7 +83,7 @@ class AsyncSampler:
         ...
 
     def clear(self) -> None:
-        """clear the sampler"""
+        """clear the sampler, using a async thread to release the resources"""
         ...
 
     def enabled(self) -> bool:
