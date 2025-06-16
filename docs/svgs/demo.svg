@@ -1,0 +1,977 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="680" onload="init(evt)" viewBox="0 0 1200 680"
+	xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+	<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+	<!-- NOTES:  -->
+	<defs>
+		<linearGradient id="background" y1="0" y2="1" x1="0" x2="0">
+			<stop stop-color="#eeeeee" offset="5%" />
+			<stop stop-color="#eeeeb0" offset="95%" />
+		</linearGradient>
+	</defs>
+	<style type="text/css">
+		text {
+			font-family: Source Serif Pro, Palatino, gentium plus, Arial, sans-serif;
+			font-size: 11px;
+			fill: rgb(0, 0, 0);
+		}
+
+		#search,
+		#ignorecase {
+			opacity: 0.1;
+			cursor: pointer;
+		}
+
+		#search:hover,
+		#search.show,
+		#ignorecase:hover,
+		#ignorecase.show {
+			opacity: 1;
+		}
+
+		#subtitle {
+			text-anchor: middle;
+			font-color: rgb(160, 160, 160);
+		}
+
+		#title {
+			text-anchor: middle;
+			font-size: 17px
+		}
+
+		#under_title {
+			text-anchor: middle;
+			font-size: 13px
+		}
+
+		#unzoom {
+			cursor: pointer;
+		}
+
+		#frames>*:hover {
+			stroke: black;
+			stroke-width: 0.5;
+			cursor: pointer;
+		}
+
+		.hide {
+			display: none;
+		}
+
+		.parent {
+			opacity: 0.5;
+		}
+	</style>
+	<script type="text/ecmascript">
+		<![CDATA[
+		"use strict";
+var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+function init(evt) {
+	details = document.getElementById("details").firstChild;
+	searchbtn = document.getElementById("search");
+	ignorecaseBtn = document.getElementById("ignorecase");
+	unzoombtn = document.getElementById("unzoom");
+	matchedtxt = document.getElementById("matched");
+	svg = document.getElementsByTagName("svg")[0];
+	searching = 0;
+	currentSearchTerm = null;
+
+	// use GET parameters to restore a flamegraphs state.
+	var params = get_params();
+	if (params.x && params.y)
+		zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+	if (params.s) search(params.s);
+}
+
+// event listeners
+window.addEventListener("click", function (e) {
+	var target = find_group(e.target);
+	if (target) {
+		if (target.nodeName == "a") {
+			if (e.ctrlKey === false) return;
+			e.preventDefault();
+		}
+		if (target.classList.contains("parent")) unzoom(true);
+		zoom(target);
+		if (!document.querySelector('.parent')) {
+			// we have basically done a clearzoom so clear the url
+			var params = get_params();
+			if (params.x) delete params.x;
+			if (params.y) delete params.y;
+			history.replaceState(null, null, parse_params(params));
+			unzoombtn.classList.add("hide");
+			return;
+		}
+
+		// set parameters for zoom state
+		var el = target.querySelector("rect");
+		if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+			var params = get_params()
+			params.x = el.attributes._orig_x.value;
+			params.y = el.attributes.y.value;
+			history.replaceState(null, null, parse_params(params));
+		}
+	}
+	else if (e.target.id == "unzoom") clearzoom();
+	else if (e.target.id == "search") search_prompt();
+	else if (e.target.id == "ignorecase") toggle_ignorecase();
+}, false)
+
+// mouse-over for info
+// show
+window.addEventListener("mouseover", function (e) {
+	var target = find_group(e.target);
+	if (target) details.nodeValue = "Function: " + g_to_text(target);
+}, false)
+
+// clear
+window.addEventListener("mouseout", function (e) {
+	var target = find_group(e.target);
+	if (target) details.nodeValue = ' ';
+}, false)
+
+// ctrl-F for search
+// ctrl-I to toggle case-sensitive search
+window.addEventListener("keydown", function (e) {
+	if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+		e.preventDefault();
+		search_prompt();
+	}
+	else if (e.ctrlKey && e.keyCode === 73) {
+		e.preventDefault();
+		toggle_ignorecase();
+	}
+}, false)
+
+// functions
+function get_params() {
+	var params = {};
+	var paramsarr = window.location.search.substr(1).split('&');
+	for (var i = 0; i < paramsarr.length; ++i) {
+		var tmp = paramsarr[i].split("=");
+		if (!tmp[0] || !tmp[1]) continue;
+		params[tmp[0]] = decodeURIComponent(tmp[1]);
+	}
+	return params;
+}
+function parse_params(params) {
+	var uri = "?";
+	for (var key in params) {
+		uri += key + '=' + encodeURIComponent(params[key]) + '&';
+	}
+	if (uri.slice(-1) == "&")
+		uri = uri.substring(0, uri.length - 1);
+	if (uri == '?')
+		uri = window.location.href.split('?')[0];
+	return uri;
+}
+function find_child(node, selector) {
+	var children = node.querySelectorAll(selector);
+	if (children.length) return children[0];
+}
+function find_group(node) {
+	var parent = node.parentElement;
+	if (!parent) return;
+	if (parent.id == "frames") return node;
+	return find_group(parent);
+}
+function orig_save(e, attr, val) {
+	if (e.attributes["_orig_" + attr] != undefined) return;
+	if (e.attributes[attr] == undefined) return;
+	if (val == undefined) val = e.attributes[attr].value;
+	e.setAttribute("_orig_" + attr, val);
+}
+function orig_load(e, attr) {
+	if (e.attributes["_orig_" + attr] == undefined) return;
+	e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+	e.removeAttribute("_orig_" + attr);
+}
+function g_to_text(e) {
+	var text = find_child(e, "title").firstChild.nodeValue;
+	return (text)
+}
+function g_to_func(e) {
+	var func = g_to_text(e);
+	// if there's any manipulation we want to do to the function
+	// name before it's searched, do it here before returning.
+	return (func);
+}
+function update_text(e) {
+	var r = find_child(e, "rect");
+	var t = find_child(e, "text");
+	var w = parseFloat(r.attributes.width.value) - 3;
+	var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/, "");
+	t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+	// Smaller than this size won't fit anything
+	if (w < 2 * 12 * 0.59) {
+		t.textContent = "";
+		return;
+	}
+
+	t.textContent = txt;
+	var sl = t.getSubStringLength(0, txt.length);
+	// check if only whitespace or if we can fit the entire string into width w
+	if (/^ *$/.test(txt) || sl < w)
+		return;
+
+	// this isn't perfect, but gives a good starting point
+	// and avoids calling getSubStringLength too often
+	var start = Math.floor((w / sl) * txt.length);
+	for (var x = start; x > 0; x = x - 2) {
+		if (t.getSubStringLength(0, x + 2) <= w) {
+			t.textContent = txt.substring(0, x) + "..";
+			return;
+		}
+	}
+	t.textContent = "";
+}
+
+// zoom
+function zoom_reset(e) {
+	if (e.attributes != undefined) {
+		orig_load(e, "x");
+		orig_load(e, "width");
+	}
+	if (e.childNodes == undefined) return;
+	for (var i = 0, c = e.childNodes; i < c.length; i++) {
+		zoom_reset(c[i]);
+	}
+}
+function zoom_child(e, x, ratio) {
+	if (e.attributes != undefined) {
+		if (e.attributes.x != undefined) {
+			orig_save(e, "x");
+			e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+			if (e.tagName == "text")
+				e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+		}
+		if (e.attributes.width != undefined) {
+			orig_save(e, "width");
+			e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+		}
+	}
+
+	if (e.childNodes == undefined) return;
+	for (var i = 0, c = e.childNodes; i < c.length; i++) {
+		zoom_child(c[i], x - 10, ratio);
+	}
+}
+function zoom_parent(e) {
+	if (e.attributes) {
+		if (e.attributes.x != undefined) {
+			orig_save(e, "x");
+			e.attributes.x.value = 10;
+		}
+		if (e.attributes.width != undefined) {
+			orig_save(e, "width");
+			e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+		}
+	}
+	if (e.childNodes == undefined) return;
+	for (var i = 0, c = e.childNodes; i < c.length; i++) {
+		zoom_parent(c[i]);
+	}
+}
+function zoom(node) {
+	var attr = find_child(node, "rect").attributes;
+	var width = parseFloat(attr.width.value);
+	var xmin = parseFloat(attr.x.value);
+	var xmax = parseFloat(xmin + width);
+	var ymin = parseFloat(attr.y.value);
+	var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+	// XXX: Workaround for JavaScript float issues (fix me)
+	var fudge = 0.0001;
+
+	unzoombtn.classList.remove("hide");
+
+	var el = document.getElementById("frames").children;
+	for (var i = 0; i < el.length; i++) {
+		var e = el[i];
+		var a = find_child(e, "rect").attributes;
+		var ex = parseFloat(a.x.value);
+		var ew = parseFloat(a.width.value);
+		var upstack;
+		// Is it an ancestor
+		if (0 == 0) {
+			upstack = parseFloat(a.y.value) > ymin;
+		} else {
+			upstack = parseFloat(a.y.value) < ymin;
+		}
+		if (upstack) {
+			// Direct ancestor
+			if (ex <= xmin && (ex + ew + fudge) >= xmax) {
+				e.classList.add("parent");
+				zoom_parent(e);
+				update_text(e);
+			}
+			// not in current path
+			else
+				e.classList.add("hide");
+		}
+		// Children maybe
+		else {
+			// no common path
+			if (ex < xmin || ex + fudge >= xmax) {
+				e.classList.add("hide");
+			}
+			else {
+				zoom_child(e, xmin, ratio);
+				update_text(e);
+			}
+		}
+	}
+	search();
+}
+function unzoom(dont_update_text) {
+	unzoombtn.classList.add("hide");
+	var el = document.getElementById("frames").children;
+	for (var i = 0; i < el.length; i++) {
+		el[i].classList.remove("parent");
+		el[i].classList.remove("hide");
+		zoom_reset(el[i]);
+		if (!dont_update_text) update_text(el[i]);
+	}
+	search();
+}
+function clearzoom() {
+	unzoom();
+
+	// remove zoom state
+	var params = get_params();
+	if (params.x) delete params.x;
+	if (params.y) delete params.y;
+	history.replaceState(null, null, parse_params(params));
+}
+
+// search
+function toggle_ignorecase() {
+	ignorecase = !ignorecase;
+	if (ignorecase) {
+		ignorecaseBtn.classList.add("show");
+	} else {
+		ignorecaseBtn.classList.remove("show");
+	}
+	reset_search();
+	search();
+}
+function reset_search() {
+	var el = document.querySelectorAll("#frames rect");
+	for (var i = 0; i < el.length; i++) {
+		orig_load(el[i], "fill")
+	}
+	var params = get_params();
+	delete params.s;
+	history.replaceState(null, null, parse_params(params));
+}
+function search_prompt() {
+	if (!searching) {
+		var term = prompt("Enter a search term (regexp " +
+			"allowed, eg: ^ext4_)"
+			+ (ignorecase ? ", ignoring case" : "")
+			+ "\nPress Ctrl-i to toggle case sensitivity", "");
+		if (term != null) search(term);
+	} else {
+		reset_search();
+		searching = 0;
+		currentSearchTerm = null;
+		searchbtn.classList.remove("show");
+		searchbtn.firstChild.nodeValue = "Search"
+		matchedtxt.classList.add("hide");
+		matchedtxt.firstChild.nodeValue = ""
+	}
+}
+function search(term) {
+	if (term) currentSearchTerm = term;
+	if (currentSearchTerm === null) return;
+
+	var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+	var el = document.getElementById("frames").children;
+	var matches = new Object();
+	var maxwidth = 0;
+	for (var i = 0; i < el.length; i++) {
+		var e = el[i];
+		var func = g_to_func(e);
+		var rect = find_child(e, "rect");
+		if (func == null || rect == null)
+			continue;
+
+		// Save max width. Only works as we have a root frame
+		var w = parseFloat(rect.attributes.width.value);
+		if (w > maxwidth)
+			maxwidth = w;
+
+		if (func.match(re)) {
+			// highlight
+			var x = parseFloat(rect.attributes.x.value);
+			orig_save(rect, "fill");
+			rect.attributes.fill.value = "rgb(230,0,230)";
+
+			// remember matches
+			if (matches[x] == undefined) {
+				matches[x] = w;
+			} else {
+				if (w > matches[x]) {
+					// overwrite with parent
+					matches[x] = w;
+				}
+			}
+			searching = 1;
+		}
+	}
+	if (!searching)
+		return;
+	var params = get_params();
+	params.s = currentSearchTerm;
+	history.replaceState(null, null, parse_params(params));
+
+	searchbtn.classList.add("show");
+	searchbtn.firstChild.nodeValue = "Reset Search";
+
+	// calculate percent matched, excluding vertical overlap
+	var count = 0;
+	var lastx = -1;
+	var lastw = 0;
+	var keys = Array();
+	for (k in matches) {
+		if (matches.hasOwnProperty(k))
+			keys.push(k);
+	}
+	// sort the matched frames by their x location
+	// ascending, then width descending
+	keys.sort(function (a, b) {
+		return a - b;
+	});
+	// Step through frames saving only the biggest bottom-up frames
+	// thanks to the sort order. This relies on the tree property
+	// where children are always smaller than their parents.
+	var fudge = 0.0001;	// JavaScript floating point
+	for (var k in keys) {
+		var x = parseFloat(keys[k]);
+		var w = matches[keys[k]];
+		if (x >= lastx + lastw - fudge) {
+			count += w;
+			lastx = x;
+			lastw = w;
+		}
+	}
+	// display matched percent
+	matchedtxt.classList.remove("hide");
+	var pct = 100 * count / maxwidth;
+	if (pct != 100) pct = pct.toFixed(1)
+	matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+}
+
+		]]>
+	</script>
+	<rect x="0" y="0" width="1200" height="680" fill="url(#background)" rx="2" ry="2" />
+	<text id="title" x="600" y="24">TelePy Flame Graph</text>
+	<text id="under_title" x="600" y="44">Environment: /Users/telepy/miniconda3/lib/python3.12</text>
+	<text id="under_title" x="600" y="64">Working Directory: /Users/telepy/Desktop/workdir/telepy</text>
+	<text id="under_title" x="600" y="84">Command: /Users/telepy/miniconda3/bin/python
+		/Users/telepy/miniconda3/bin/telepy tests/telepys/fib.py --interval 1</text>
+	<text id="details" x="10" y="670"> </text>
+	<text id="unzoom" x="10" y="24" class="hide">Reset Zoom</text>
+	<text id="search" x="1090" y="24">Search</text>
+	<text id="ignorecase" x="1170" y="24">ic</text>
+	<text id="matched" x="1090" y="670"> </text>
+	<g id="frames">
+		<g>
+			<title>root (89 samples, 100.00%)</title>
+			<rect x="10" y="615" width="1180.0" height="15" fill="hsl(82, 57%, 67%)" rx="2" ry="2" />
+			<text x="15" y="625.5">root</text>
+		</g>
+		<g>
+			<title>MainThread (89 samples, 100.00%)</title>
+			<rect x="10" y="600" width="1180.0" height="15" fill="hsl(187, 42%, 72%)" rx="2" ry="2" />
+			<text x="15" y="610.5">MainThread</text>
+		</g>
+		<g>
+			<title>Users/telepy/miniconda3/bin/telepy:&lt;module&gt;:8 (74 samples, 83.15%)</title>
+			<rect x="10" y="585" width="981.1235955056179" height="15" fill="hsl(173, 58%, 68%)" rx="2" ry="2" />
+			<text x="15" y="595.5">Users/telepy/miniconda3/bin/telepy:&lt;module&gt;:8</text>
+		</g>
+		<g>
+			<title>weakref.py:finalize._exitfunc:649 (11 samples, 12.36%)</title>
+			<rect x="991.1235955056179" y="585" width="145.8426966292135" height="15" fill="hsl(271, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="996.1235955056179" y="595.5">weakref.py:finalize...</text>
+		</g>
+		<g>
+			<title>weakref.py:finalize._exitfunc:666 (1 samples, 1.12%)</title>
+			<rect x="1136.9662921348313" y="585" width="13.258426966292134" height="15" fill="hsl(195, 50%, 70%)" rx="2"
+				ry="2" />
+			<text x="1141.9662921348313" y="595.5"></text>
+		</g>
+		<g>
+			<title>threading.py:_shutdown:1575 (1 samples, 1.12%)</title>
+			<rect x="1150.2247191011234" y="585" width="13.258426966292134" height="15" fill="hsl(5, 40%, 70%)" rx="2"
+				ry="2" />
+			<text x="1155.2247191011234" y="595.5"></text>
+		</g>
+		<g>
+			<title>threading.py:_shutdown:1593 (1 samples, 1.12%)</title>
+			<rect x="1163.4831460674154" y="585" width="13.258426966292134" height="15" fill="hsl(225, 50%, 70%)" rx="2"
+				ry="2" />
+			<text x="1168.4831460674154" y="595.5"></text>
+		</g>
+		<g>
+			<title>threading.py:_shutdown:1597 (1 samples, 1.12%)</title>
+			<rect x="1176.7415730337075" y="585" width="13.258426966292134" height="15" fill="hsl(134, 49%, 69%)" rx="2"
+				ry="2" />
+			<text x="1181.7415730337075" y="595.5"></text>
+		</g>
+		<g>
+			<title>telepy/__main__.py:main:247 (74 samples, 83.15%)</title>
+			<rect x="10" y="570" width="981.1235955056179" height="15" fill="hsl(146, 61%, 71%)" rx="2" ry="2" />
+			<text x="15" y="580.5">telepy/__main__.py:main:247</text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_find_and_load:1357 (6 samples, 6.74%)</title>
+			<rect x="991.1235955056179" y="570" width="79.5505617977528" height="15" fill="hsl(268, 63%, 73%)" rx="2"
+				ry="2" />
+			<text x="996.1235955056179" y="580.5">&lt;frozen im..</text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_find_and_load:1360 (5 samples, 5.62%)</title>
+			<rect x="1070.6741573033707" y="570" width="66.29213483146067" height="15" fill="hsl(137, 52%, 72%)" rx="2"
+				ry="2" />
+			<text x="1075.6741573033707" y="580.5">&lt;frozen ..</text>
+		</g>
+		<g>
+			<title>weakref.py:finalize.__call__:590 (1 samples, 1.12%)</title>
+			<rect x="1136.9662921348313" y="570" width="13.258426966292134" height="15" fill="hsl(142, 57%, 67%)" rx="2"
+				ry="2" />
+			<text x="1141.9662921348313" y="580.5"></text>
+		</g>
+		<g>
+			<title>threading.py:Thread.ident:1198 (1 samples, 1.12%)</title>
+			<rect x="1176.7415730337075" y="570" width="13.258426966292134" height="15" fill="hsl(336, 41%, 71%)" rx="2"
+				ry="2" />
+			<text x="1181.7415730337075" y="580.5"></text>
+		</g>
+		<g>
+			<title>telepy/__main__.py:dispatch:183 (74 samples, 83.15%)</title>
+			<rect x="10" y="555" width="981.1235955056179" height="15" fill="hsl(60, 35%, 65%)" rx="2" ry="2" />
+			<text x="15" y="565.5">telepy/__main__.py:dispatch:183</text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_ModuleLockManager.__enter__:417 (5 samples, 5.62%)</title>
+			<rect x="991.1235955056179" y="555" width="66.29213483146067" height="15" fill="hsl(350, 55%, 65%)" rx="2"
+				ry="2" />
+			<text x="996.1235955056179" y="565.5">&lt;frozen ..</text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_ModuleLockManager.__exit__:420 (1 samples, 1.12%)</title>
+			<rect x="1057.4157303370787" y="555" width="13.258426966292134" height="15" fill="hsl(307, 42%, 72%)" rx="2"
+				ry="2" />
+			<text x="1062.4157303370787" y="565.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_find_and_load_unlocked:1322 (1 samples, 1.12%)</title>
+			<rect x="1070.6741573033707" y="555" width="13.258426966292134" height="15" fill="hsl(59, 64%, 74%)" rx="2"
+				ry="2" />
+			<text x="1075.6741573033707" y="565.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_find_and_load_unlocked:1331 (4 samples, 4.49%)</title>
+			<rect x="1083.9325842696628" y="555" width="53.03370786516854" height="15" fill="hsl(313, 48%, 68%)" rx="2"
+				ry="2" />
+			<text x="1088.9325842696628" y="565.5">&lt;froze..</text>
+		</g>
+		<g>
+			<title>telepy/environment.py:telepy_finalize:113 (1 samples, 1.12%)</title>
+			<rect x="1136.9662921348313" y="555" width="13.258426966292134" height="15" fill="hsl(24, 59%, 69%)" rx="2"
+				ry="2" />
+			<text x="1141.9662921348313" y="565.5"></text>
+		</g>
+		<g>
+			<title>telepy/__main__.py:PythonFileProfilingHandler.handle:130 (1 samples, 1.12%)</title>
+			<rect x="10" y="540" width="13.258426966292134" height="15" fill="hsl(29, 64%, 74%)" rx="2" ry="2" />
+			<text x="15" y="550.5"></text>
+		</g>
+		<g>
+			<title>telepy/__main__.py:PythonFileProfilingHandler.handle:134 (2 samples, 2.25%)</title>
+			<rect x="23.258426966292134" y="540" width="26.51685393258427" height="15" fill="hsl(28, 63%, 73%)" rx="2"
+				ry="2" />
+			<text x="28.258426966292134" y="550.5">te..</text>
+		</g>
+		<g>
+			<title>telepy/__main__.py:PythonFileProfilingHandler.handle:135 (2 samples, 2.25%)</title>
+			<rect x="49.7752808988764" y="540" width="26.51685393258427" height="15" fill="hsl(152, 37%, 67%)" rx="2"
+				ry="2" />
+			<text x="54.7752808988764" y="550.5">te..</text>
+		</g>
+		<g>
+			<title>telepy/__main__.py:PythonFileProfilingHandler.handle:136 (69 samples, 77.53%)</title>
+			<rect x="76.29213483146067" y="540" width="914.8314606741573" height="15" fill="hsl(41, 46%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="550.5">telepy/__main__.py:PythonFileProfilingHandler.handle:136</text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_get_module_lock:443 (4 samples, 4.49%)</title>
+			<rect x="991.1235955056179" y="540" width="53.03370786516854" height="15" fill="hsl(79, 54%, 74%)" rx="2"
+				ry="2" />
+			<text x="996.1235955056179" y="550.5">&lt;froze..</text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_get_module_lock:456 (1 samples, 1.12%)</title>
+			<rect x="1044.1573033707864" y="540" width="13.258426966292134" height="15" fill="hsl(74, 49%, 69%)" rx="2"
+				ry="2" />
+			<text x="1049.1573033707864" y="550.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_find_spec:1256 (1 samples, 1.12%)</title>
+			<rect x="1070.6741573033707" y="540" width="13.258426966292134" height="15" fill="hsl(56, 61%, 71%)" rx="2"
+				ry="2" />
+			<text x="1075.6741573033707" y="550.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_load_unlocked:921 (4 samples, 4.49%)</title>
+			<rect x="1083.9325842696628" y="540" width="53.03370786516854" height="15" fill="hsl(153, 38%, 68%)" rx="2"
+				ry="2" />
+			<text x="1088.9325842696628" y="550.5">&lt;froze..</text>
+		</g>
+		<g>
+			<title>telepy/thread.py:in_main_thread.&lt;locals&gt;._decorator:49 (1 samples, 1.12%)</title>
+			<rect x="1136.9662921348313" y="540" width="13.258426966292134" height="15" fill="hsl(259, 54%, 74%)" rx="2"
+				ry="2" />
+			<text x="1141.9662921348313" y="550.5"></text>
+		</g>
+		<g>
+			<title>contextlib.py:_GeneratorContextManager.__exit__:144 (1 samples, 1.12%)</title>
+			<rect x="10" y="525" width="13.258426966292134" height="15" fill="hsl(232, 57%, 67%)" rx="2" ry="2" />
+			<text x="15" y="535.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen codecs&gt;:BufferedIncrementalDecoder.decode:319 (1 samples, 1.12%)</title>
+			<rect x="23.258426966292134" y="525" width="13.258426966292134" height="15" fill="hsl(118, 63%, 73%)" rx="2"
+				ry="2" />
+			<text x="28.258426966292134" y="535.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen codecs&gt;:BufferedIncrementalDecoder.decode:322 (1 samples, 1.12%)</title>
+			<rect x="36.51685393258427" y="525" width="13.258426966292134" height="15" fill="hsl(343, 48%, 68%)" rx="2"
+				ry="2" />
+			<text x="41.51685393258427" y="535.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen posixpath&gt;:abspath:415 (1 samples, 1.12%)</title>
+			<rect x="49.7752808988764" y="525" width="13.258426966292134" height="15" fill="hsl(299, 64%, 74%)" rx="2"
+				ry="2" />
+			<text x="54.7752808988764" y="535.5"></text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:&lt;module&gt;:11 (69 samples, 77.53%)</title>
+			<rect x="76.29213483146067" y="525" width="914.8314606741573" height="15" fill="hsl(116, 61%, 71%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="535.5">tests/telepys/fib.py:&lt;module&gt;:11</text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_ModuleLock.__init__:232 (1 samples, 1.12%)</title>
+			<rect x="991.1235955056179" y="525" width="13.258426966292134" height="15" fill="hsl(278, 43%, 73%)" rx="2"
+				ry="2" />
+			<text x="996.1235955056179" y="535.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_ModuleLock.__init__:253 (1 samples, 1.12%)</title>
+			<rect x="1004.3820224719101" y="525" width="13.258426966292134" height="15" fill="hsl(160, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="1009.3820224719101" y="535.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_ModuleLock.__init__:254 (1 samples, 1.12%)</title>
+			<rect x="1017.6404494382023" y="525" width="13.258426966292134" height="15" fill="hsl(80, 55%, 65%)" rx="2"
+				ry="2" />
+			<text x="1022.6404494382023" y="535.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:module_from_spec:813 (1 samples, 1.12%)</title>
+			<rect x="1083.9325842696628" y="525" width="13.258426966292134" height="15" fill="hsl(43, 48%, 68%)" rx="2"
+				ry="2" />
+			<text x="1088.9325842696628" y="535.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:module_from_spec:819 (3 samples, 3.37%)</title>
+			<rect x="1097.1910112359549" y="525" width="39.7752808988764" height="15" fill="hsl(85, 60%, 70%)" rx="2"
+				ry="2" />
+			<text x="1102.1910112359549" y="535.5">&lt;fro..</text>
+		</g>
+		<g>
+			<title>telepy/thread.py:PyMainTrampoline.__init__:13 (1 samples, 1.12%)</title>
+			<rect x="1136.9662921348313" y="525" width="13.258426966292134" height="15" fill="hsl(107, 52%, 72%)" rx="2"
+				ry="2" />
+			<text x="1141.9662921348313" y="535.5"></text>
+		</g>
+		<g>
+			<title>telepy/environment.py:telepy_env:99 (1 samples, 1.12%)</title>
+			<rect x="10" y="510" width="13.258426966292134" height="15" fill="hsl(150, 35%, 65%)" rx="2" ry="2" />
+			<text x="15" y="520.5"></text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="510" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="520.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:BuiltinImporter.create_module:995 (1 samples, 1.12%)</title>
+			<rect x="1083.9325842696628" y="510" width="13.258426966292134" height="15" fill="hsl(211, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="1088.9325842696628" y="520.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_init_module_attrs:733 (1 samples, 1.12%)</title>
+			<rect x="1097.1910112359549" y="510" width="13.258426966292134" height="15" fill="hsl(156, 41%, 71%)" rx="2"
+				ry="2" />
+			<text x="1102.1910112359549" y="520.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_init_module_attrs:737 (1 samples, 1.12%)</title>
+			<rect x="1110.449438202247" y="510" width="13.258426966292134" height="15" fill="hsl(193, 48%, 68%)" rx="2"
+				ry="2" />
+			<text x="1115.449438202247" y="520.5"></text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_init_module_attrs:743 (1 samples, 1.12%)</title>
+			<rect x="1123.707865168539" y="510" width="13.258426966292134" height="15" fill="hsl(125, 40%, 70%)" rx="2"
+				ry="2" />
+			<text x="1128.707865168539" y="520.5"></text>
+		</g>
+		<g>
+			<title>telepy/environment.py:Environment.destory_telepy_enviroment:89 (1 samples, 1.12%)</title>
+			<rect x="10" y="495" width="13.258426966292134" height="15" fill="hsl(90, 35%, 65%)" rx="2" ry="2" />
+			<text x="15" y="505.5"></text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="495" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="505.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>&lt;frozen importlib._bootstrap&gt;:_call_with_frames_removed:488 (1 samples, 1.12%)</title>
+			<rect x="1083.9325842696628" y="495" width="13.258426966292134" height="15" fill="hsl(72, 47%, 67%)" rx="2"
+				ry="2" />
+			<text x="1088.9325842696628" y="505.5"></text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="480" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="490.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="465" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="475.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="450" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="460.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="435" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="445.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="420" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="430.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="405" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="415.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="390" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="400.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="375" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="385.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="360" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="370.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="345" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="355.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (68 samples, 76.40%)</title>
+			<rect x="76.29213483146067" y="330" width="901.5730337078651" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="340.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (1 samples, 1.12%)</title>
+			<rect x="76.29213483146067" y="315" width="13.258426966292134" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="81.29213483146067" y="325.5"></text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (67 samples, 75.28%)</title>
+			<rect x="89.5505617977528" y="315" width="888.314606741573" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="94.5505617977528" y="325.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (67 samples, 75.28%)</title>
+			<rect x="89.5505617977528" y="300" width="888.314606741573" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="94.5505617977528" y="310.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (67 samples, 75.28%)</title>
+			<rect x="89.5505617977528" y="285" width="888.314606741573" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="94.5505617977528" y="295.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (1 samples, 1.12%)</title>
+			<rect x="89.5505617977528" y="270" width="13.258426966292134" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="94.5505617977528" y="280.5"></text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (66 samples, 74.16%)</title>
+			<rect x="102.80898876404494" y="270" width="875.0561797752808" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="107.80898876404494" y="280.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (5 samples, 5.62%)</title>
+			<rect x="102.80898876404494" y="255" width="66.29213483146067" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="107.80898876404494" y="265.5">tests/te..</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (61 samples, 68.54%)</title>
+			<rect x="169.1011235955056" y="255" width="808.7640449438202" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="174.1011235955056" y="265.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (4 samples, 4.49%)</title>
+			<rect x="169.1011235955056" y="240" width="53.03370786516854" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="174.1011235955056" y="250.5">tests/..</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (57 samples, 64.04%)</title>
+			<rect x="222.13483146067415" y="240" width="755.7303370786517" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="227.13483146067415" y="250.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (4 samples, 4.49%)</title>
+			<rect x="222.13483146067415" y="225" width="53.03370786516854" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="227.13483146067415" y="235.5">tests/..</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (53 samples, 59.55%)</title>
+			<rect x="275.1685393258427" y="225" width="702.6966292134831" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="280.1685393258427" y="235.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (6 samples, 6.74%)</title>
+			<rect x="275.1685393258427" y="210" width="79.5505617977528" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="280.1685393258427" y="220.5">tests/tele..</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (47 samples, 52.81%)</title>
+			<rect x="354.71910112359546" y="210" width="623.1460674157303" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="359.71910112359546" y="220.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (7 samples, 7.87%)</title>
+			<rect x="354.71910112359546" y="195" width="92.80898876404494" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="359.71910112359546" y="205.5">tests/telepy..</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (40 samples, 44.94%)</title>
+			<rect x="447.5280898876404" y="195" width="530.3370786516854" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="452.5280898876404" y="205.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (7 samples, 7.87%)</title>
+			<rect x="447.5280898876404" y="180" width="92.80898876404494" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="452.5280898876404" y="190.5">tests/telepy..</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (33 samples, 37.08%)</title>
+			<rect x="540.3370786516854" y="180" width="437.5280898876404" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="545.3370786516854" y="190.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (12 samples, 13.48%)</title>
+			<rect x="540.3370786516854" y="165" width="159.1011235955056" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="545.3370786516854" y="175.5">tests/telepys/fib.py:f..</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (21 samples, 23.60%)</title>
+			<rect x="699.4382022471909" y="165" width="278.4269662921348" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="704.4382022471909" y="175.5">tests/telepys/fib.py:fib:7</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (11 samples, 12.36%)</title>
+			<rect x="699.4382022471909" y="150" width="145.8426966292135" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="704.4382022471909" y="160.5">tests/telepys/fib.py..</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (10 samples, 11.24%)</title>
+			<rect x="845.2808988764044" y="150" width="132.58426966292134" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="850.2808988764044" y="160.5">tests/telepys/fib...</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (8 samples, 8.99%)</title>
+			<rect x="845.2808988764044" y="135" width="106.06741573033707" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="850.2808988764044" y="145.5">tests/telepys/..</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:7 (2 samples, 2.25%)</title>
+			<rect x="951.3483146067415" y="135" width="26.51685393258427" height="15" fill="hsl(31, 36%, 66%)" rx="2"
+				ry="2" />
+			<text x="956.3483146067415" y="145.5">te..</text>
+		</g>
+		<g>
+			<title>tests/telepys/fib.py:fib:1 (2 samples, 2.25%)</title>
+			<rect x="951.3483146067415" y="120" width="26.51685393258427" height="15" fill="hsl(280, 45%, 65%)" rx="2"
+				ry="2" />
+			<text x="956.3483146067415" y="130.5">te..</text>
+		</g>
+	</g>
+</svg>
