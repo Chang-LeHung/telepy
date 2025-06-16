@@ -336,7 +336,7 @@ class FlameGraph:
         return content
 
 
-def process_stack_trace(lines: str, site_path: str, work_dir: str) -> list[str]:
+def process_stack_trace(lines: list[str], site_path: str, work_dir: str) -> list[str]:
     res: list[str] = []
     base_dir = "/".join(site_path.split("/")[:-1])
     for line in lines:
@@ -369,7 +369,7 @@ def main() -> None:
         default=sys.stdin,
         help="Input file (default: stdin)",
     )
-    parser.add_argument("--title", default="Flame Graph", help="Title text")
+    parser.add_argument("--title", default="TelePy Flame Graph", help="Title text")
     parser.add_argument("--width", type=int, default=1200, help="SVG width")
     parser.add_argument("--height", type=int, default=15, help="Frame height")
     parser.add_argument("--minwidth", type=float, default=0.1, help="Minimum frame width")
