@@ -34,3 +34,6 @@ fix = false
 
 [tool.setuptools.dynamic]
 version = { attr = "telepy.__version__" }
+
+[project.scripts]
+telepy = "telepy.__main__:main"
