@@ -1,3 +1,4 @@
+
 "use strict";
 var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
 function init(evt) {
