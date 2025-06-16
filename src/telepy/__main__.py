@@ -13,6 +13,7 @@ from typing import override
 from rich import print
 from rich.panel import Panel
 from rich.traceback import Traceback, install
+from rich_argparse import RichHelpFormatter
 
 from . import logging
 from .environment import Environment, telepy_env, telepy_finalize
@@ -196,7 +197,7 @@ def dispatch(args: argparse.Namespace) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=RichHelpFormatter)
     parser.add_argument(
         "input",
         nargs=1,
