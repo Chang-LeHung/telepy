@@ -33,6 +33,7 @@ class Builder(build_ext):
             "-c",
             "-std=c++11",
             "src/telepy/telepysys/tree.cc",
+            "-pthread",
             *(flags),
             "-o",
             "build/tree.o",
