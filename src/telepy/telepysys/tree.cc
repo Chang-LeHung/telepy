@@ -1,13 +1,25 @@
 
 #include "tree.h"
+#include <atomic>
 #include <cassert>
+#include <condition_variable>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <mutex>
+#include <queue>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
+
+
+std::mutex queue_mtx;
+std::condition_variable queue_cv;
+std::queue<StackTree*> delete_queue;
+std::atomic<bool> thread_initialized{false};
+std::thread* delete_thread = nullptr;
 
 
 struct Node {
@@ -130,9 +142,36 @@ NewTree() {
     return new StackTree();
 }
 
+
+void
+DeleteWorker() {
+    while (true) {
+        std::unique_lock<std::mutex> lock(queue_mtx);
+        queue_cv.wait(lock, [] { return !delete_queue.empty(); });
+
+        StackTree* tree = delete_queue.front();
+        delete_queue.pop();
+        lock.unlock();
+
+        delete tree;
+    }
+}
+
+
 void
 FreeTree(StackTree* tree) {
-    delete tree;
+    if (!thread_initialized.exchange(true)) {
+        // Initialize the background thread only once
+        delete_thread = new std::thread(DeleteWorker);
+        delete_thread->detach();  // Run in background
+    }
+
+    // Add the tree to the deletion queue
+    {
+        std::lock_guard<std::mutex> lock(queue_mtx);
+        delete_queue.push(tree);
+    }
+    queue_cv.notify_one();  // Notify the worker thread
 }
 
 void
