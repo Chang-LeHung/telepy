@@ -132,7 +132,7 @@ class PythonFileProfilingHandler(ArgsHandler):
     def handle(self, args: argparse.Namespace) -> bool:
         filename: str = args.input[0].name
 
-        if not (filename.endswith(".py") or filename.endswith(".pyc")):
+        if not filename.endswith(".py"):
             return False
 
         with telepy_env(args) as (global_dict, sampler):
@@ -201,7 +201,7 @@ def main():
     parser.add_argument(
         "input",
         nargs=1,
-        help="Input file(s), if run a python file, it must be ended with .py or .pyc",
+        help="Input file(s), if run a python file, it must be ended with .py",
         type=argparse.FileType("r"),
     )
     parser.add_argument(
