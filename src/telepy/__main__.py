@@ -265,7 +265,7 @@ def main():
         "-r",
         "--reverse",
         action="store_true",
-        help="Generate flame graph with reversed frames",
+        help=argparse.SUPPRESS,  # TODO: implement it!
     )
     args = parser.parse_args()
     try:
