@@ -20,6 +20,12 @@ def register_main(callable: Callable, /, *args, **kwargs) -> None:
     """
     ...
 
+def sched_yield() -> None:
+    """
+    Yield the current thread to other threads.
+    Relax to call me, we handle the GIL properly.
+    """
+
 class Sampler:
     def __init__(self) -> None:
         # sampling interval in microseconds

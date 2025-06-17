@@ -8,6 +8,19 @@ from . import _telepysys
 from .thread import in_main_thread
 
 
+class MultiProcessEnv:
+    """
+    We do not use the __slots__ to avoid a TypeError raise by CPython
+    internals (Objects/typeobject.c:best_base).
+    """
+
+    def __init__(self) -> None:
+        self.is_root: bool = True
+        self.child_cnt: int = 0
+        self.from_fork: bool = False
+        self.from_mp: bool = False
+
+
 class SamplerMixin(ABC):
     @abstractmethod
     def adjust(self) -> bool:
@@ -49,7 +62,7 @@ class SamplerMixin(ABC):
         return sys.getswitchinterval()
 
 
-class TelepySysSampler(_telepysys.Sampler, SamplerMixin):
+class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
     """
     Inherited sampler for TelepySys.
     """
@@ -71,6 +84,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin):
                 Whether to ignore frozen threads.
         """
         super().__init__()
+        MultiProcessEnv.__init__(self)
         self.sampling_interval = sampling_interval
         self.debug = debug
         self.ignore_frozen = ignore_frozen
@@ -119,7 +133,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin):
         return self.enabled()
 
 
-class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin):
+class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessEnv):
     """
     AsyncSampler class.
     """
@@ -141,6 +155,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin):
                 Whether to ignore frozen threads.
         """
         super().__init__()
+        MultiProcessEnv.__init__(self)
         if sampling_interval < 5:
             # this line is hard to be coveraged
             sampling_interval = 5  # pragma: no cover

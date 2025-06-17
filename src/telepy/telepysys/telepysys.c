@@ -5,6 +5,7 @@
 #include "tree.h"
 #include "tupleobject.h"
 #include <Python.h>
+#include <sched.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -1208,6 +1209,17 @@ error:
 PyDoc_STRVAR(telepysys_register_main_doc,
              "Register a callable in the main thread.");
 
+static PyObject*
+telepysys_yield(PyObject* Py_UNUSED(module), PyObject* Py_UNUSED(args)) {
+
+    Py_BEGIN_ALLOW_THREADS;
+    sched_yield();
+    Py_END_ALLOW_THREADS;
+    Py_RETURN_NONE;
+}
+
+PyDoc_STRVAR(telepysys_yield_doc,
+             "Yield the current thread to other threads.");
 
 static PyMethodDef telepysys_methods[] = {
     {
@@ -1227,6 +1239,12 @@ static PyMethodDef telepysys_methods[] = {
         _PyCFunction_CAST(telepysys_register_main),
         METH_VARARGS | METH_KEYWORDS,
         telepysys_register_main_doc,
+    },
+    {
+        "sched_yield",
+        (PyCFunction)telepysys_yield,
+        METH_NOARGS,
+        telepysys_yield_doc,
     },
     {
         NULL,

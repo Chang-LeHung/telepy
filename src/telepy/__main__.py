@@ -197,7 +197,11 @@ def dispatch(args: argparse.Namespace) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(formatter_class=RichHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description="TelePy is a very powerful python profiler and dignostic tool."
+        " If it helps, you can star it here https://github.com/Chang-LeHung/telepy",
+        formatter_class=RichHelpFormatter,
+    )
     parser.add_argument(
         "input",
         nargs=1,
@@ -256,11 +260,25 @@ def main():
     )
     parser.add_argument("-m", nargs=1, help="run a module")
     parser.add_argument(
+        "--merge",
+        action="store_true",
+        help="Merge multiple flamegraph files in multiprocess environment. "
+        "If not merge them, the child flamegraph named in format "
+        "`pid-ppid.svg` and `pid-ppid.folded`",
+    )
+    parser.add_argument(
         "--fork", action="store_true", help=argparse.SUPPRESS
     )  # internal flag
     parser.add_argument(
         "--mp", action="store_true", help=argparse.SUPPRESS
     )  # internal flag
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=10.0,
+        help="Timeout (in seconds) for parent process to wait for child processes"
+        " to merge flamegraph files (default: 10.0)",
+    )
     parser.add_argument(
         "-r",
         "--reverse",
