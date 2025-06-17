@@ -209,7 +209,7 @@ def main():
         "--parse",
         action="store_true",
         help="Parse stack trace data to generate a flamegraph svg file, "
-        "such as telepy -p result.folded",
+        "such as `telepy -p result.folded`",
     )
     parser.add_argument(
         "--interval",
