@@ -42,6 +42,8 @@ def patch_mp(sampler: TelepySysAsyncWorkerSampler):
 class Environment:
     initialized = False
 
+    sampler_created = False
+
     @classmethod
     def init_telepy_environment(cls, args_: argparse.Namespace) -> dict[str, Any]:
         """
@@ -59,9 +61,13 @@ class Environment:
                 return main_mod.__dict__
 
             sampler = TelepySysAsyncWorkerSampler(
-                args.interval, debug=args.debug, ignore_frozen=args.ignore_frozen
+                args.interval,
+                debug=args.debug,
+                ignore_frozen=args.ignore_frozen,
+                ignore_self=not args.include_telepy,
             )
             sampler.adjust()
+            Environment.sampler_created = True
             cls.initialized = True
             setattr(main_mod, "__file__", os.path.abspath(args.input[0].name))
             setattr(main_mod, "__builtins__", globals()["__builtins__"])
@@ -87,6 +93,7 @@ class Environment:
         sys.argv = getattr(sys, "telepy_argv")
         delattr(sys, "telepy_argv")
         sys.path.remove(os.getcwd())
+        Environment.initialized = False
 
 
 @contextlib.contextmanager
@@ -106,7 +113,7 @@ def telepy_finalize() -> None:
     by stopping the global sampler instance and save profiling data.
     """
     global sampler
-    if not Environment.initialized:
+    if not Environment.sampler_created:
         raise RuntimeError("telepy environment is not initialized")
     assert sampler is not None
     assert args is not None
@@ -115,7 +122,8 @@ def telepy_finalize() -> None:
 
     site_path = site.getsitepackages()[0]
     work_dir = os.getcwd()
-    lines = process_stack_trace(lines, site_path, work_dir)
+    if not args.full_path:
+        lines = process_stack_trace(lines, site_path, work_dir)
     fg = FlameGraph(
         lines,
         title="TelePy Flame Graph",

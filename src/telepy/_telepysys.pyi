@@ -30,6 +30,7 @@ class Sampler:
         self.sampling_times: int
         self.debug: bool = False
         self.ignore_frozen: bool = False
+        self.ignore_self: bool = False
 
     def start(self) -> None:
         """start the sampler"""
@@ -73,6 +74,7 @@ class AsyncSampler:
         self.sampling_tid: int
         self.start_time: int
         self.end_time: int
+        self.ignore_self: bool = False
 
     def start(self) -> None:
         """start the sampler"""
