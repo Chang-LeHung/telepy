@@ -222,7 +222,7 @@ def main():
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Enable debug mode (default: False)",
+        help="Enable debug mode (default: False). Print some debug information.",
     )
     parser.add_argument(
         "--full-path",
