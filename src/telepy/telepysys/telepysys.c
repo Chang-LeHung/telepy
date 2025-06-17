@@ -97,6 +97,24 @@ Sampler_stop(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
     Py_RETURN_NONE;
 }
 
+static inline int
+PyUnicode_Contain(PyObject* filename, const char* str) {
+    const char* filename_cstr = PyUnicode_AsUTF8(filename);
+    if (!filename_cstr) {
+        return 0;
+    }
+    return strstr(filename_cstr, str) != NULL;
+}
+
+static inline int
+PyUnicode_start_with(PyObject* filename, const char* str) {
+    const char* f = PyUnicode_AsUTF8(filename);
+    if (!f) {
+        return 0;
+    }
+    return strncmp(f, str, strlen(str)) == 0;
+}
+
 
 // return 0 on success, other on failure and set python error
 static int
@@ -123,7 +141,12 @@ call_stack(SamplerObject* self,
         PyCodeObject* code = PyFrame_GetCode(frame);  // New reference
         PyObject* filename = code->co_filename;
         PyObject* name = code->co_name;
-
+        if (IGNORE_SELF_ENABLED(self) &&
+            (PyUnicode_Contain(filename, "/site-packages/telepy") ||
+             PyUnicode_Contain(filename, "/bin/telepy"))) {
+            Py_DECREF(code);
+            continue;
+        }
         if (filename == NULL || name == NULL) {
             PyErr_Format(PyExc_RuntimeError,
                          "telepysys: failed to get filename or name");
@@ -142,13 +165,8 @@ call_stack(SamplerObject* self,
         } else {
             format = "%s:%s:%d";
         }
-        PyObject* result =
-            PyObject_CallMethod(filename, "startswith", "s", "<frozen");
-        if (result == NULL) {
-            Py_DECREF(code);
-            goto error;
-        }
-        if (!(IGNORE_FROZEN_ENABLED(self) && Py_IsTrue(result))) {
+        if (!(IGNORE_FROZEN_ENABLED(self) &&
+              PyUnicode_start_with(filename, "<frozen"))) {
             ret = snprintf(buf + pos,
                            buf_size - pos,
                            format,
@@ -519,6 +537,31 @@ Sampler_set_ignore_frozen(SamplerObject* self,
     return 0;
 }
 
+static PyObject*
+Sampler_get_ignore_self(SamplerObject* self, void* Py_UNUSED(closure)) {
+    if (ENABLE_IGNORE_SELF(self)) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
+
+static int
+Sampler_set_ignore_self(SamplerObject* self,
+                        PyObject* value,
+                        void* Py_UNUSED(closure)) {
+    if (!PyBool_Check(value)) {
+        PyErr_Format(PyExc_TypeError, "ignore_self must be a bool");
+        return -1;
+    }
+    if (Py_IsTrue(value)) {
+        ENABLE_IGNORE_SELF(self);
+    } else {
+        DISABLE_IGNORE_SELF(self);
+    }
+    return 0;
+}
+
 
 static PyGetSetDef Sampler_getset[] = {
     {
@@ -561,6 +604,13 @@ static PyGetSetDef Sampler_getset[] = {
         (getter)Sampler_get_ignore_frozen,
         (setter)Sampler_set_ignore_frozen,
         "ignore frozen frames or not",
+        NULL,
+    },
+    {
+        "ignore_self",
+        (getter)Sampler_get_ignore_self,
+        (setter)Sampler_set_ignore_self,
+        "ignore self or not",
         NULL,
     },
     {
@@ -742,6 +792,13 @@ static PyGetSetDef AsyncSampler_getset[] = {
         (getter)Sampler_get_ignore_frozen,  // share it
         (setter)Sampler_set_ignore_frozen,  // share it
         "ignore frozen frames or not",
+        NULL,
+    },
+    {
+        "ignore_self",
+        (getter)Sampler_get_ignore_self,  // share it
+        (setter)Sampler_set_ignore_self,  // share it
+        "ignore self or not",
         NULL,
     },
     {
