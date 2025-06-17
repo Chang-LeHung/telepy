@@ -59,6 +59,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin):
         sampling_interval: int = 10_000,
         debug: bool = False,
         ignore_frozen: bool = False,
+        ignore_self: bool = True,
     ) -> None:
         """
         Args:
@@ -73,6 +74,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin):
         self.sampling_interval = sampling_interval
         self.debug = debug
         self.ignore_frozen = ignore_frozen
+        self.ignore_self = ignore_self
 
     def adjust_interval(self) -> bool:
         """
@@ -127,6 +129,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin):
         sampling_interval: int = 10_000,
         debug: bool = False,
         ignore_frozen: bool = False,
+        ignore_self: bool = True,
     ) -> None:
         """
         Args:
@@ -138,12 +141,13 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin):
                 Whether to ignore frozen threads.
         """
         super().__init__()
-        if sampling_interval < 10:
+        if sampling_interval < 5:
             # this line is hard to be coveraged
-            sampling_interval = 10  # pragma: no cover
+            sampling_interval = 5  # pragma: no cover
         self.sampling_interval = sampling_interval
         self.debug = debug
         self.ignore_frozen = ignore_frozen
+        self.ignore_self = ignore_self
 
     @override
     def save(self, filename: str) -> None:
