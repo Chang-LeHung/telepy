@@ -209,19 +209,25 @@ def main():
         "--parse",
         action="store_true",
         help="Parse stack trace data to generate a flamegraph svg file, "
-        "such as telepy -p result.folded",
+        "such as `telepy -p result.folded`",
     )
     parser.add_argument(
         "--interval",
         type=int,
-        default=5000,
-        help="Sampling interval in microseconds(default: 5000). The minimum value is 10, "
-        "if less than 10, it will be set to 10",
+        default=8000,
+        help="Sampling interval in microseconds (default: 8000, i.e., 8 ms). "
+        "The minimum value is 5; if a smaller value is specified, it will be"
+        " set to 5. The larger the value, the higher the overhead.",
     )
     parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable debug mode (default: False)",
+    )
+    parser.add_argument(
+        "--full-path",
+        action="store_true",
+        help="Display file absolute paths in flamegraph (default: False)",
     )
     parser.add_argument(
         "--ignore-frozen",
