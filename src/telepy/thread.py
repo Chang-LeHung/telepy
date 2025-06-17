@@ -18,7 +18,7 @@ class PyMainTrampoline:
         """
         Call the callable in main thread.
         Raises:
-            RuntimeError: if func is not callable.
+            RuntimeError: if func is not callable or failed to register.
         """
         if not callable(self.func):
             raise RuntimeError(f"{self.func} is not callable")  # pragma: no cover

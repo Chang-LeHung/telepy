@@ -135,14 +135,17 @@ class PythonFileProfilingHandler(ArgsHandler):
         if not filename.endswith(".py"):
             return False
 
-        with telepy_env(args) as (global_dict, sampler):
-            assert sampler is not None
-            assert global_dict is not None
-            sampler.start()
-            code = args.input[0].read()
-            pyc = compile(code, os.path.abspath(filename), "exec")
-            exec(pyc, global_dict)
-            weakref.finalize(sampler, telepy_finalize)
+        try:
+            with telepy_env(args) as (global_dict, sampler):
+                assert sampler is not None
+                assert global_dict is not None
+                sampler.start()
+                code = args.input[0].read()
+                pyc = compile(code, os.path.abspath(filename), "exec")
+                exec(pyc, global_dict)
+                weakref.finalize(sampler, telepy_finalize)
+        except RuntimeError as e:
+            logging.log_error_panel(f"{e}")
         return True
 
 
