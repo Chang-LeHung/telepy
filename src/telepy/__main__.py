@@ -266,7 +266,7 @@ def main():
         "--merge",
         action="store_true",
         help="Merge multiple flamegraph files in multiprocess environment. "
-        "If not merge them, the child flamegraph named in format "
+        "If not merge them, the child flamegraphs will be named in format "
         "`pid-ppid.svg` and `pid-ppid.folded`",
     )
     parser.add_argument(
