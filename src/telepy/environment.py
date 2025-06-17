@@ -4,6 +4,7 @@ import os
 import site
 import sys
 import threading
+import time
 import types
 from multiprocessing import util
 from typing import Any
@@ -11,6 +12,7 @@ from typing import Any
 from rich.table import Table
 
 from . import logging
+from ._telepysys import sched_yield
 from .flamegraph import FlameGraph, process_stack_trace
 from .sampler import TelepySysAsyncWorkerSampler
 
@@ -24,12 +26,32 @@ args: None | argparse.Namespace = None
 main_mod = types.ModuleType("__main__")
 
 
-def patch_os_fork():
+def patch_os_fork_in_child():
     global sampler, args
     assert sampler is not None
     assert args is not None
-    args.fork = True
     sampler.clear()
+    sampler.stop()  # stop it first.
+    sampler.start()  # timer was cleared in the child process we need restart it.
+    sampler.child_cnt = 0
+    sampler.from_fork = True
+    if sampler.is_root:
+        sampler.is_root = False
+
+
+def patch_os_fork_in_parent():
+    global sampler, args
+    assert sampler is not None
+    assert args is not None
+
+
+def patch_before_fork():
+    global sampler, args
+    assert sampler is not None
+    assert args is not None
+
+    if sampler.is_root:
+        sampler.child_cnt += 1
 
 
 def patch_mp(sampler: TelepySysAsyncWorkerSampler):
@@ -83,7 +105,11 @@ class Environment:
             else:
                 sys.argv = [args.input[0].name]
 
-            os.register_at_fork(after_in_child=patch_os_fork)
+            os.register_at_fork(
+                before=patch_before_fork,
+                after_in_child=patch_os_fork_in_child,
+                after_in_parent=patch_os_fork_in_parent,
+            )
             util.register_after_fork(sampler, patch_mp)
             sys.path.append(os.getcwd())
             return main_mod.__dict__
@@ -108,6 +134,196 @@ def telepy_env(args: argparse.Namespace):
         Environment.destory_telepy_enviroment()
 
 
+class FlameGraphSaver:
+    def __init__(
+        self, agrs: argparse.Namespace, sampler: TelepySysAsyncWorkerSampler
+    ) -> None:
+        assert args is not None
+        self.args = args
+        self.sampler = sampler
+        self.args = args
+        self.site_path = site.getsitepackages()[0]
+        self.work_dir = os.getcwd()
+        self.title = "TelePy Flame Graph"
+        self.lines = sampler.dumps().splitlines()[:-1]  # ignore last empty line
+        if not self.args.full_path:  # type : ignore
+            self.lines = process_stack_trace(self.lines, self.site_path, self.work_dir)
+
+        self.timeout = False
+        self.pid = os.getpid()
+
+    def _save_svg(self, filename: str) -> None:
+        fg = FlameGraph(
+            self.lines,
+            title="TelePy Flame Graph",
+            reverse=self.args.reverse,
+            command=" ".join([sys.executable, *sys.argv]),
+            package_path=os.path.dirname(self.site_path),
+            work_dir=self.work_dir,
+        )
+
+        fg.parse_input()
+        svg_content = fg.generate_svg()
+        with open(filename, "w+") as fp:
+            fp.write(svg_content)
+
+    def _save_folded(self, filename: str) -> None:
+        with open(filename, "w+") as fp:
+            for idx, line in enumerate(self.lines):
+                if idx < len(self.lines) - 1:
+                    fp.write(line + "\n")
+                else:
+                    fp.write(line)
+
+    @staticmethod
+    def add_pid_prefix(lines: list[str], pid: int | str) -> list[str]:
+        return [f"Process({pid});" + line for line in lines]
+
+    def _single_process_root(self) -> None:
+        self._save_svg(self.args.output)
+        if self.args.folded_save:
+            self._save_folded(self.args.folded_file)
+
+    def _single_process_child(self) -> None:
+        # filename: pid-ppid.svg pid-ppid.folded
+        if not self.args.merge:
+            filename = f"{self.pid}-{os.getppid()}.svg"
+            self._save_svg(filename)
+            if self.args.debug:
+                logging.log_success_panel(
+                    f"Process {self.pid} saved profiling data to svg file {filename}"
+                )
+            if self.args.folded_save:
+                filename = f"{self.pid}-{os.getppid()}.folded"
+                self._save_folded(filename)
+                if self.args.debug:
+                    logging.log_success_panel(
+                        f"Process {self.pid} saved profiling data to folded file {filename}"  # noqa: E501
+                    )
+        else:
+            filename = f"{self.pid}-{os.getppid()}.folded"
+            self.lines = self.add_pid_prefix(self.lines, self.pid)
+            self._save_folded(filename)
+            if self.args.debug:
+                logging.log_success_panel(
+                    f"Process {self.pid} saved profiling data to folded file {filename}"
+                )
+
+    def _multi_process_root(self) -> None:
+        if self.args.merge:
+            files = os.listdir(os.getcwd())
+            foldeds = [file for file in files if file.endswith(f"{self.pid}.folded")]
+
+            self.lines = self.add_pid_prefix(self.lines, self.pid)
+
+            def load_chidren_file():
+                for file in foldeds:
+                    with open(file, "r+") as fp:
+                        lines = fp.readlines()
+                    os.unlink(file)
+                    if self.args.debug:
+                        logging.log_success_panel(
+                            f"Root process {self.pid} read and removed file {file}"
+                        )
+                    self.lines.extend([line.strip() for line in lines])
+
+            load_chidren_file()
+            self._save_svg(self.args.output)
+            if self.args.debug:
+                logging.log_success_panel(
+                    f"Root process {self.pid} collected profiling data to svg "
+                    f"file {self.args.output}"
+                )
+            if self.args.folded_save:
+                self._save_folded(self.args.folded_file)
+                if self.args.debug:
+                    logging.log_success_panel(
+                        f"Root process {self.pid} collected profiling data {foldeds} to"
+                        f" folded file {self.args.folded_file}"
+                    )
+        else:
+            self._save_svg(self.args.output)
+            if self.args.debug:
+                logging.log_success_panel(
+                    f"Root process {self.pid} saved profiling data to"
+                    f" svg file {self.args.output}"
+                )
+            if self.args.folded_save:
+                self._save_folded(self.args.folded_file)
+                if self.args.debug:
+                    logging.log_success_panel(
+                        f"Root process {self.pid} saved profiling data to"
+                        f" folded file {self.args.folded_file}"
+                    )
+
+    def _multi_process_child(self) -> None:
+        if self.args.merge:
+            files = os.listdir(os.getcwd())
+            foldeds = [file for file in files if file.endswith(f"{self.pid}.folded")]
+            self.lines = self.add_pid_prefix(self.lines, self.pid)
+
+            def load_chidren_file():
+                for file in foldeds:
+                    with open(file, "r+") as fp:
+                        lines = fp.readlines()
+                    os.unlink(file)
+                    if self.args.debug:
+                        logging.log_success_panel(
+                            f"Process {self.pid} read and removed file {file}"
+                        )
+                    self.lines.extend([line.strip() for line in lines])
+
+            load_chidren_file()
+            filename = f"{self.pid}-{os.getppid()}.folded"
+            self._save_folded(filename)
+            if self.args.debug:
+                logging.log_success_panel(
+                    f"Process {self.pid} collected profiling data {foldeds}"
+                    f" to folded file {filename}"
+                )
+        else:
+            filename = f"{self.pid}-{os.getppid()}.svg"
+            self._save_svg(filename)
+            if self.args.debug:
+                logging.log_success_panel(
+                    f"Process {self.pid} saved profiling data to svg file {filename}"
+                )
+            if self.args.folded_save:
+                filename = f"{self.pid}-{os.getppid()}.folded"
+                self._save_folded(filename)
+                if self.args.debug:
+                    logging.log_success_panel(
+                        f"Process {self.pid} saved profiling data to folded file {filename}"  # noqa: E501
+                    )
+
+    def save(self) -> None:
+        if self.sampler.child_cnt > 0:
+            self.wait_children()
+            if self.sampler.is_root:
+                self._multi_process_root()
+            else:
+                self._multi_process_child()
+        else:
+            if self.sampler.is_root:
+                self._single_process_root()
+            else:
+                self._single_process_child()
+
+    def wait_children(self) -> None:
+        """Wait for all child processes to exit."""
+        res: list[str] = []
+        begin = time.time()
+        while len(res) != self.sampler.child_cnt:
+            sched_yield()
+            files = os.listdir(os.getcwd())
+            res = [file for file in files if file.endswith(f"{self.pid}.folded")]
+            if time.time() - begin > self.args.timeout:
+                self.timeout = True
+                break
+        if self.timeout:
+            logging.log_error_panel("Timeout waiting for child processes to complete")
+
+
 def telepy_finalize() -> None:
     """Stop and clean up the global sampler resource.
 
@@ -120,41 +336,9 @@ def telepy_finalize() -> None:
     assert sampler is not None
     assert args is not None
     sampler.stop()
-    lines = sampler.dumps().splitlines()[:-1]
 
-    site_path = site.getsitepackages()[0]
-    work_dir = os.getcwd()
-    if not args.full_path:
-        lines = process_stack_trace(lines, site_path, work_dir)
-    fg = FlameGraph(
-        lines,
-        title="TelePy Flame Graph",
-        reverse=args.reverse,
-        command=" ".join([sys.executable, *sys.argv]),
-        package_path=os.path.dirname(site_path),
-        work_dir=work_dir,
-    )
-    fg.parse_input()
-    if args.folded_save:
-        with open(args.folded_file, "w+") as fp:
-            for idx, line in enumerate(lines):
-                if idx == len(lines) - 1:
-                    print(line, file=fp, end="")
-                else:
-                    print(line, file=fp)
-        logging.log_success_panel(
-            f"Saved folded stack trace to {args.folded_file}, "
-            f"please check it out via `open {args.folded_file}`"
-        )
-
-    svg_content = fg.generate_svg()
-
-    with open(args.output, "w+") as fp:
-        fp.write(svg_content)
-    logging.log_success_panel(
-        f"Saved profiling data to flamegraph svg file {args.output}, "
-        f"please check it out via `open {args.output}`"
-    )
+    saver = FlameGraphSaver(args, sampler)
+    saver.save()
 
     if args.debug:
         from .logging import console
@@ -162,7 +346,16 @@ def telepy_finalize() -> None:
         acc = sampler.acc_sampling_time
         start = sampler.start_time
         end = sampler.end_time
-        table = Table(title="TelePySampler Metrics", expand=True)
+        title = "TelePySampler Metrics"
+        if sampler.child_cnt > 0 and (sampler.from_fork):
+            title += f" pid = {os.getpid()} (with {sampler.child_cnt} child process(es)) "
+            f"ppid = {os.getppid()}"
+        elif sampler.child_cnt > 0:
+            title += f" pid = {os.getpid()} (with {sampler.child_cnt} child process(es))"
+        elif sampler.from_fork or sampler.from_mp:
+            title += f" pid = {os.getpid()} ppid = {os.getppid()}"
+
+        table = Table(title=title, expand=True)
 
         table.add_column("Metric", style="cyan", no_wrap=True)
         table.add_column("Value", style="green")
