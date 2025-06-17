@@ -241,9 +241,19 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
     @override
     @in_main_thread
     def start(self):
+        """
+        Raises:
+            RuntimeError: If the sampler is not started or failed
+                            to execute in main thread.
+        """
         return super().start()
 
     @override
     @in_main_thread
     def stop(self):
+        """
+        Raises:
+            RuntimeError: If the sampler is not started or failed
+                            to execute in main thread.
+        """
         return super().stop()
