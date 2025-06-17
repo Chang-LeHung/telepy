@@ -8,6 +8,8 @@ import types
 from multiprocessing import util
 from typing import Any
 
+from rich.table import Table
+
 from . import logging
 from .flamegraph import FlameGraph, process_stack_trace
 from .sampler import TelepySysAsyncWorkerSampler
@@ -153,3 +155,24 @@ def telepy_finalize() -> None:
         f"Saved profiling data to flamegraph svg file {args.output}, "
         f"please check it out via `open {args.output}`"
     )
+
+    if args.debug:
+        from .logging import console
+
+        acc = sampler.acc_sampling_time
+        start = sampler.start_time
+        end = sampler.end_time
+        table = Table(title="TelePySampler Metrics", expand=True)
+
+        table.add_column("Metric", style="cyan", no_wrap=True)
+        table.add_column("Value", style="green")
+
+        table.add_row("Accumulated Sampling Time (Monotonic Mircoseconds)", f"{acc}")
+        table.add_row(
+            "Sampling Time Rate (Versus Program Time)", f"{acc / (end - start):.2%}"
+        )
+        table.add_row("TelePy Sampler Start Time (Monotonic Mircoseconds)", f"{start}")
+        table.add_row("TelePy Sampler End Time (Monotonic Mircoseconds)", f"{end}")
+        table.add_row("Sampling Count", str(sampler.sampling_times))
+
+        console.print(table)
