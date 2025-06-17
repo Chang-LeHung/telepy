@@ -235,7 +235,8 @@ class FlameGraph:
     def generate_svg(self) -> str:
         """Generate SVG flame graph with proper layout"""
         root = self.build_call_tree()
-
+        root.total = max(1, root.total)
+        self.total_samples = max(1, self.total_samples)
         scale = (self.width - 20) / root.total
         root.depth = 1
         self.layout_tree(root, 10, scale)
