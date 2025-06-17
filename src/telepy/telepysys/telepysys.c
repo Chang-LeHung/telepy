@@ -917,7 +917,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     const size_t buf_size = self->buf_size;
     char* buf = self->buf;
 
-    Telepy_time sampling_start = self->start = unix_micro_time();
+    Telepy_time sampling_start = unix_micro_time();
 
     PyObject* frames = _PyThread_CurrentFrames();  // New reference
     if (frames == NULL) {
@@ -990,8 +990,8 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     // }
     // =======================================================================
 
-    Telepy_time sampling_end = self->end = unix_micro_time();
-    base->acc_sampling_time = sampling_end - sampling_start;
+    Telepy_time sampling_end = unix_micro_time();
+    base->acc_sampling_time += sampling_end - sampling_start;
     base->sampling_times++;
     DISABLE_SAMPLING(base);
     Py_RETURN_NONE;
