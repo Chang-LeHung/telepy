@@ -29,7 +29,6 @@ import argparse
 import collections
 import hashlib
 import html
-import math
 import os
 import sys
 from collections import defaultdict
