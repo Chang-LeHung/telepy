@@ -1,5 +1,6 @@
 import argparse
 import contextlib
+import functools
 import os
 import site
 import sys
@@ -54,13 +55,32 @@ def patch_before_fork():
         sampler.child_cnt += 1
 
 
-def patch_mp(sampler: TelepySysAsyncWorkerSampler):
+def patch_multiprocesssing():
+    """
+    Patches the multiprocessing spawn mechanism to inject telepy code to profile.
+    """
     global args
     assert sampler is not None
     assert args is not None
-    sampler.clear()
-    sampler.start()
-    args.mp = True
+
+    _spawnv_passfds = util.spawnv_passfds
+
+    @functools.wraps(_spawnv_passfds)
+    def spawnv_passfds(path, args, passfds):
+        if "-c" in args:
+            idx = args.index("-c")
+            cmd = args[idx + 1]
+
+            if "forkserver" in cmd:
+                # forkserver mode, we need to inject telepy code to profile.
+                args = args[:idx] + ["-m", "telepy", "--mp", "--fork-server"] + args[idx:]
+            elif "resource_tracker" not in cmd:
+                # spawn mode
+                args = args[:idx] + ["-m", "telepy", "--mp"] + args[idx:]
+        ret = _spawnv_passfds(path, args, passfds)
+        return ret
+
+    util.spawnv_passfds = spawnv_passfds
 
 
 class Environment:
@@ -102,7 +122,7 @@ class Environment:
             setattr(sys, "telepy_argv", old_arg)
             if "--" in old_arg:
                 idx = old_arg.index("--")
-                sys.argv = old_arg[idx + 1 :]
+                sys.argv = [args.input[0].name] + old_arg[idx + 1 :]
             else:
                 sys.argv = [args.input[0].name]
 
@@ -111,7 +131,7 @@ class Environment:
                 after_in_child=patch_os_fork_in_child,
                 after_in_parent=patch_os_fork_in_parent,
             )
-            util.register_after_fork(sampler, patch_mp)
+            patch_multiprocesssing()
             sys.path.append(os.getcwd())
             return main_mod.__dict__
 

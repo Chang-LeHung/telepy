@@ -284,6 +284,9 @@ def main():
         "--mp", action="store_true", help=argparse.SUPPRESS
     )  # internal flag
     parser.add_argument(
+        "--fork-server", action="store_true", help=argparse.SUPPRESS
+    )  # internal flag
+    parser.add_argument(
         "--timeout",
         type=float,
         default=10.0,
