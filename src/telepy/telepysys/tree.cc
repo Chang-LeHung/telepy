@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <functional>
+#include <cstring>
 #include <mutex>
 #include <queue>
 #include <sstream>
