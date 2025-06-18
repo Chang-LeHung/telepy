@@ -208,7 +208,7 @@ def main():
     parser.add_argument(
         "input",
         nargs=1,
-        help="Input file(s), if run a python file, it must be ended with .py",
+        help="Input file(s), if run a python file, it must be ended with .py.",
         type=argparse.FileType("r"),
     )
     parser.add_argument(
@@ -216,7 +216,7 @@ def main():
         "--parse",
         action="store_true",
         help="Parse stack trace data to generate a flamegraph svg file, "
-        "such as `telepy -p result.folded`",
+        "such as `telepy -p result.folded`.",
     )
     parser.add_argument(
         "--interval",
@@ -224,7 +224,8 @@ def main():
         default=8000,
         help="Sampling interval in microseconds (default: 8000, i.e., 8 ms). "
         "The minimum value is 5; if a smaller value is specified, it will be"
-        " set to 5. The larger the value, the higher the overhead.",
+        " set to 5. The larger the value, the higher the overhead. Howerever, if you "
+        "enable debug mode, telepy will not check the value.",
     )
     parser.add_argument(
         "--debug",
@@ -234,32 +235,32 @@ def main():
     parser.add_argument(
         "--full-path",
         action="store_true",
-        help="Display absolute file path in the flamegraph (default: False)",
+        help="Display absolute file path in the flamegraph (default: False).",
     )
     parser.add_argument(
         "--ignore-frozen",
         action="store_true",
-        help="Ignore frozen modules (default: False)",
+        help="Ignore frozen modules (default: False).",
     )
     parser.add_argument(
         "--include-telepy",
         action="store_true",
-        help="Whether to include telepy in the stack trace (default: False)",
+        help="Whether to include telepy in the stack trace (default: False).",
     )
     parser.add_argument(
         "--folded-save",
         action="store_true",
-        help="Save folded stack traces to a file (default: False)",
+        help="Save folded stack traces to a file (default: False).",
     )
     parser.add_argument(
         "--folded-file",
         type=str,
         default="result.folded",
         help="Save folded stack traces into a file (default: result.folded). "
-        "You should enable --folded-file if using this option",
+        "You should enable --folded-file if using this option.",
     )
     parser.add_argument(
-        "-o", "--output", default="result.svg", help="Output file (default: result.svg)"
+        "-o", "--output", default="result.svg", help="Output file (default: result.svg)."
     )
     parser.add_argument("-m", nargs=1, help="run a module")
     parser.add_argument(
@@ -287,7 +288,7 @@ def main():
         type=float,
         default=10.0,
         help="Timeout (in seconds) for parent process to wait for child processes"
-        " to merge flamegraph files (default: 10.0)",
+        " to merge flamegraph files (default: 10.0).",
     )
     parser.add_argument(
         "-r",
@@ -298,7 +299,7 @@ def main():
     parser.add_argument(
         "--tree-mode",
         action="store_true",
-        help="Using call site line number instead of the first line of function(method)",
+        help="Using call site line number instead of the first line of function(method).",
     )
     args = parser.parse_args()
     try:
