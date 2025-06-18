@@ -234,7 +234,7 @@ def main():
     parser.add_argument(
         "--full-path",
         action="store_true",
-        help="Display file absolute paths in flamegraph (default: False)",
+        help="Display absolute file path in the flamegraph (default: False)",
     )
     parser.add_argument(
         "--ignore-frozen",
@@ -265,9 +265,16 @@ def main():
     parser.add_argument(
         "--merge",
         action="store_true",
-        help="Merge multiple flamegraph files in multiprocess environment. "
-        "If not merge them, the child flamegraphs will be named in format "
-        "`pid-ppid.svg` and `pid-ppid.folded`",
+        default=True,
+        help="Merge multiple flamegraph files in multiprocess environment (default: "
+        "True). If not merge them, the child flamegraphs and foldeds will be named in "
+        "the format `pid-ppid.svg` and `pid-ppid.folded` respectively. ",
+    )
+    parser.add_argument(
+        "--no-merge",
+        dest="merge",
+        action="store_false",
+        help="Disable --merge",
     )
     parser.add_argument(
         "--fork", action="store_true", help=argparse.SUPPRESS

@@ -340,6 +340,8 @@ Sampler_clear_tree(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
             return NULL;
         }
     }
+    self->acc_sampling_time = 0;
+    self->sampling_times = 0;
     Py_RETURN_NONE;
 }
 
@@ -652,6 +654,8 @@ Sampler_clear(SamplerObject* self) {
         FreeTree(self->tree);
         self->tree = NULL;
     }
+    self->sampling_times = 0;
+    self->acc_sampling_time = 0;
     return 0;
 }
 
