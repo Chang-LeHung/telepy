@@ -37,6 +37,7 @@ typedef struct TelePySysState {
 #define IGNORE_FROZEN 2
 #define SAMPLING 3
 #define IGNORE_SELF 4
+#define TREE_MODE 5
 
 #define Sample_Enabled(s) (BIT_CHECK((s)->flags, ENABLED))
 #define Sample_Disable(s) (BIT_CLEAR((s)->flags, ENABLED))
@@ -57,6 +58,10 @@ typedef struct TelePySysState {
 #define ENABLE_IGNORE_SELF(s) (BIT_SET((s)->flags, IGNORE_SELF))
 #define DISABLE_IGNORE_SELF(s) (BIT_CLEAR((s)->flags, IGNORE_SELF))
 #define IGNORE_SELF_ENABLED(s) (BIT_CHECK((s)->flags, IGNORE_SELF))
+
+#define ENABLE_TREE_MODE(s) (BIT_SET((s)->flags, TREE_MODE))
+#define DISABLE_TREE_MODE(s) (BIT_CLEAR((s)->flags, TREE_MODE))
+#define TREE_MODE_ENABLED(s) (BIT_CHECK((s)->flags, TREE_MODE))
 
 #define CHECK_FALG(s, flag) (BIT_CHECK((s)->flags, flag))
 

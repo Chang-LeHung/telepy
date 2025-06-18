@@ -73,6 +73,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         debug: bool = False,
         ignore_frozen: bool = False,
         ignore_self: bool = True,
+        tree_mode: bool = False,
     ) -> None:
         """
         Args:
@@ -89,6 +90,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         self.debug = debug
         self.ignore_frozen = ignore_frozen
         self.ignore_self = ignore_self
+        self.tree_mode = tree_mode
 
     def adjust_interval(self) -> bool:
         """
@@ -144,6 +146,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         debug: bool = False,
         ignore_frozen: bool = False,
         ignore_self: bool = True,
+        tree_mode: bool = False,
     ) -> None:
         """
         Args:
@@ -163,6 +166,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self.debug = debug
         self.ignore_frozen = ignore_frozen
         self.ignore_self = ignore_self
+        self.tree_mode = tree_mode
 
     @override
     def save(self, filename: str) -> None:

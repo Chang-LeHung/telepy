@@ -295,6 +295,11 @@ def main():
         action="store_true",
         help=argparse.SUPPRESS,  # TODO: implement it!
     )
+    parser.add_argument(
+        "--tree-mode",
+        action="store_true",
+        help="Using call site line number instead of the first line of function(method)",
+    )
     args = parser.parse_args()
     try:
         dispatch(args)

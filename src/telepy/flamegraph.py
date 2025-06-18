@@ -29,6 +29,7 @@ import argparse
 import collections
 import hashlib
 import html
+import math
 import os
 import sys
 from collections import defaultdict
@@ -167,33 +168,34 @@ class FlameGraph:
 
         return root
 
-    def layout_tree(self, node: Node, x: float, scale: float) -> None:
-        """Recursively lays out a tree node and its children horizontally.
+    def layout_tree(self, node: Node, x: float, scale: float, L: float, R: float) -> None:
+        """Recursively layout a flame graph tree node and its children.
 
         Args:
             node: The current node to layout.
             x: The starting x-coordinate for this node.
-            scale: The scaling factor to apply to node widths.
+            scale: Scaling factor to convert node values to pixel widths.
+            L: Left boundary constraint for node positioning.
+            R: Right boundary constraint for node positioning.
 
-        The method sets the node's position and width, sorts its children by name,
-        updates their depths, and recursively lays out each child node.
+        The method calculates node width and position, enforces boundary constraints,
+        and recursively lays out children nodes from right to left.
         """
-        node.x = x
         node.width = node.total * scale
-        try:
-            sorted_children = sorted(
-                node.children.values(), key=lambda n: int(n.name.split(":")[-1])
-            )
-        except ValueError:
-            sorted_children = list(node.children.values())
+        node.x = x - node.width
+        if node.x < L:
+            node.x = L
+        if node.x + node.width > R:
+            node.width = R - node.x
+        sorted_children = list(reversed(node.children.values()))
 
         for child in sorted_children:
             child.depth = node.depth + 1
 
         current_x = x
         for child in sorted_children:
-            self.layout_tree(child, current_x, scale)
-            current_x += child.width
+            self.layout_tree(child, current_x, scale, node.x, node.x + node.width)
+            current_x -= child.width
 
     def collect_nodes_by_depth(self, root: Node) -> dict[int, list[Node]]:
         """Collect nodes grouped by their depth using BFS traversal.
@@ -213,13 +215,8 @@ class FlameGraph:
             if node.depth > 0:
                 nodes_by_depth[node.depth].append(node)
 
-            try:
-                sorted_children = sorted(
-                    node.children.values(), key=lambda n: int(n.name.split(":")[-1])
-                )
-            except ValueError:
-                sorted_children = list(node.children.values())
-            for child in sorted_children:
+            children = list(node.children.values())
+            for child in children:
                 queue.append(child)
 
         return nodes_by_depth
@@ -239,7 +236,7 @@ class FlameGraph:
         self.total_samples = max(1, self.total_samples)
         scale = (self.width - 20) / root.total
         root.depth = 1
-        self.layout_tree(root, 10, scale)
+        self.layout_tree(root, self.width - 10, scale, 10, self.width - 10)
 
         nodes_by_depth = self.collect_nodes_by_depth(root)
         max_depth = max(nodes_by_depth.keys()) if nodes_by_depth else 0
