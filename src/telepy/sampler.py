@@ -86,6 +86,8 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         """
         super().__init__()
         MultiProcessEnv.__init__(self)
+        if not debug and sampling_interval < 5:
+            sampling_interval = 5  # pragma: no cover
         self.sampling_interval = sampling_interval
         self.debug = debug
         self.ignore_frozen = ignore_frozen
@@ -159,7 +161,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         """
         super().__init__()
         MultiProcessEnv.__init__(self)
-        if sampling_interval < 5:
+        if not debug and sampling_interval < 5:
             # this line is hard to be coveraged
             sampling_interval = 5  # pragma: no cover
         self.sampling_interval = sampling_interval

@@ -156,7 +156,7 @@ call_stack(SamplerObject* self,
         }
 
         int lineno = code->co_firstlineno;
-        if (ENABLE_TREE_MODE(self))
+        if (TREE_MODE_ENABLED(self))
             lineno = PyFrame_GetLineNumber(frame);
 #if PY_VERSION_HEX >= 0x030B00F0
         name = code->co_qualname;

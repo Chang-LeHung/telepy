@@ -203,7 +203,9 @@ class FlameGraphSaver:
                     )
         else:
             filename = f"{self.pid}-{os.getppid()}.folded"
-            self.lines = self.add_pid_prefix(self.lines, self.pid)
+            self.lines = self.add_pid_prefix(
+                self.lines, f"pid-{self.pid}, ppid-{os.getppid()}"
+            )
             self._save_folded(filename)
             if self.args.debug:
                 logging.log_success_panel(
@@ -215,7 +217,7 @@ class FlameGraphSaver:
             files = os.listdir(os.getcwd())
             foldeds = [file for file in files if file.endswith(f"{self.pid}.folded")]
 
-            self.lines = self.add_pid_prefix(self.lines, self.pid)
+            self.lines = self.add_pid_prefix(self.lines, f"root, pid={self.pid}")
 
             def load_chidren_file():
                 for file in foldeds:
@@ -261,7 +263,9 @@ class FlameGraphSaver:
         if self.args.merge:
             files = os.listdir(os.getcwd())
             foldeds = [file for file in files if file.endswith(f"{self.pid}.folded")]
-            self.lines = self.add_pid_prefix(self.lines, self.pid)
+            self.lines = self.add_pid_prefix(
+                self.lines, f"pid-{self.pid}, ppid-{os.getppid()}"
+            )
 
             def load_chidren_file():
                 for file in foldeds:
