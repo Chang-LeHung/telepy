@@ -20,7 +20,7 @@ def prepare_flags():
 
     if "-Wall" not in flags:
         flags.append("-Wall")
-    return flags
+    return [f for f in flags if f != ""]
 
 
 flags = prepare_flags()
@@ -32,9 +32,9 @@ class Builder(build_ext):
             "g++",
             "-c",
             "-std=c++11",
+            "-fPIC",
             "src/telepy/telepysys/tree.cc",
             "-pthread",
-            *(flags),
             "-o",
             "build/tree.o",
             *flags,
