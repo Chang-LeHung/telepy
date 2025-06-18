@@ -89,6 +89,7 @@ class Environment:
                 debug=args.debug,
                 ignore_frozen=args.ignore_frozen,
                 ignore_self=not args.include_telepy,
+                tree_mode=args.tree_mode,
             )
             sampler.adjust()
             Environment.sampler_created = True

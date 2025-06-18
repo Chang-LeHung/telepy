@@ -155,7 +155,9 @@ call_stack(SamplerObject* self,
             goto error;
         }
 
-        int lineno = PyFrame_GetLineNumber(frame);
+        int lineno = code->co_firstlineno;
+        if (ENABLE_TREE_MODE(self))
+            lineno = PyFrame_GetLineNumber(frame);
 #if PY_VERSION_HEX >= 0x030B00F0
         name = code->co_qualname;
 #endif
@@ -566,6 +568,32 @@ Sampler_set_ignore_self(SamplerObject* self,
 }
 
 
+static PyObject*
+Sampler_get_tree_mode(SamplerObject* self, void* Py_UNUSED(closure)) {
+    if (ENABLE_TREE_MODE(self)) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
+
+static int
+Sampler_set_tree_mode(SamplerObject* self,
+                      PyObject* value,
+                      void* Py_UNUSED(closure)) {
+    if (!PyBool_Check(value)) {
+        PyErr_Format(PyExc_TypeError, "ignore_self must be a bool");
+        return -1;
+    }
+    if (Py_IsTrue(value)) {
+        ENABLE_TREE_MODE(self);
+    } else {
+        DISABLE_TREE_MODE(self);
+    }
+    return 0;
+}
+
+
 static PyGetSetDef Sampler_getset[] = {
     {
         "sampling_interval",
@@ -614,6 +642,13 @@ static PyGetSetDef Sampler_getset[] = {
         (getter)Sampler_get_ignore_self,
         (setter)Sampler_set_ignore_self,
         "ignore self or not",
+        NULL,
+    },
+    {
+        "tree_mode",
+        (getter)Sampler_get_tree_mode,
+        (setter)Sampler_set_tree_mode,
+        "tree mode or not",
         NULL,
     },
     {
@@ -743,6 +778,13 @@ AsyncSampler_get_end_time(AsyncSamplerObject* self, void* Py_UNUSED(closure)) {
 
 
 static PyGetSetDef AsyncSampler_getset[] = {
+    {
+        "tree_mode",
+        (getter)Sampler_get_tree_mode,
+        (setter)Sampler_set_tree_mode,
+        "tree mode or not",
+        NULL,
+    },
     {
         "start_time",
         (getter)AsyncSampler_get_start_time,
