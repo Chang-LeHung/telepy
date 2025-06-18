@@ -301,7 +301,14 @@ def main():
         action="store_true",
         help="Using call site line number instead of the first line of function(method).",
     )
+    parser.add_argument(
+        "--disbale-traceback",
+        action="store_true",
+        help="Disable the rich(colorfule) traceback and use the default traceback.",
+    )
     args = parser.parse_args()
+    if not args.disbale_traceback:
+        install()
     try:
         dispatch(args)
     except Exception as e:
