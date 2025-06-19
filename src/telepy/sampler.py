@@ -19,6 +19,7 @@ class MultiProcessEnv:
         self.child_cnt: int = 0
         self.from_fork: bool = False
         self.from_mp: bool = False
+        self.forkserver: bool = False
 
 
 class SamplerMixin(ABC):
@@ -74,16 +75,32 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         ignore_frozen: bool = False,
         ignore_self: bool = True,
         tree_mode: bool = False,
+        is_root: bool = True,
+        from_fork: bool = False,
+        from_mp: bool = False,
+        forkserver: bool = False,
     ) -> None:
         """
         Args:
-            sampling_interval:
+            sampling_interval (int):
                 The interval at which the sampler will sample the current stack trace.
-            debug:
+            debug (bool):
                 Whether to print debug messages.
-            ignore_frozen:
+            ignore_frozen (bool):
                 Whether to ignore frozen threads.
-        """
+            ignore_self (bool):
+                Whether to ignore the current thread stack trace data.
+            tree_mode (bool):
+                Whether to use the tree mode.
+            is_root (bool):
+                Whether the sampler is running in the root process.
+            from_fork (bool):
+                Whether the sampler is running in the child process with the fork syscall.
+            from_mp (bool):
+                Whether the sampler is running in the child process with the multiprocessing.
+            forkserver (bool):
+                Whether the current process is the forkserver.
+        """  # noqa: E501
         super().__init__()
         MultiProcessEnv.__init__(self)
         if not debug and sampling_interval < 5:
@@ -93,6 +110,10 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         self.ignore_frozen = ignore_frozen
         self.ignore_self = ignore_self
         self.tree_mode = tree_mode
+        self.is_root = is_root
+        self.from_fork = from_fork
+        self.from_mp = from_mp
+        self.forkserver = forkserver
 
     def adjust_interval(self) -> bool:
         """
@@ -149,16 +170,32 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         ignore_frozen: bool = False,
         ignore_self: bool = True,
         tree_mode: bool = False,
+        is_root: bool = True,
+        from_fork: bool = False,
+        from_mp: bool = False,
+        forkserver: bool = False,
     ) -> None:
         """
         Args:
-            sampling_interval:
+            sampling_interval (int):
                 The interval at which the sampler will sample the current stack trace.
-            debug:
+            debug (bool):
                 Whether to print debug messages.
-            ignore_frozen:
+            ignore_frozen (bool):
                 Whether to ignore frozen threads.
-        """
+            ignore_self (bool):
+                Whether to ignore the current thread stack trace data.
+            tree_mode (bool):
+                Whether to use the tree mode.
+            is_root (bool):
+                Whether the sampler is running in the root process.
+            from_fork (bool):
+                Whether the sampler is running in the child process with the fork syscall.
+            from_mp (bool):
+                Whether the sampler is running in the child process with the multiprocessing.
+            forkserver (bool):
+                Whether the current process is the forkserver.
+        """  # noqa: E501
         super().__init__()
         MultiProcessEnv.__init__(self)
         if not debug and sampling_interval < 5:
@@ -169,6 +206,10 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self.ignore_frozen = ignore_frozen
         self.ignore_self = ignore_self
         self.tree_mode = tree_mode
+        self.is_root = is_root
+        self.from_fork = from_fork
+        self.from_mp = from_mp
+        self.forkserver = forkserver
 
     @override
     def save(self, filename: str) -> None:
