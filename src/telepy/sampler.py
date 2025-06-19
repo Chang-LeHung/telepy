@@ -291,7 +291,7 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
         """
         Raises:
             RuntimeError: If the sampler is not started or failed
-                            to execute in main thread.
+                            to execute in the main thread.
         """
         return super().start()
 
@@ -301,6 +301,6 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
         """
         Raises:
             RuntimeError: If the sampler is not started or failed
-                            to execute in main thread.
+                            to execute in the main thread.
         """
         return super().stop()

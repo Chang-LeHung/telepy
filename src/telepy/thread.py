@@ -7,7 +7,7 @@ from . import _telepysys
 
 class PyMainTrampoline:
     """
-    This class is used to call a callable object in main thread.
+    This class is used to call a callable object in the main thread.
     """
 
     def __init__(self, func: Callable) -> None:
@@ -16,7 +16,7 @@ class PyMainTrampoline:
 
     def __call__(self, *args, **kwds) -> None:
         """
-        Call the callable in main thread.
+        Call the callable in the main thread.
         Raises:
             RuntimeError: if func is not callable or failed to register.
         """
@@ -31,7 +31,7 @@ class PyMainTrampoline:
     def main_thread(self, *args, **kwds):
         """Run in the main thread"""
         self.func(*args, **kwds)
-        self.event.set()  # signal the other thread in main thread
+        self.event.set()  # signal the other thread in the main thread
 
 
 def in_main_thread(func: Callable) -> Callable:
