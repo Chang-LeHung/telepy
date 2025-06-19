@@ -29,7 +29,6 @@ import argparse
 import collections
 import hashlib
 import html
-import math
 import os
 import sys
 from collections import defaultdict
@@ -137,6 +136,10 @@ class FlameGraph:
             self.stacks[";".join(frames)] += count
             self.total_samples += count
             self.max_depth = max(self.max_depth, len(frames))
+
+    @property
+    def sample_count(self):
+        return self.total_samples
 
     def build_call_tree(self):
         """Builds a call tree from collected stack traces.
