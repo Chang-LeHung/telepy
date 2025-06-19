@@ -15,13 +15,13 @@ from rich.panel import Panel
 from rich.traceback import Traceback, install
 from rich_argparse import RichHelpFormatter
 
-from . import logging
-from .environment import Environment, telepy_env, telepy_finalize
+from . import logger
+from .environment import CodeMode, telepy_env, telepy_finalize
 from .flamegraph import FlameGraph
 
 install()
 
-console = logging.console
+console = logger.console
 
 
 class ArgsHandler(ABC):
@@ -112,7 +112,7 @@ class StackTraceHandler(ArgsHandler):
         args.input[0].close()
         with open(args.output, "w") as f:
             f.write(svg)
-        logging.log_success_panel(
+        logger.log_success_panel(
             f"Generated a flamegraph svg file `{args.output}` from the stack "
             f"trace file `{args.input[0].name}`, "
             f"please check it out via `open {args.output}`"
@@ -130,48 +130,78 @@ class PythonFileProfilingHandler(ArgsHandler):
 
     @override
     def handle(self, args: argparse.Namespace) -> bool:
+        if args.input is None:
+            return False
         filename: str = args.input[0].name
 
         if not filename.endswith(".py"):
             return False
 
-        try:
-            with telepy_env(args) as (global_dict, sampler):
-                assert sampler is not None
-                assert global_dict is not None
-                sampler.start()
-                code = args.input[0].read()
-                pyc = compile(code, os.path.abspath(filename), "exec")
-                exec(pyc, global_dict)
-                weakref.finalize(sampler, telepy_finalize)
-        except RuntimeError as e:
-            logging.log_error_panel(f"{e}")
+        with telepy_env(args, CodeMode.PyFile) as (global_dict, sampler):
+            assert sampler is not None
+            assert global_dict is not None
+            code = args.input[0].read()
+            pyc = compile(code, os.path.abspath(filename), "exec")
+            sampler.start()
+            exec(pyc, global_dict)
+            weakref.finalize(sampler, telepy_finalize)
         return True
 
 
 @register_handler
-class PythonModuleProfilingHandler(ArgsHandler):
+class PyCommandStringProfilingHandler(ArgsHandler):
     @classmethod
     def build(cls):
         return cls()
 
-    def __init__(self, priority: int = 512):
-        super().__init__("PythonModuleProfilingHandler", priority=priority)
+    def __init__(self, priority: int = 2048):
+        super().__init__("PyCommandStringProfilingHandler", priority=priority)
 
     @override
     def handle(self, args: argparse.Namespace) -> bool:
-        if args.m is None:
+        if args.cmd is None:
             return False
+        str_code = args.cmd
+        with telepy_env(args, CodeMode.PyString) as (global_dict, sampler):
+            assert sampler is not None
+            assert global_dict is not None
+            pyc = compile(str_code, "<string>", "exec")
+            # see the enviroment.py:patch_multiprocesssing and patch_os_fork_in_child
+            if not args.fork_server:
+                sampler.start()
+            exec(pyc, global_dict)
+            weakref.finalize(sampler, telepy_finalize)
+        return True
 
-        Environment.init_telepy_environment(args)
-        from .environment import sampler
 
-        assert sampler is not None
+@register_handler
+class PyCommandModuleProfilingHandler(ArgsHandler):
+    @classmethod
+    def build(cls):
+        return cls()
 
-        sampler.start()
-        code = args.input[0].read()
-        exec(code)
-        sampler.stop()
+    def __init__(self, priority: int = 2049):
+        super().__init__("PyCommandModuleProfilingHandler", priority=priority)
+
+    @override
+    def handle(self, args: argparse.Namespace) -> bool:
+        if args.module is None:
+            return False
+        module_name = args.module
+        with telepy_env(args, CodeMode.PyModule) as (global_dict, sampler):
+            assert sampler is not None
+            assert global_dict is not None
+            import runpy
+
+            code = "run_module(modname, run_name='__main__', alter_sys=False)"
+            global_dict = {
+                "run_module": runpy.run_module,
+                "modname": module_name,
+            }
+            pyc = compile(code, "<string>", "exec")
+            sampler.start()
+            exec(pyc, global_dict)
+            weakref.finalize(sampler, telepy_finalize)
         return True
 
 
@@ -200,6 +230,9 @@ def dispatch(args: argparse.Namespace) -> None:
 
 
 def main():
+    arguments = sys.argv[1:]
+    if "--" in arguments:
+        arguments = arguments[: arguments.index("--")]
     parser = argparse.ArgumentParser(
         description="TelePy is a very powerful python profiler and dignostic tool."
         " If it helps, you can star it here https://github.com/Chang-LeHung/telepy",
@@ -207,7 +240,7 @@ def main():
     )
     parser.add_argument(
         "input",
-        nargs=1,
+        nargs="*",
         help="Input file(s), if run a python file, it must be ended with .py.",
         type=argparse.FileType("r"),
     )
@@ -262,7 +295,6 @@ def main():
     parser.add_argument(
         "-o", "--output", default="result.svg", help="Output file (default: result.svg)."
     )
-    parser.add_argument("-m", nargs=1, help="run a module")
     parser.add_argument(
         "--merge",
         action="store_true",
@@ -277,9 +309,6 @@ def main():
         action="store_false",
         help="Disable --merge",
     )
-    parser.add_argument(
-        "--fork", action="store_true", help=argparse.SUPPRESS
-    )  # internal flag
     parser.add_argument(
         "--mp", action="store_true", help=argparse.SUPPRESS
     )  # internal flag
@@ -309,19 +338,24 @@ def main():
         action="store_true",
         help="Disable the rich(colorfule) traceback and use the default traceback.",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "-c",
+        "--cmd",
+        type=str,
+        help="Command to run (default: None).",
+    )
+    parser.add_argument(
+        "--module",
+        "-m",
+        type=str,
+        help="Module to run (default: None).",
+    )
+    args = parser.parse_args(arguments)
     if not args.disbale_traceback:
         install()
     try:
         dispatch(args)
-    except Exception as e:
-        panel = Panel(
-            f"[bold red]{type(e).__name__}[/bold red]: {e}",
-            border_style="yellow",
-            title="Error",
-            expand=False,
-        )
-        print(panel)
+    except Exception as _:
         console.print(
             Panel(
                 "[bold red]The following traceback may be useful for debugging.[/bold red]"  # noqa: E501
@@ -332,8 +366,13 @@ def main():
                 border_style="bright_red",
             )
         )
-        tb = Traceback()
-        console.print(tb)
+        if not args.disbale_traceback:
+            tb = Traceback()
+            console.print(tb)
+        else:
+            import traceback
+
+            traceback.print_exc()
         sys.exit(1)
 
 
