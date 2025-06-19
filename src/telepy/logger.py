@@ -10,3 +10,7 @@ def log_success_panel(content: str) -> None:
 
 def log_error_panel(content: str) -> None:
     console.print(Panel(content, style="red", title="Error"))
+
+
+def log_warning_panel(content: str) -> None:
+    console.print(Panel(content, style="yellow", title="Warning"))
