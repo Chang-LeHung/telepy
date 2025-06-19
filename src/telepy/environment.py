@@ -146,10 +146,6 @@ class Environment:
         cls, args_: argparse.Namespace, mode: CodeMode = CodeMode.PyFile
     ) -> dict[str, Any]:
         """
-        Prepare the environment for a new process. If the process is a child process,
-        `prepare_process_environment` will return directly (we have initialized the
-        environment in the parent process).
-
         Args:
             args_ (argparse.Namespace): The arguments for the process.
         """
@@ -250,8 +246,8 @@ class Environment:
 @contextlib.contextmanager
 def telepy_env(args: argparse.Namespace, code_mode: CodeMode = CodeMode.PyFile):
     global sampler
-    global_dict = Environment.init_telepy_environment(args, code_mode)
     try:
+        global_dict = Environment.init_telepy_environment(args, code_mode)
         yield global_dict, sampler
     finally:
         Environment.destory_telepy_enviroment()
