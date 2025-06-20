@@ -248,6 +248,12 @@ def telepy_help(parser: argparse.ArgumentParser):
     console.print(table)
 
 
+def _pre_chceck(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if args.help:
+        telepy_help(parser)
+        sys.exit(0)
+
+
 def main():
     arguments = sys.argv[1:]
     if "--" in arguments:
@@ -375,9 +381,7 @@ def main():
     )
 
     args = parser.parse_args(arguments)
-    if args.help:
-        telepy_help(parser)
-        sys.exit(0)
+    _pre_chceck(args, parser)
     if not args.disbale_traceback:
         install()
     try:
