@@ -12,6 +12,7 @@ from typing import override
 
 from rich import print
 from rich.panel import Panel
+from rich.table import Table
 from rich.traceback import Traceback, install
 from rich_argparse import RichHelpFormatter
 
@@ -199,7 +200,8 @@ class PyCommandModuleProfilingHandler(ArgsHandler):
                 "modname": module_name,
             }
             pyc = compile(code, "<string>", "exec")
-            sampler.start()
+            if not sampler.forkserver:
+                sampler.start()
             exec(pyc, global_dict)
             weakref.finalize(sampler, telepy_finalize)
         return True
@@ -229,6 +231,23 @@ def dispatch(args: argparse.Namespace) -> None:
     )
 
 
+def telepy_help(parser: argparse.ArgumentParser):
+    parser.print_help()
+    table = Table(title="Recommended Interval", show_lines=True)
+
+    table.add_column("Task Duration", style="cyan", justify="right")
+    table.add_column("Unit", style="green")
+    table.add_column("Recommended Interval (μs)", style="magenta")
+
+    table.add_row("< 1ms", "ms", "Uninstall TelePy, you do not need it at all.")
+    table.add_row("< 100ms", "ms", "10")
+    table.add_row("x seconds", "s", "1000")
+    table.add_row("x minutes", "m", "10000")
+    table.add_row("x hours", "h", "Up to you.")
+    print()  # print a new line
+    console.print(table)
+
+
 def main():
     arguments = sys.argv[1:]
     if "--" in arguments:
@@ -236,6 +255,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="TelePy is a very powerful python profiler and dignostic tool."
         " If it helps, you can star it here https://github.com/Chang-LeHung/telepy",
+        add_help=False,
         formatter_class=RichHelpFormatter,
     )
     parser.add_argument(
@@ -350,7 +370,14 @@ def main():
         type=str,
         help="Module to run (default: None).",
     )
+    parser.add_argument(
+        "-h", "--help", action="store_true", help="Show this help message and exit."
+    )
+
     args = parser.parse_args(arguments)
+    if args.help:
+        telepy_help(parser)
+        sys.exit(0)
     if not args.disbale_traceback:
         install()
     try:
