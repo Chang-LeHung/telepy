@@ -110,10 +110,11 @@ def patch_multiprocesssing():
                     + filter_child_args()
                     + args[idx : idx + 2]
                 )
-                logger.log_warning_panel(
-                    "Because you are using the multiprocessing module with "
-                    "the forkserver mode, we will not merge the flamegraphs."
-                )
+                if not args.no_verbose:
+                    logger.log_warning_panel(
+                        "Because you are using the multiprocessing module with "
+                        "the forkserver mode, we will not merge the flamegraphs."
+                    )
                 rest = args[idx + 2 :]
                 if rest:
                     new_args += ["--", *rest]
@@ -164,11 +165,12 @@ class Environment:
         """
         global sampler
         if sampler is not None and sampler.started:
-            logger.log_success_panel(
-                f"Process {os.getpid()} exited early via sys.exit(), "
-                "telepy saved profiling data and terminated. "
-                "(You might be using the multiprocessing module)"
-            )
+            if not args.no_verbose:
+                logger.log_success_panel(
+                    f"Process {os.getpid()} exited early via sys.exit(), "
+                    "telepy saved profiling data and terminated. "
+                    "(You might be using the multiprocessing module)"
+                )
             # forserver mode will not start the sampler.
             if sampler.started:
                 sampler.stop()
@@ -183,11 +185,12 @@ class Environment:
         """
         global sampler
         if sampler is not None and sampler.started:
-            logger.log_success_panel(
-                f"Process {os.getpid()} exited early via os._exit(), "
-                "telepy saved profiling data and terminated."
-                "(You might be using the multiprocessing module)"
-            )
+            if not args.no_verbose:
+                logger.log_success_panel(
+                    f"Process {os.getpid()} exited early via os._exit(), "
+                    "telepy saved profiling data and terminated."
+                    "(You might be using the multiprocessing module)"
+                )
             # forserver mode will not start the sampler.
             if sampler.started:
                 sampler.stop()
@@ -361,14 +364,16 @@ class FlameGraphSaver:
 
     def _single_process_root(self) -> None:
         self._save_svg(self.args.output)
-        logger.log_success_panel(
-            f"Process {self.pid} saved the profiling data to the svg file {self.args.output}"  # noqa: E501
-        )
+        if not self.args.no_verbose:
+            logger.log_success_panel(
+                f"Process {self.pid} saved the profiling data to the svg file {self.args.output}"  # noqa: E501
+            )
         if self.args.folded_save:
             self._save_folded(self.args.folded_file)
-            logger.log_success_panel(
-                f"Process {self.pid} saved the profiling data to the folded file {self.args.folded_file}"  # noqa: E501
-            )
+            if not self.args.no_verbose:
+                logger.log_success_panel(
+                    f"Process {self.pid} saved the profiling data to the folded file {self.args.folded_file}"  # noqa: E501
+                )
 
     def _single_process_child(self) -> None:
         # filename: pid-ppid.svg pid-ppid.folded
@@ -417,28 +422,32 @@ class FlameGraphSaver:
 
             load_chidren_file()
             self._save_svg(self.args.output)
-            logger.log_success_panel(
-                f"Root process {self.pid} collected the profiling data to svg "
-                f"file {self.args.output}"
-            )
+            if not self.args.no_verbose:
+                logger.log_success_panel(
+                    f"Root process {self.pid} collected the profiling data to svg "
+                    f"file {self.args.output}"
+                )
             if self.args.folded_save:
                 self._save_folded(self.args.folded_file)
-                logger.log_success_panel(
-                    f"Root process {self.pid} collected the profiling data {foldeds} to"
-                    f" the folded file {self.args.folded_file}"
-                )
+                if not self.args.no_verbose:
+                    logger.log_success_panel(
+                        f"Root process {self.pid} collected the profiling data "
+                        f"{foldeds} to the folded file {self.args.folded_file}"
+                    )
         else:
             self._save_svg(self.args.output)
-            logger.log_success_panel(
-                f"Root process {self.pid} saved the profiling data to"
-                f" the svg file {self.args.output}"
-            )
-            if self.args.folded_save:
-                self._save_folded(self.args.folded_file)
+            if not self.args.no_verbose:
                 logger.log_success_panel(
                     f"Root process {self.pid} saved the profiling data to"
-                    f" the folded file {self.args.folded_file}"
+                    f" the svg file {self.args.output}"
                 )
+            if self.args.folded_save:
+                self._save_folded(self.args.folded_file)
+                if not self.args.no_verbose:
+                    logger.log_success_panel(
+                        f"Root process {self.pid} saved the profiling data to"
+                        f" the folded file {self.args.folded_file}"
+                    )
 
     def _multi_process_child(self) -> None:
         if self.args.merge:

@@ -265,6 +265,14 @@ def main():
         formatter_class=RichHelpFormatter,
     )
     parser.add_argument(
+        "-h", "--help", action="store_true", help="Show this help message and exit."
+    )
+    parser.add_argument(
+        "--no-verbose",
+        action="store_true",
+        help="Disable verbose mode (default: False).",
+    )
+    parser.add_argument(
         "input",
         nargs="*",
         help="Input file(s), if run a python file, it must be ended with .py.",
@@ -375,9 +383,6 @@ def main():
         "-m",
         type=str,
         help="Module to run (default: None).",
-    )
-    parser.add_argument(
-        "-h", "--help", action="store_true", help="Show this help message and exit."
     )
 
     args = parser.parse_args(arguments)
