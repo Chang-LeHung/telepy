@@ -92,6 +92,7 @@ def patch_multiprocesssing():
     assert sampler is not None
     assert args is not None
 
+    parser_args = args
     _spawnv_passfds = util.spawnv_passfds
 
     @functools.wraps(_spawnv_passfds)
@@ -110,7 +111,7 @@ def patch_multiprocesssing():
                     + filter_child_args()
                     + args[idx : idx + 2]
                 )
-                if not args.no_verbose:
+                if not parser_args.no_verbose:
                     logger.log_warning_panel(
                         "Because you are using the multiprocessing module with "
                         "the forkserver mode, we will not merge the flamegraphs."
@@ -158,12 +159,12 @@ class Environment:
     _os_exit = os._exit
 
     @classmethod
-    def patch_sys_exit(cls, *args, **kwargs):
+    def patch_sys_exit(cls, *_args, **kwargs):
         """
         `telepy_finalize` will not be called when the process exits. We need to stop the
         sampler and save the data.
         """
-        global sampler
+        global sampler, args
         if sampler is not None and sampler.started:
             if not args.no_verbose:
                 logger.log_success_panel(
@@ -175,15 +176,15 @@ class Environment:
             if sampler.started:
                 sampler.stop()
                 _do_save()
-        cls._sys_exit(*args, **kwargs)
+        cls._sys_exit(*_args, **kwargs)
 
     @classmethod
-    def patch_os__exit(cls, *args, **kwargs):
+    def patch_os__exit(cls, *_args, **kwargs):
         """
         `telepy_finalize` will not be called when the process exits. We need to stop the
         sampler and save the data.
         """
-        global sampler
+        global sampler, args
         if sampler is not None and sampler.started:
             if not args.no_verbose:
                 logger.log_success_panel(
@@ -195,7 +196,7 @@ class Environment:
             if sampler.started:
                 sampler.stop()
                 _do_save()
-        cls._os_exit(*args, **kwargs)
+        cls._os_exit(*_args, **kwargs)
 
     @classmethod
     def init_telepy_environment(
