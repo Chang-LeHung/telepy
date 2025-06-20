@@ -82,7 +82,12 @@ def patch_multiprocesssing():
                 args = args[:idx] + ["--mp", "--fork-server"] + args[idx:]
             elif "resource_tracker" not in cmd:
                 # spawn mode
-                args = args[:idx] + ["-m", "telepy", "--mp"] + args[idx:]
+                new_args = args[:idx] + ["-m", "telepy", "--mp"] + args[idx : idx + 2]
+                rest = args[idx + 2 :]
+                if rest:
+                    new_args += ["--", *rest]
+                args = new_args
+                sampler.child_cnt += 1
         ret = _spawnv_passfds(path, args, passfds)
         return ret
 
@@ -166,9 +171,6 @@ class Environment:
                 forkserver=args.fork_server,
                 from_mp=args.mp,
             )
-            # we do not profile the forkserver process.
-            if not args.fork_server:
-                sampler.start()
             sampler.adjust()
             sys.exit = cls.patch_sys_exit
             os._exit = cls.patch_os__exit
