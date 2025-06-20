@@ -88,7 +88,7 @@ def patch_multiprocesssing():
     """
     Patches the multiprocessing spawn mechanism to inject telepy code to profile.
     """
-    global args
+    global args, sampler
     assert sampler is not None
     assert args is not None
 
