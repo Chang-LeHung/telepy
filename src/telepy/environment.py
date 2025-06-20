@@ -59,6 +59,31 @@ def patch_before_fork():
     assert args is not None
 
 
+def filter_child_args() -> list[str]:
+    global args
+    assert args is not None
+    res = []
+    if args.debug:
+        res.append("--debug")
+    if args.full_path:
+        res.append("--full-path")
+    if not args.merge:
+        res.append("--no-merge")
+    if args.ignore_frozen:
+        res.append("--ignore-frozen")
+    if args.include_telepy:
+        res.append("--include-telepy")
+    if args.timeout:
+        res.append("--timeout")
+        res.append(str(args.timeout))
+    if args.tree_mode:
+        res.append("--tree-mode")
+    if args.interval:
+        res.append("--interval")
+        res.append(str(args.interval))
+    return res
+
+
 def patch_multiprocesssing():
     """
     Patches the multiprocessing spawn mechanism to inject telepy code to profile.
@@ -79,10 +104,28 @@ def patch_multiprocesssing():
                 # forkserver mode, we need to inject telepy code to profile.
                 # we do not launch telepy in the server process, but we will
                 # hack the fork syscall to sample its child processes.
-                args = args[:idx] + ["--mp", "--fork-server"] + args[idx:]
+                new_args = (
+                    args[:idx]
+                    + ["-m", "telepy", "--fork-server", "--no-merge"]
+                    + filter_child_args()
+                    + args[idx : idx + 2]
+                )
+                logger.log_warning_panel(
+                    "Because you are using the multiprocessing module with "
+                    "the forkserver mode, we will not merge the flamegraphs."
+                )
+                rest = args[idx + 2 :]
+                if rest:
+                    new_args += ["--", *rest]
+                args = new_args
             elif "resource_tracker" not in cmd:
                 # spawn mode
-                new_args = args[:idx] + ["-m", "telepy", "--mp"] + args[idx : idx + 2]
+                new_args = (
+                    args[:idx]
+                    + ["-m", "telepy", "--mp"]
+                    + filter_child_args()
+                    + args[idx : idx + 2]
+                )
                 rest = args[idx + 2 :]
                 if rest:
                     new_args += ["--", *rest]
@@ -100,6 +143,9 @@ class CodeMode(enum.Enum):
     PyModule = 2
 
 
+_internal_argv = "telepy_argv"
+
+
 class Environment:
     initialized = False
 
@@ -110,8 +156,6 @@ class Environment:
     _sys_exit = sys.exit
     _os_exit = os._exit
 
-    _sys_module_exit = sys.exit
-
     @classmethod
     def patch_sys_exit(cls, *args, **kwargs):
         """
@@ -121,7 +165,9 @@ class Environment:
         global sampler
         if sampler is not None and sampler.started:
             logger.log_success_panel(
-                "telepy early stops in sys.exit, so we stop and save the data."
+                f"Process {os.getpid()} exited early via sys.exit(), "
+                "telepy saved profiling data and terminated. "
+                "(You might be using the multiprocessing module)"
             )
             # forserver mode will not start the sampler.
             if sampler.started:
@@ -138,7 +184,9 @@ class Environment:
         global sampler
         if sampler is not None and sampler.started:
             logger.log_success_panel(
-                "telepy early stops in os._exit, so we stop and save the data."
+                f"Process {os.getpid()} exited early via os._exit(), "
+                "telepy saved profiling data and terminated."
+                "(You might be using the multiprocessing module)"
             )
             # forserver mode will not start the sampler.
             if sampler.started:
@@ -190,7 +238,7 @@ class Environment:
                 sys.modules["__telepy_main__"] = sys.modules["__main__"]
                 sys.modules["__main__"] = main_mod
                 old_arg = sys.argv
-                setattr(sys, "telepy_argv", old_arg)
+                setattr(sys, _internal_argv, old_arg)
                 if "--" in old_arg:
                     idx = old_arg.index("--")
                     sys.argv = [args.input[0].name] + old_arg[idx + 1 :]
@@ -205,7 +253,7 @@ class Environment:
                 sys.modules["__telepy_main__"] = sys.modules["__main__"]
                 sys.modules["__main__"] = string_mod
                 old_arg = sys.argv
-                setattr(sys, "telepy_argv", old_arg)
+                setattr(sys, _internal_argv, old_arg)
                 if "--" in old_arg:
                     idx = old_arg.index("--")
                     sys.argv = ["-c"] + old_arg[idx + 1 :]
@@ -215,7 +263,7 @@ class Environment:
                 return string_mod.__dict__
             elif mode == CodeMode.PyModule:
                 old_arg = sys.argv
-                setattr(sys, "telepy_argv", old_arg)
+                setattr(sys, _internal_argv, old_arg)
                 if "--" in old_arg:
                     idx = old_arg.index("--")
                     sys.argv = [old_arg[0]] + old_arg[idx + 1 :]
@@ -235,12 +283,12 @@ class Environment:
             if cls.code_mode in (CodeMode.PyFile, CodeMode.PyString):
                 sys.modules["__main__"] = sys.modules["__telepy_main__"]
                 del sys.modules["__telepy_main__"]
-                sys.argv = getattr(sys, "telepy_argv")
-                delattr(sys, "telepy_argv")
+                sys.argv = getattr(sys, _internal_argv)
+                delattr(sys, _internal_argv)
                 sys.path.remove(os.getcwd())
             elif cls.code_mode == CodeMode.PyModule:
-                sys.argv = getattr(sys, "telepy_argv")
-                delattr(sys, "telepy_argv")
+                sys.argv = getattr(sys, _internal_argv)
+                delattr(sys, _internal_argv)
                 sys.path.remove(os.getcwd())
             cls.initialized = False
 
@@ -451,6 +499,11 @@ class FlameGraphSaver:
         """Wait for all child processes to exit."""
         res: list[str] = []
         begin = time.time()
+        if self.args.debug:
+            logger.log_success_panel(
+                f"Process {self.pid} are waiting for {self.sampler.child_cnt} "
+                "child processes to complete"
+            )
         while len(res) != self.sampler.child_cnt:
             sched_yield()
             files = os.listdir(os.getcwd())
