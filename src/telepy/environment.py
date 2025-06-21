@@ -83,6 +83,14 @@ def filter_child_args() -> list[str]:
         res.append(str(args.interval))
     if args.folded_save:
         res.append("--folded-save")
+    if args.folded_file:
+        res.append("--folded-file")
+        res.append(args.folded_file)
+    if args.mp:
+        res.append("--mp")
+    if args.fork_server:  # pragma: no cover
+        # nobody writes code to use it.
+        res.append("--fork-server")
     return res
 
 
@@ -504,7 +512,7 @@ class FlameGraphSaver:
             if self.sampler.is_root:
                 self._multi_process_root()
             else:
-                self._multi_process_child()
+                self._multi_process_child()  # pragma: no cover
         else:
             if self.sampler.is_root:
                 self._single_process_root()
