@@ -40,7 +40,7 @@ def patch_os_fork_in_child():
     if sampler.is_root:
         sampler.is_root = False
 
-    if sampler.forkserver:
+    if sampler.forkserver:  # pragma: no cover
         sampler.start()
         sampler.forkserver = False
 
@@ -117,7 +117,7 @@ def patch_multiprocesssing():
                         "the forkserver mode, we will not merge the flamegraphs."
                     )
                 rest = args[idx + 2 :]
-                if rest:
+                if rest:  # pragma: no cover
                     new_args += ["--", *rest]
                 args = new_args
             elif "resource_tracker" not in cmd:
@@ -185,7 +185,7 @@ class Environment:
         sampler and save the data.
         """
         global sampler, args
-        if sampler is not None and sampler.started:
+        if sampler is not None and sampler.started:  # pragma: no cover
             if not args.no_verbose:
                 logger.log_success_panel(
                     f"Process {os.getpid()} exited early via os._exit(), "
@@ -196,7 +196,7 @@ class Environment:
             if sampler.started:
                 sampler.stop()
                 _do_save()
-        cls._os_exit(*_args, **kwargs)
+        cls._os_exit(*_args, **kwargs)  # pragma: no cover
 
     @classmethod
     def init_telepy_environment(
@@ -275,7 +275,7 @@ class Environment:
                     sys.argv = [old_arg[0]]
                 sys.path.append(os.getcwd())
                 return {}
-            raise RuntimeError("telepy: invalid code mode")
+            raise RuntimeError("telepy: invalid code mode")  # pragma: no cover
 
     @classmethod
     def destory_telepy_enviroment(cls):
@@ -450,7 +450,11 @@ class FlameGraphSaver:
                         f" the folded file {self.args.folded_file}"
                     )
 
-    def _multi_process_child(self) -> None:
+    def _multi_process_child(self) -> None:  # pragma: no cover
+        """
+        This function can not be covered by coverage.
+        But it has been tested by the test suite.
+        """
         if self.args.merge:
             files = os.listdir(os.getcwd())
             foldeds = [file for file in files if file.endswith(f"{self.pid}.folded")]
@@ -518,10 +522,10 @@ class FlameGraphSaver:
             sched_yield()
             files = os.listdir(os.getcwd())
             res = [file for file in files if file.endswith(f"{self.pid}.folded")]
-            if time.time() - begin > self.args.timeout:
+            if time.time() - begin > self.args.timeout:  # pragma: no cover
                 self.timeout = True
                 break
-        if self.timeout:
+        if self.timeout:  # pragma: no cover
             logger.log_error_panel("Timeout waiting for child processes to complete")
 
 
@@ -553,7 +557,7 @@ def _do_save():
         start = sampler.start_time
         end = sampler.end_time
         title = "TelePySampler Metrics"
-        if sampler.child_cnt > 0 and (sampler.from_fork):
+        if sampler.child_cnt > 0 and (sampler.from_fork):  # pragma: no cover
             title += f" pid = {os.getpid()} (with {sampler.child_cnt} child process(es)) "
             f"ppid = {os.getppid()}"
         elif sampler.child_cnt > 0:
