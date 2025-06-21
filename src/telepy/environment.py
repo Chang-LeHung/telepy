@@ -81,6 +81,8 @@ def filter_child_args() -> list[str]:
     if args.interval:
         res.append("--interval")
         res.append(str(args.interval))
+    if args.folded_save:
+        res.append("--folded-save")
     return res
 
 
@@ -511,7 +513,7 @@ class FlameGraphSaver:
 
     def wait_children(self) -> None:
         """Wait for all child processes to exit."""
-        if self.args.folded_save:
+        if not self.args.merge:
             return
         res: list[str] = []
         begin = time.time()
