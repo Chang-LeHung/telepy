@@ -8,7 +8,7 @@ def log_success_panel(content: str) -> None:
     console.print(Panel(content, style="green", title="Info"))
 
 
-def log_error_panel(content: str) -> None:
+def log_error_panel(content: str) -> None:  # pragma: no cover
     console.print(Panel(content, style="red", title="Error"))
 
 

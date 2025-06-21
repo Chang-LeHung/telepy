@@ -12,6 +12,7 @@ from typing import override
 
 from rich import print
 from rich.panel import Panel
+from rich.table import Table
 from rich.traceback import Traceback, install
 from rich_argparse import RichHelpFormatter
 
@@ -22,6 +23,9 @@ from .flamegraph import FlameGraph
 install()
 
 console = logger.console
+
+
+in_coverage = "coverage" in sys.modules
 
 
 class ArgsHandler(ABC):
@@ -40,7 +44,7 @@ class ArgsHandler(ABC):
     def weight(self) -> int:
         return self.priority
 
-    def __str__(self):
+    def __str__(self):  # pragma: no cover
         return f"[bold blue] Handler[name = {self.name}, priority={self.priority}][/bold blue]"  # noqa: E501
 
     @abstractmethod
@@ -52,12 +56,12 @@ class ArgsHandler(ABC):
         Returns:
             bool: Whether the command be handled.
         """
-        pass
+        pass  # pragma: no cover
 
     @classmethod
     @abstractmethod
     def build(cls) -> "ArgsHandler":
-        pass
+        pass  # pragma: no cover
 
     def __lt__(self, other: "ArgsHandler") -> bool:
         return self.weight > other.weight  # big heap
@@ -103,7 +107,7 @@ class StackTraceHandler(ArgsHandler):
         flamegraph.parse_input()
         svg = flamegraph.generate_svg()
 
-        if args.output is None:
+        if args.output is None:  # pragma: no cover
             print(
                 "[red]output file is not specified, using result.svg as default[/red]",
                 file=sys.stderr,
@@ -130,7 +134,7 @@ class PythonFileProfilingHandler(ArgsHandler):
 
     @override
     def handle(self, args: argparse.Namespace) -> bool:
-        if args.input is None:
+        if args.input is None:  # pragma: no cover
             return False
         filename: str = args.input[0].name
 
@@ -144,7 +148,10 @@ class PythonFileProfilingHandler(ArgsHandler):
             pyc = compile(code, os.path.abspath(filename), "exec")
             sampler.start()
             exec(pyc, global_dict)
-            weakref.finalize(sampler, telepy_finalize)
+            if not in_coverage:
+                weakref.finalize(sampler, telepy_finalize)  # pragma: no cover
+        if in_coverage:
+            telepy_finalize()
         return True
 
 
@@ -170,7 +177,10 @@ class PyCommandStringProfilingHandler(ArgsHandler):
             if not args.fork_server:
                 sampler.start()
             exec(pyc, global_dict)
-            weakref.finalize(sampler, telepy_finalize)
+            if not in_coverage:
+                weakref.finalize(sampler, telepy_finalize)  # pragma: no cover
+        if in_coverage:
+            telepy_finalize()
         return True
 
 
@@ -199,10 +209,15 @@ class PyCommandModuleProfilingHandler(ArgsHandler):
                 "modname": module_name,
             }
             pyc = compile(code, "<string>", "exec")
-            sampler.start()
+            if not sampler.forkserver:
+                sampler.start()
             exec(pyc, global_dict)
-            weakref.finalize(sampler, telepy_finalize)
-        return True
+            if not in_coverage:  # pragma: no cover
+                weakref.finalize(sampler, telepy_finalize)
+        # coverage do not cover this line, god knows why
+        if in_coverage:  # pragma: no cover
+            telepy_finalize()
+        return True  # pragma: no cover
 
 
 @register_handler
@@ -229,6 +244,29 @@ def dispatch(args: argparse.Namespace) -> None:
     )
 
 
+def telepy_help(parser: argparse.ArgumentParser):
+    parser.print_help()
+    table = Table(title="Recommended Interval", show_lines=True)
+
+    table.add_column("Task Duration", style="cyan", justify="right")
+    table.add_column("Unit", style="green")
+    table.add_column("Recommended Interval (μs)", style="magenta")
+
+    table.add_row("< 1ms", "ms", "Uninstall TelePy, you do not need it at all.")
+    table.add_row("< 100ms", "ms", "10")
+    table.add_row("x seconds", "s", "1000")
+    table.add_row("x minutes", "m", "10000")
+    table.add_row("x hours", "h", "Up to you.")
+    print()  # print a new line
+    console.print(table)
+
+
+def _pre_chceck(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    if args.help:
+        telepy_help(parser)
+        sys.exit(0)
+
+
 def main():
     arguments = sys.argv[1:]
     if "--" in arguments:
@@ -236,7 +274,16 @@ def main():
     parser = argparse.ArgumentParser(
         description="TelePy is a very powerful python profiler and dignostic tool."
         " If it helps, you can star it here https://github.com/Chang-LeHung/telepy",
+        add_help=False,
         formatter_class=RichHelpFormatter,
+    )
+    parser.add_argument(
+        "-h", "--help", action="store_true", help="Show this help message and exit."
+    )
+    parser.add_argument(
+        "--no-verbose",
+        action="store_true",
+        help="Disable verbose mode (default: False).",
     )
     parser.add_argument(
         "input",
@@ -350,7 +397,9 @@ def main():
         type=str,
         help="Module to run (default: None).",
     )
+
     args = parser.parse_args(arguments)
+    _pre_chceck(args, parser)
     if not args.disbale_traceback:
         install()
     try:

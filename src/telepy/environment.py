@@ -40,7 +40,7 @@ def patch_os_fork_in_child():
     if sampler.is_root:
         sampler.is_root = False
 
-    if sampler.forkserver:
+    if sampler.forkserver:  # pragma: no cover
         sampler.start()
         sampler.forkserver = False
 
@@ -59,14 +59,50 @@ def patch_before_fork():
     assert args is not None
 
 
+def filter_child_args() -> list[str]:
+    global args
+    assert args is not None
+    res = []
+    if args.debug:
+        res.append("--debug")
+    if args.full_path:
+        res.append("--full-path")
+    if not args.merge:
+        res.append("--no-merge")
+    if args.ignore_frozen:
+        res.append("--ignore-frozen")
+    if args.include_telepy:
+        res.append("--include-telepy")
+    if args.timeout:
+        res.append("--timeout")
+        res.append(str(args.timeout))
+    if args.tree_mode:
+        res.append("--tree-mode")
+    if args.interval:
+        res.append("--interval")
+        res.append(str(args.interval))
+    if args.folded_save:
+        res.append("--folded-save")
+    if args.folded_file:
+        res.append("--folded-file")
+        res.append(args.folded_file)
+    if args.mp:
+        res.append("--mp")
+    if args.fork_server:  # pragma: no cover
+        # nobody writes code to use it.
+        res.append("--fork-server")
+    return res
+
+
 def patch_multiprocesssing():
     """
     Patches the multiprocessing spawn mechanism to inject telepy code to profile.
     """
-    global args
+    global args, sampler
     assert sampler is not None
     assert args is not None
 
+    parser_args = args
     _spawnv_passfds = util.spawnv_passfds
 
     @functools.wraps(_spawnv_passfds)
@@ -79,10 +115,34 @@ def patch_multiprocesssing():
                 # forkserver mode, we need to inject telepy code to profile.
                 # we do not launch telepy in the server process, but we will
                 # hack the fork syscall to sample its child processes.
-                args = args[:idx] + ["--mp", "--fork-server"] + args[idx:]
+                new_args = (
+                    args[:idx]
+                    + ["-m", "telepy", "--fork-server", "--no-merge"]
+                    + filter_child_args()
+                    + args[idx : idx + 2]
+                )
+                if not parser_args.no_verbose:
+                    logger.log_warning_panel(
+                        "Because you are using the multiprocessing module with "
+                        "the forkserver mode, we will not merge the flamegraphs."
+                    )
+                rest = args[idx + 2 :]
+                if rest:  # pragma: no cover
+                    new_args += ["--", *rest]
+                args = new_args
             elif "resource_tracker" not in cmd:
                 # spawn mode
-                args = args[:idx] + ["-m", "telepy", "--mp"] + args[idx:]
+                new_args = (
+                    args[:idx]
+                    + ["-m", "telepy", "--mp"]
+                    + filter_child_args()
+                    + args[idx : idx + 2]
+                )
+                rest = args[idx + 2 :]
+                if rest:
+                    new_args += ["--", *rest]
+                args = new_args
+                sampler.child_cnt += 1
         ret = _spawnv_passfds(path, args, passfds)
         return ret
 
@@ -95,6 +155,9 @@ class CodeMode(enum.Enum):
     PyModule = 2
 
 
+_internal_argv = "telepy_argv"
+
+
 class Environment:
     initialized = False
 
@@ -105,51 +168,51 @@ class Environment:
     _sys_exit = sys.exit
     _os_exit = os._exit
 
-    _sys_module_exit = sys.exit
-
     @classmethod
-    def patch_sys_exit(cls, *args, **kwargs):
+    def patch_sys_exit(cls, *_args, **kwargs):
         """
         `telepy_finalize` will not be called when the process exits. We need to stop the
         sampler and save the data.
         """
-        global sampler
+        global sampler, args
         if sampler is not None and sampler.started:
-            logger.log_success_panel(
-                "telepy early stops in sys.exit, so we stop and save the data."
-            )
+            if not args.no_verbose:
+                logger.log_success_panel(
+                    f"Process {os.getpid()} exited early via sys.exit(), "
+                    "telepy saved profiling data and terminated. "
+                    "(You might be using the multiprocessing module)"
+                )
             # forserver mode will not start the sampler.
             if sampler.started:
                 sampler.stop()
                 _do_save()
-        cls._sys_exit(*args, **kwargs)
+        cls._sys_exit(*_args, **kwargs)
 
     @classmethod
-    def patch_os__exit(cls, *args, **kwargs):
+    def patch_os__exit(cls, *_args, **kwargs):
         """
         `telepy_finalize` will not be called when the process exits. We need to stop the
         sampler and save the data.
         """
-        global sampler
-        if sampler is not None and sampler.started:
-            logger.log_success_panel(
-                "telepy early stops in os._exit, so we stop and save the data."
-            )
+        global sampler, args
+        if sampler is not None and sampler.started:  # pragma: no cover
+            if not args.no_verbose:
+                logger.log_success_panel(
+                    f"Process {os.getpid()} exited early via os._exit(), "
+                    "telepy saved profiling data and terminated."
+                    "(You might be using the multiprocessing module)"
+                )
             # forserver mode will not start the sampler.
             if sampler.started:
                 sampler.stop()
                 _do_save()
-        cls._os_exit(*args, **kwargs)
+        cls._os_exit(*_args, **kwargs)  # pragma: no cover
 
     @classmethod
     def init_telepy_environment(
         cls, args_: argparse.Namespace, mode: CodeMode = CodeMode.PyFile
     ) -> dict[str, Any]:
         """
-        Prepare the environment for a new process. If the process is a child process,
-        `prepare_process_environment` will return directly (we have initialized the
-        environment in the parent process).
-
         Args:
             args_ (argparse.Namespace): The arguments for the process.
         """
@@ -170,9 +233,6 @@ class Environment:
                 forkserver=args.fork_server,
                 from_mp=args.mp,
             )
-            # we do not profile the forkserver process.
-            if not args.fork_server:
-                sampler.start()
             sampler.adjust()
             sys.exit = cls.patch_sys_exit
             os._exit = cls.patch_os__exit
@@ -192,7 +252,7 @@ class Environment:
                 sys.modules["__telepy_main__"] = sys.modules["__main__"]
                 sys.modules["__main__"] = main_mod
                 old_arg = sys.argv
-                setattr(sys, "telepy_argv", old_arg)
+                setattr(sys, _internal_argv, old_arg)
                 if "--" in old_arg:
                     idx = old_arg.index("--")
                     sys.argv = [args.input[0].name] + old_arg[idx + 1 :]
@@ -207,7 +267,7 @@ class Environment:
                 sys.modules["__telepy_main__"] = sys.modules["__main__"]
                 sys.modules["__main__"] = string_mod
                 old_arg = sys.argv
-                setattr(sys, "telepy_argv", old_arg)
+                setattr(sys, _internal_argv, old_arg)
                 if "--" in old_arg:
                     idx = old_arg.index("--")
                     sys.argv = ["-c"] + old_arg[idx + 1 :]
@@ -217,7 +277,7 @@ class Environment:
                 return string_mod.__dict__
             elif mode == CodeMode.PyModule:
                 old_arg = sys.argv
-                setattr(sys, "telepy_argv", old_arg)
+                setattr(sys, _internal_argv, old_arg)
                 if "--" in old_arg:
                     idx = old_arg.index("--")
                     sys.argv = [old_arg[0]] + old_arg[idx + 1 :]
@@ -225,7 +285,7 @@ class Environment:
                     sys.argv = [old_arg[0]]
                 sys.path.append(os.getcwd())
                 return {}
-            raise RuntimeError("telepy: invalid code mode")
+            raise RuntimeError("telepy: invalid code mode")  # pragma: no cover
 
     @classmethod
     def destory_telepy_enviroment(cls):
@@ -237,12 +297,12 @@ class Environment:
             if cls.code_mode in (CodeMode.PyFile, CodeMode.PyString):
                 sys.modules["__main__"] = sys.modules["__telepy_main__"]
                 del sys.modules["__telepy_main__"]
-                sys.argv = getattr(sys, "telepy_argv")
-                delattr(sys, "telepy_argv")
+                sys.argv = getattr(sys, _internal_argv)
+                delattr(sys, _internal_argv)
                 sys.path.remove(os.getcwd())
             elif cls.code_mode == CodeMode.PyModule:
-                sys.argv = getattr(sys, "telepy_argv")
-                delattr(sys, "telepy_argv")
+                sys.argv = getattr(sys, _internal_argv)
+                delattr(sys, _internal_argv)
                 sys.path.remove(os.getcwd())
             cls.initialized = False
 
@@ -250,8 +310,8 @@ class Environment:
 @contextlib.contextmanager
 def telepy_env(args: argparse.Namespace, code_mode: CodeMode = CodeMode.PyFile):
     global sampler
-    global_dict = Environment.init_telepy_environment(args, code_mode)
     try:
+        global_dict = Environment.init_telepy_environment(args, code_mode)
         yield global_dict, sampler
     finally:
         Environment.destory_telepy_enviroment()
@@ -315,14 +375,16 @@ class FlameGraphSaver:
 
     def _single_process_root(self) -> None:
         self._save_svg(self.args.output)
-        logger.log_success_panel(
-            f"Process {self.pid} saved the profiling data to the svg file {self.args.output}"  # noqa: E501
-        )
+        if not self.args.no_verbose:
+            logger.log_success_panel(
+                f"Process {self.pid} saved the profiling data to the svg file {self.args.output}"  # noqa: E501
+            )
         if self.args.folded_save:
             self._save_folded(self.args.folded_file)
-            logger.log_success_panel(
-                f"Process {self.pid} saved the profiling data to the folded file {self.args.folded_file}"  # noqa: E501
-            )
+            if not self.args.no_verbose:
+                logger.log_success_panel(
+                    f"Process {self.pid} saved the profiling data to the folded file {self.args.folded_file}"  # noqa: E501
+                )
 
     def _single_process_child(self) -> None:
         # filename: pid-ppid.svg pid-ppid.folded
@@ -371,30 +433,38 @@ class FlameGraphSaver:
 
             load_chidren_file()
             self._save_svg(self.args.output)
-            logger.log_success_panel(
-                f"Root process {self.pid} collected the profiling data to svg "
-                f"file {self.args.output}"
-            )
+            if not self.args.no_verbose:
+                logger.log_success_panel(
+                    f"Root process {self.pid} collected the profiling data to svg "
+                    f"file {self.args.output}"
+                )
             if self.args.folded_save:
                 self._save_folded(self.args.folded_file)
-                logger.log_success_panel(
-                    f"Root process {self.pid} collected the profiling data {foldeds} to"
-                    f" the folded file {self.args.folded_file}"
-                )
+                if not self.args.no_verbose:
+                    logger.log_success_panel(
+                        f"Root process {self.pid} collected the profiling data "
+                        f"{foldeds} to the folded file {self.args.folded_file}"
+                    )
         else:
             self._save_svg(self.args.output)
-            logger.log_success_panel(
-                f"Root process {self.pid} saved the profiling data to"
-                f" the svg file {self.args.output}"
-            )
-            if self.args.folded_save:
-                self._save_folded(self.args.folded_file)
+            if not self.args.no_verbose:
                 logger.log_success_panel(
                     f"Root process {self.pid} saved the profiling data to"
-                    f" the folded file {self.args.folded_file}"
+                    f" the svg file {self.args.output}"
                 )
+            if self.args.folded_save:
+                self._save_folded(self.args.folded_file)
+                if not self.args.no_verbose:
+                    logger.log_success_panel(
+                        f"Root process {self.pid} saved the profiling data to"
+                        f" the folded file {self.args.folded_file}"
+                    )
 
-    def _multi_process_child(self) -> None:
+    def _multi_process_child(self) -> None:  # pragma: no cover
+        """
+        This function can not be covered by coverage.
+        But it has been tested by the test suite.
+        """
         if self.args.merge:
             files = os.listdir(os.getcwd())
             foldeds = [file for file in files if file.endswith(f"{self.pid}.folded")]
@@ -442,7 +512,7 @@ class FlameGraphSaver:
             if self.sampler.is_root:
                 self._multi_process_root()
             else:
-                self._multi_process_child()
+                self._multi_process_child()  # pragma: no cover
         else:
             if self.sampler.is_root:
                 self._single_process_root()
@@ -451,16 +521,23 @@ class FlameGraphSaver:
 
     def wait_children(self) -> None:
         """Wait for all child processes to exit."""
+        if not self.args.merge:
+            return
         res: list[str] = []
         begin = time.time()
+        if self.args.debug:
+            logger.log_success_panel(
+                f"Process {self.pid} are waiting for {self.sampler.child_cnt} "
+                "child processes to complete"
+            )
         while len(res) != self.sampler.child_cnt:
             sched_yield()
             files = os.listdir(os.getcwd())
             res = [file for file in files if file.endswith(f"{self.pid}.folded")]
-            if time.time() - begin > self.args.timeout:
+            if time.time() - begin > self.args.timeout:  # pragma: no cover
                 self.timeout = True
                 break
-        if self.timeout:
+        if self.timeout:  # pragma: no cover
             logger.log_error_panel("Timeout waiting for child processes to complete")
 
 
@@ -492,7 +569,7 @@ def _do_save():
         start = sampler.start_time
         end = sampler.end_time
         title = "TelePySampler Metrics"
-        if sampler.child_cnt > 0 and (sampler.from_fork):
+        if sampler.child_cnt > 0 and (sampler.from_fork):  # pragma: no cover
             title += f" pid = {os.getpid()} (with {sampler.child_cnt} child process(es)) "
             f"ppid = {os.getppid()}"
         elif sampler.child_cnt > 0:

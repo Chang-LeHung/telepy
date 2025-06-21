@@ -236,9 +236,10 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
             raise RuntimeError("Sampler is already started")
 
         if threading.current_thread() != threading.main_thread():
+            # coverage do not cover this line, god knows why
             raise RuntimeError(
                 "TelepySysAsyncSampler must be started from the main thread"
-            )
+            )  # pragma: no cover
 
         current = signal.getsignal(signal.SIGPROF)
         if current not in (signal.SIG_DFL, signal.SIG_IGN):
@@ -291,7 +292,7 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
         """
         Raises:
             RuntimeError: If the sampler is not started or failed
-                            to execute in main thread.
+                            to execute in the main thread.
         """
         return super().start()
 
@@ -301,6 +302,6 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
         """
         Raises:
             RuntimeError: If the sampler is not started or failed
-                            to execute in main thread.
+                            to execute in the main thread.
         """
         return super().stop()

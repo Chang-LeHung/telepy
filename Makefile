@@ -10,7 +10,7 @@ build_debug: compile_commands
 
 clean: uninstall
 	make -C src/$(PKG_NAME)/telepysys clean
-	rm -rf dist build compile_commands.json src/$(PKG_NAME).egg-info .coverage*
+	rm -rf dist build compile_commands.json src/$(PKG_NAME).egg-info .coverage\.* *.svg *.folded
 
 install:
 	@pip install .
@@ -28,12 +28,13 @@ compile_commands:
 	@export TELEPY_FLAGS="-DTELEPY_TEST -g -O0" && bear -- python setup.py build_ext --inplace
 
 coverage:
-	coverage run --source=telepy -m unittest discover -s tests
+	coverage run --parallel-mode --source=telepy -m unittest discover -s tests
+	coverage combine
 	coverage report
 	coverage html
 
 test:
 	make -C src/$(PKG_NAME)/telepysys test
-	@python -m unittest discover -s tests -v
+	@python -m unittest discover -s tests
 
 .PHONY: build clean install uninstall docs coverage
