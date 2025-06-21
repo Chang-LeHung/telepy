@@ -10,7 +10,7 @@ build_debug: compile_commands
 
 clean: uninstall
 	make -C src/$(PKG_NAME)/telepysys clean
-	rm -rf dist build compile_commands.json src/$(PKG_NAME).egg-info .coverage\.*
+	rm -rf dist build compile_commands.json src/$(PKG_NAME).egg-info .coverage\.* *.svg *.folded
 
 install:
 	@pip install .
