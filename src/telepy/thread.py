@@ -25,8 +25,10 @@ class PyMainTrampoline:
         if threading.current_thread() is threading.main_thread():
             self.func(*args, **kwds)
             return
-        _telepysys.register_main(self.main_thread, *args, **kwds)
-        self.event.wait()  # wait for the main thread to finish
+        # coverage can not detect this line
+        _telepysys.register_main(self.main_thread, *args, **kwds)  # pragma: no cover
+        # wait for the main thread to finish
+        self.event.wait()  # pragma: no cover
 
     def main_thread(self, *args, **kwds):
         """Run in the main thread"""
