@@ -1,7 +1,7 @@
-from unittest import TestCase
+from base import TestBase  # type: ignore
 
 
-class TestTelePySys(TestCase):
+class TestTelePySys(TestBase):
     def test_telepysys_version(self):
         import telepy
 
@@ -105,7 +105,7 @@ class TestTelePySys(TestCase):
         self.assertEqual(tids, set(call_stack.keys()))
 
 
-class TestSampler(TestCase):
+class TestSampler(TestBase):
     def test_sampler(self):
         import telepy
 
@@ -204,7 +204,7 @@ class TestSampler(TestCase):
         self.assertLessEqual(sampler.sampling_time_rate, 1)
 
 
-class TelepyMainThread(TestCase):
+class TelepyMainThread(TestBase):
     def test_main_thread(self):
         import io
         import threading
@@ -250,3 +250,22 @@ class TelepyMainThread(TestCase):
             assert threading.current_thread().name == "MainThread"
 
         bar()
+
+    def test_in_main_in_non_main(self):
+        import threading
+
+        from telepy import in_main_thread
+
+        def test():
+            @in_main_thread
+            def bar():
+                import threading
+
+                assert threading.current_thread().name == "MainThread"
+
+            assert threading.current_thread().name != "MainThread"
+            bar()
+
+        t = threading.Thread(target=test)
+        t.start()
+        t.join()

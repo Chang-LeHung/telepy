@@ -1,10 +1,11 @@
 import threading
-import unittest
+
+from base import TestBase  # type: ignore
 
 import telepy
 
 
-class TestAsyncSampler(unittest.TestCase):
+class TestAsyncSampler(TestBase):
     def test_sampler(self):
         self.assertEqual(threading.current_thread(), threading.main_thread())
 
@@ -98,5 +99,22 @@ class TestAsyncSampler(unittest.TestCase):
                 self.fail("RuntimeError not raised")
 
         t = threading.Thread(target=spawn_sampler)
+        t.start()
+        t.join()
+        print(async_sampler.sampling_time_rate)
+
+    def test_async_sampler_not_in_main(self):
+        import threading
+
+        def bar():
+            async_sampler = telepy.TelepySysAsyncSampler()
+            try:
+                async_sampler.start()
+            except RuntimeError:
+                pass
+            else:
+                self.fail("RuntimeError not raised")
+
+        t = threading.Thread(target=bar)
         t.start()
         t.join()
