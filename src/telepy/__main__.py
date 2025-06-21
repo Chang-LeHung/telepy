@@ -25,6 +25,9 @@ install()
 console = logger.console
 
 
+in_coverage = "coverage" in sys.modules
+
+
 class ArgsHandler(ABC):
     def __init__(self, name: str, priority: int = 0) -> None:
         """
@@ -145,7 +148,10 @@ class PythonFileProfilingHandler(ArgsHandler):
             pyc = compile(code, os.path.abspath(filename), "exec")
             sampler.start()
             exec(pyc, global_dict)
-            weakref.finalize(sampler, telepy_finalize)
+            if not in_coverage:
+                weakref.finalize(sampler, telepy_finalize)
+        if in_coverage:
+            telepy_finalize()
         return True
 
 
@@ -171,7 +177,10 @@ class PyCommandStringProfilingHandler(ArgsHandler):
             if not args.fork_server:
                 sampler.start()
             exec(pyc, global_dict)
-            weakref.finalize(sampler, telepy_finalize)
+            if not in_coverage:
+                weakref.finalize(sampler, telepy_finalize)
+        if in_coverage:
+            telepy_finalize()
         return True
 
 
@@ -203,7 +212,10 @@ class PyCommandModuleProfilingHandler(ArgsHandler):
             if not sampler.forkserver:
                 sampler.start()
             exec(pyc, global_dict)
-            weakref.finalize(sampler, telepy_finalize)
+            if not in_coverage:
+                weakref.finalize(sampler, telepy_finalize)
+        if in_coverage:
+            telepy_finalize()
         return True
 
 
