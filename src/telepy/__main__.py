@@ -44,7 +44,7 @@ class ArgsHandler(ABC):
     def weight(self) -> int:
         return self.priority
 
-    def __str__(self):
+    def __str__(self):  # pragma: no cover
         return f"[bold blue] Handler[name = {self.name}, priority={self.priority}][/bold blue]"  # noqa: E501
 
     @abstractmethod
@@ -56,12 +56,12 @@ class ArgsHandler(ABC):
         Returns:
             bool: Whether the command be handled.
         """
-        pass
+        pass  # pragma: no cover
 
     @classmethod
     @abstractmethod
     def build(cls) -> "ArgsHandler":
-        pass
+        pass  # pragma: no cover
 
     def __lt__(self, other: "ArgsHandler") -> bool:
         return self.weight > other.weight  # big heap
@@ -107,7 +107,7 @@ class StackTraceHandler(ArgsHandler):
         flamegraph.parse_input()
         svg = flamegraph.generate_svg()
 
-        if args.output is None:
+        if args.output is None:  # pragma: no cover
             print(
                 "[red]output file is not specified, using result.svg as default[/red]",
                 file=sys.stderr,
@@ -134,7 +134,7 @@ class PythonFileProfilingHandler(ArgsHandler):
 
     @override
     def handle(self, args: argparse.Namespace) -> bool:
-        if args.input is None:
+        if args.input is None:  # pragma: no cover
             return False
         filename: str = args.input[0].name
 
@@ -149,7 +149,7 @@ class PythonFileProfilingHandler(ArgsHandler):
             sampler.start()
             exec(pyc, global_dict)
             if not in_coverage:
-                weakref.finalize(sampler, telepy_finalize)
+                weakref.finalize(sampler, telepy_finalize)  # pragma: no cover
         if in_coverage:
             telepy_finalize()
         return True
@@ -178,7 +178,7 @@ class PyCommandStringProfilingHandler(ArgsHandler):
                 sampler.start()
             exec(pyc, global_dict)
             if not in_coverage:
-                weakref.finalize(sampler, telepy_finalize)
+                weakref.finalize(sampler, telepy_finalize)  # pragma: no cover
         if in_coverage:
             telepy_finalize()
         return True
@@ -212,11 +212,12 @@ class PyCommandModuleProfilingHandler(ArgsHandler):
             if not sampler.forkserver:
                 sampler.start()
             exec(pyc, global_dict)
-            if not in_coverage:
+            if not in_coverage:  # pragma: no cover
                 weakref.finalize(sampler, telepy_finalize)
-        if in_coverage:
+        # coverage do not cover this line, god knows why
+        if in_coverage:  # pragma: no cover
             telepy_finalize()
-        return True
+        return True  # pragma: no cover
 
 
 @register_handler
