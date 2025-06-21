@@ -1,3 +1,4 @@
 [run]
 cover_pylib = True
 source = telepy
+concurrency = multiprocessing
