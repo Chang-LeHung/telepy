@@ -511,6 +511,8 @@ class FlameGraphSaver:
 
     def wait_children(self) -> None:
         """Wait for all child processes to exit."""
+        if self.args.folded_save:
+            return
         res: list[str] = []
         begin = time.time()
         if self.args.debug:
