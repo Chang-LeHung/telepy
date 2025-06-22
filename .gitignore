@@ -177,4 +177,5 @@ compile_commands.json
 result.svg
 result.html
 test_sampler.stack
-./*.svg
+*.svg
+*.folded
