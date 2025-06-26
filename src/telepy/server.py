@@ -12,13 +12,6 @@ from urllib.parse import parse_qs, urlparse
 
 from ._telepysys import __version__
 
-logger = logging.getLogger("http.server")
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter("%(message)s")
-handler.setFormatter(formatter)
-logger.handlers = [handler]
-
 
 class TelePyHandler(BaseHTTPRequestHandler):
     """
@@ -30,11 +23,23 @@ class TelePyHandler(BaseHTTPRequestHandler):
     server: HTTPServer
 
     def __init__(self, request, client_address, server) -> None:
+        """
+        Initializes a new request handler instance.
+
+        Args:
+            request: The client request object.
+            client_address: The client address tuple (host, port).
+            server: The server instance.
+            log: Flag indicating whether to enable logging.
+            logger: Logger instance for request logging.
+        """
         super().__init__(request, client_address, server)
         self.telepy_headers: dict[str, str] = {}
         self.req: TelePyRequest
         self.resp: TelePyInterceptor
         self.interceptor: TelePyInterceptor
+        self.log: bool
+        self.logger: logging.Logger
 
     def before_request(self):
         """
@@ -161,9 +166,10 @@ class TelePyHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(body).encode())
 
     def log_message(self, format, *args):
-        logger.info(
-            f"{self.client_address[0]} - - [{self.log_date_time_string()}] {format % args}"  # noqa: E501
-        )
+        if self.log:
+            self.logger.info(
+                f"{self.client_address[0]} - - [{self.log_date_time_string()}] {format % args}"  # noqa: E501
+            )
 
     @override
     def send_response(self, code, message=None):
@@ -278,6 +284,8 @@ class TelepyApp:
         self,
         port: int = 8026,
         host: str = "127.0.0.1",
+        filename: str | None = None,
+        log: bool = True,
     ) -> None:
         self.port = port
         self.host = host
@@ -286,6 +294,27 @@ class TelepyApp:
 
         self.before_routers: list[Callable[..., Any]] = []
         self.after_routers: list[Callable[..., Any]] = []
+
+        self.filename = filename
+        self.log = log
+        formatter = logging.Formatter("%(message)s")
+        if self.log and self.filename is None:
+            logger = logging.getLogger("http.server")
+            logger.setLevel(logging.INFO)
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setFormatter(formatter)
+            logger.handlers = [handler]
+            self.logger: logging.Logger | None = logger
+        elif not self.log:
+            self.logger = None
+        elif self.filename is not None:
+            self.logger = logging.getLogger("http.server")
+            self.logger.setLevel(logging.INFO)
+            fh = logging.FileHandler(self.filename)
+            fh.setFormatter(formatter)
+            self.logger.handlers = [fh]
+        else:
+            self.logger = None
 
     def route(
         self, path: str, method: str = "GET"
@@ -301,7 +330,14 @@ class TelepyApp:
 
     def run(self) -> None:
         clazz = type(
-            "TelePyAppHandler", (TelePyHandler,), {"app": self, "routers": self.routers}
+            "TelePyAppHandler",
+            (TelePyHandler,),
+            {
+                "app": self,
+                "routers": self.routers,
+                "log": self.log,
+                "logger": self.logger,
+            },
         )
         self.server = HTTPServer((self.host, self.port), clazz)
 
