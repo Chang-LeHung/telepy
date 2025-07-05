@@ -45,6 +45,7 @@ class TestApp(TestCase):
         t.daemon = True
         t.start()
         app.run()
+        app.close()
 
     def test_before_request(self):
         app = TelepyApp(port=8027)
