@@ -12,13 +12,6 @@ from urllib.parse import parse_qs, urlparse
 
 from ._telepysys import __version__
 
-logger = logging.getLogger("http.server")
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter("%(message)s")
-handler.setFormatter(formatter)
-logger.handlers = [handler]
-
 
 class TelePyHandler(BaseHTTPRequestHandler):
     """
@@ -30,23 +23,44 @@ class TelePyHandler(BaseHTTPRequestHandler):
     server: HTTPServer
 
     def __init__(self, request, client_address, server) -> None:
+        """
+        Initializes a new request handler instance.
+
+        Args:
+            request: The client request object.
+            client_address: The client address tuple (host, port).
+            server: The server instance.
+            log: Flag indicating whether to enable logging.
+            logger: Logger instance for request logging.
+        """
         super().__init__(request, client_address, server)
         self.telepy_headers: dict[str, str] = {}
+        self.req: TelePyRequest
+        self.resp: TelePyInterceptor
+        self.interceptor: TelePyInterceptor
+        self.log: bool
+        self.logger: logging.Logger
 
     def before_request(self):
         """
         This method is called before the request is handled.
         """
-        pass
+        for intercetor in self.app.before_routers:
+            intercetor(self.req, self.interceptor)
+            if not self.interceptor.flow:
+                return
 
     def after_request(self):
         """
         This method is called after the request is handled.
         """
-        pass
+        for resp_handler in self.app.after_routers:
+            resp_handler(self.req, self.resp)
+            if not self.resp.flow:
+                return
 
     @override
-    def handle_one_request(self):
+    def handle_one_request(self):  # pragma: no cover
         """Handle a single HTTP request.
 
         You normally don't need to override this method; see the class
@@ -56,29 +70,45 @@ class TelePyHandler(BaseHTTPRequestHandler):
         """
         try:
             self.raw_requestline = self.rfile.readline(65537)
-            if len(self.raw_requestline) > 65536:  # pragma: no cover
+            if len(self.raw_requestline) > 65536:
                 self.requestline = ""
                 self.request_version = ""
                 self.command = ""
                 self.send_error(HTTPStatus.REQUEST_URI_TOO_LONG)
                 return
-            if not self.raw_requestline:  # pragma: no cover
+            if not self.raw_requestline:
                 self.close_connection = True
                 return
-            if not self.parse_request():  # pragma: no cover
+            if not self.parse_request():
                 # An error code has been sent, just exit
                 return
             mname = "do_" + self.command
-            if not hasattr(self, mname):  # pragma: no cover
+            if not hasattr(self, mname):
                 self.send_error(
                     HTTPStatus.NOT_IMPLEMENTED,
                     f"Unsupported method ({self.command!r})",
                 )
                 return
             method = getattr(self, mname)
+            parsed_url = urlparse(self.path)
+            query = parse_qs(parsed_url.query)
+            self.req = TelePyRequest(
+                app=self.app,
+                headers=self.headers,
+                query=query,
+                url=parsed_url.path,
+                method=self.command,
+            )
+            self.interceptor = TelePyInterceptor(
+                status_code=HTTPStatus.OK.value, headers={}
+            )
+            self.resp = self.interceptor
             self.before_request()
-            method()
+            if self.interceptor.forward:
+                method()
+            self.interceptor.flow = True
             self.after_request()
+            self._request_finished()
             self.wfile.flush()  # actually send the response if not already done.
         except TimeoutError as e:  # pragma: no cover
             # a read or a write timed out.  Discard this connection
@@ -86,67 +116,42 @@ class TelePyHandler(BaseHTTPRequestHandler):
             self.close_connection = True
             return
 
+    def _request_finished(self):
+        print(f"{self.resp.headers = }")
+        for key, val in self.resp.headers.items():
+            self.send_header(key, val)
+        self.end_headers()
+        self.wfile.write(self.resp.buf.getvalue())
+
     def do_GET(self):
         parsed_url = urlparse(self.path)
-        query = parse_qs(parsed_url.query)
-
         path = parsed_url.path
         if path in self.routers["GET"]:
-            req = TelePyRequest(
-                app=self.app,
-                headers=self.headers,
-                query=query,
-                url=parsed_url.path,
-                method="GET",
-            )
-            self._check_request(req)
-            resp = TelePyResponse(status_code=HTTPStatus.OK.value, headers={})
 
-            self.routers["GET"][path](req, resp)
-            resp.start()
-            self.send_response(resp.status_code)
-            resp.finish()
-            for key, val in resp.headers.items():
-                self.send_header(key, val)
-            self.end_headers()
-            self.wfile.write(resp.buf.getvalue())
-            self._check_response(resp)
+            self.resp.start()
+            self.routers["GET"][path](self.req, self.resp)
+            self.send_response(self.resp.status_code)
+            self.resp.finish()
             return
 
-        self.send_error_response(HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase)
+        self.send_error_response(
+            HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase
+        )
 
     def do_POST(self):
         parsed_url = urlparse(self.path)
-        query = parse_qs(parsed_url.query)
 
         path = parsed_url.path
         if path in self.routers["POST"]:
-            req = TelePyRequest(
-                app=self.app,
-                headers=self.headers,
-                query=query,
-                url=parsed_url.path,
-                method="POST",
-                body=self.rfile.read(int(self.headers["Content-Length"])),
-            )
-            self._check_request(req)
-            resp = TelePyResponse(status_code=HTTPStatus.OK.value, headers={})
+            req = self.req
+            resp = self.resp
             resp.start()
             self.routers["POST"][path](req, resp)
             resp.finish()
-            for key, val in resp.headers.items():
-                self.send_header(key, val)
-            self.end_headers()
-            self.wfile.write(resp.buf.getvalue())
-            self._check_response(resp)
             return
-        self.send_error_response(HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase)
-
-    def _check_response(self, resp: "TelePyResponse"):
-        pass
-
-    def _check_request(self, req: "TelePyRequest"):
-        pass
+        self.send_error_response(
+            HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase
+        )
 
     def send_error_response(self, status_code: int, message: str):
         self.send_response(status_code)
@@ -161,9 +166,10 @@ class TelePyHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(body).encode())
 
     def log_message(self, format, *args):
-        logger.info(
-            f"{self.client_address[0]} - - [{self.log_date_time_string()}] {format % args}"  # noqa: E501
-        )
+        if self.log:
+            self.logger.info(
+                f"{self.client_address[0]} - - [{self.log_date_time_string()}] {format % args}"  # noqa: E501
+            )
 
     @override
     def send_response(self, code, message=None):
@@ -245,6 +251,32 @@ class TelePyResponse(TelePyResponseMixin):
             self.headers["Content-Type"] = "text/plain; charset=utf-8"
 
 
+class TelePyInterceptor(TelePyResponse):
+
+    def __init__(self, status_code, headers) -> None:
+        super().__init__(status_code, headers)
+        self._forward: bool = True
+        self._flow: bool = True
+
+    @property
+    def forward(self) -> bool:
+        return self._forward
+
+    @forward.setter
+    def forward(self, value: bool):
+        self._forward = value
+        if not value:
+            self._flow = False
+
+    @property
+    def flow(self) -> bool:
+        return self._flow
+
+    @flow.setter
+    def flow(self, value: bool) -> None:
+        self._flow = value
+
+
 class TelepyApp:
     supported_methods = ("GET",)
 
@@ -252,11 +284,37 @@ class TelepyApp:
         self,
         port: int = 8026,
         host: str = "127.0.0.1",
+        filename: str | None = None,
+        log: bool = True,
     ) -> None:
         self.port = port
         self.host = host
 
         self.routers: dict[str, dict[str, Callable[..., Any]]] = defaultdict(dict)
+
+        self.before_routers: list[Callable[..., Any]] = []
+        self.after_routers: list[Callable[..., Any]] = []
+
+        self.filename = filename
+        self.log = log
+        formatter = logging.Formatter("%(message)s")
+        if self.log and self.filename is None:
+            logger = logging.getLogger("http.server")
+            logger.setLevel(logging.INFO)
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setFormatter(formatter)
+            logger.handlers = [handler]
+            self.logger: logging.Logger | None = logger
+        elif not self.log:
+            self.logger = None
+        elif self.filename is not None:
+            self.logger = logging.getLogger("http.server")
+            self.logger.setLevel(logging.INFO)
+            fh = logging.FileHandler(self.filename)
+            fh.setFormatter(formatter)
+            self.logger.handlers = [fh]
+        else:
+            self.logger = None
 
     def route(
         self, path: str, method: str = "GET"
@@ -272,14 +330,51 @@ class TelepyApp:
 
     def run(self) -> None:
         clazz = type(
-            "TelePyAppHandler", (TelePyHandler,), {"app": self, "routers": self.routers}
+            "TelePyAppHandler",
+            (TelePyHandler,),
+            {
+                "app": self,
+                "routers": self.routers,
+                "log": self.log,
+                "logger": self.logger,
+            },
         )
         self.server = HTTPServer((self.host, self.port), clazz)
 
         self.server.serve_forever()
 
+    def register_interceptor(self, func: Callable[..., Any]):
+        """Register an interceptor function to be called before routing.
+
+        Args:
+            func: A callable to be registered as an interceptor.
+
+        Returns:
+            The same function that was passed in, allowing decorator usage.
+        """
+        self.before_routers.append(func)
+        return func
+
+    def register_response_handler(self, func: Callable[..., Any]):
+        """Register a response handler function to be called after routing.
+
+        Args:
+            func: A callable to be registered as a response handler.
+
+        Returns:
+            The registered function for potential decorator usage.
+        """
+        self.after_routers.append(func)
+        return func
+
     def defered_shutdown(self):
-        """Gracefully shuts down the server asynchronously."""
+        """Asynchronously shuts down the server in a non-blocking manner
+        by spawning a daemon thread.
+
+        This allows the main thread to continue execution while the server
+        shutdown is processed in the background. The daemon thread ensures
+        it won't prevent program exit if still running.
+        """
 
         t = threading.Thread(target=self.server.shutdown)
         t.daemon = True
