@@ -102,3 +102,4 @@ class TestApp(TestCase):
         t.daemon = True
         t.start()
         app.run()
+        app.close()
