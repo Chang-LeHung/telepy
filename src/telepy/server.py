@@ -284,3 +284,9 @@ class TelepyApp:
         t = threading.Thread(target=self.server.shutdown)
         t.daemon = True
         t.start()
+
+    def close(self) -> None:
+        self.server.server_close()
+
+    def server_close(self) -> None:
+        return self.close()
