@@ -1,12 +1,12 @@
 import threading
 from unittest import TestCase
 
-from telepy.server import TelepyApp, TelePyInterceptor, TelePyRequest, TelePyResponse
+from telepy.server import TelePyApp, TelePyInterceptor, TelePyRequest, TelePyResponse
 
 
 class TestApp(TestCase):
     def test_app(self):
-        app = TelepyApp()
+        app = TelePyApp()
 
         @app.route("/")
         def hello(req: TelePyRequest, resp: TelePyResponse) -> None:
@@ -48,7 +48,7 @@ class TestApp(TestCase):
         app.close()
 
     def test_before_request(self):
-        app = TelepyApp(port=8027)
+        app = TelePyApp(port=8027)
 
         @app.route("/")
         def hello(req: TelePyRequest, resp: TelePyResponse) -> None:

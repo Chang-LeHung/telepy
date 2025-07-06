@@ -19,7 +19,7 @@ class TelePyHandler(BaseHTTPRequestHandler):
     """
 
     routers: dict[str, dict[str, Callable[..., Any]]]
-    app: "TelepyApp"
+    app: "TelePyApp"
     server: HTTPServer
 
     def __init__(self, request, client_address, server) -> None:
@@ -127,16 +127,13 @@ class TelePyHandler(BaseHTTPRequestHandler):
         parsed_url = urlparse(self.path)
         path = parsed_url.path
         if path in self.routers["GET"]:
-
             self.resp.start()
             self.routers["GET"][path](self.req, self.resp)
             self.send_response(self.resp.status_code)
             self.resp.finish()
             return
 
-        self.send_error_response(
-            HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase
-        )
+        self.send_error_response(HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase)
 
     def do_POST(self):
         parsed_url = urlparse(self.path)
@@ -149,9 +146,7 @@ class TelePyHandler(BaseHTTPRequestHandler):
             self.routers["POST"][path](req, resp)
             resp.finish()
             return
-        self.send_error_response(
-            HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase
-        )
+        self.send_error_response(HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase)
 
     def send_error_response(self, status_code: int, message: str):
         self.send_response(status_code)
@@ -194,7 +189,7 @@ class TelePyException(Exception):
 class TelePyRequest:
     def __init__(
         self,
-        app: "TelepyApp",
+        app: "TelePyApp",
         headers: dict[str, str],
         body: bytes | None = None,
         url: str = "/",
@@ -252,7 +247,6 @@ class TelePyResponse(TelePyResponseMixin):
 
 
 class TelePyInterceptor(TelePyResponse):
-
     def __init__(self, status_code, headers) -> None:
         super().__init__(status_code, headers)
         self._forward: bool = True
@@ -277,7 +271,7 @@ class TelePyInterceptor(TelePyResponse):
         self._flow = value
 
 
-class TelepyApp:
+class TelePyApp:
     supported_methods = ("GET",)
 
     def __init__(
