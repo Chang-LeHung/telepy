@@ -42,10 +42,10 @@ class TestApp(TestCase):
                 )
 
         t = threading.Thread(target=client)
-        t.daemon = True
         t.start()
         app.run()
         app.close()
+        t.join()
 
     def test_before_request(self):
         app = TelePyApp(port=8027)
@@ -99,7 +99,7 @@ class TestApp(TestCase):
                 self.assertEqual(response.headers["Tail"], "Handler")
 
         t = threading.Thread(target=client)
-        t.daemon = True
         t.start()
         app.run()
+        t.join()
         app.close()
