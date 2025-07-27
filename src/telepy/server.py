@@ -45,7 +45,7 @@ class TelePyHandler(BaseHTTPRequestHandler):
         """
         This method is called before the request is handled.
         """
-        for intercetor in self.app.before_routers:
+        for intercetor in self.app._before_routers:
             intercetor(self.req, self.interceptor)
             if not self.interceptor.flow:
                 return
@@ -54,7 +54,7 @@ class TelePyHandler(BaseHTTPRequestHandler):
         """
         This method is called after the request is handled.
         """
-        for resp_handler in self.app.after_routers:
+        for resp_handler in self.app._after_routers:
             resp_handler(self.req, self.resp)
             if not self.resp.flow:
                 return
@@ -117,7 +117,6 @@ class TelePyHandler(BaseHTTPRequestHandler):
             return
 
     def _request_finished(self):
-        print(f"{self.resp.headers = }")
         for key, val in self.resp.headers.items():
             self.send_header(key, val)
         self.end_headers()
@@ -284,31 +283,55 @@ class TelePyApp:
         self.port = port
         self.host = host
 
-        self.routers: dict[str, dict[str, Callable[..., Any]]] = defaultdict(dict)
+        self._register_values: dict[str, Any] = dict()
 
-        self.before_routers: list[Callable[..., Any]] = []
-        self.after_routers: list[Callable[..., Any]] = []
+        self._routers: dict[str, dict[str, Callable[..., Any]]] = defaultdict(dict)
 
-        self.filename = filename
-        self.log = log
+        self._before_routers: list[Callable[..., Any]] = []
+        self._after_routers: list[Callable[..., Any]] = []
+
+        self._filename = filename
+        self._log = log
+        self.server: None | HTTPServer = None
         formatter = logging.Formatter("%(message)s")
-        if self.log and self.filename is None:
+        if self._log and self._filename is None:
             logger = logging.getLogger("http.server")
             logger.setLevel(logging.INFO)
             handler = logging.StreamHandler(sys.stdout)
             handler.setFormatter(formatter)
             logger.handlers = [handler]
             self.logger: logging.Logger | None = logger
-        elif not self.log:
+        elif not self._log:
             self.logger = None
-        elif self.filename is not None:
+        elif self._filename is not None:
             self.logger = logging.getLogger("http.server")
             self.logger.setLevel(logging.INFO)
-            fh = logging.FileHandler(self.filename)
+            fh = logging.FileHandler(self._filename)
             fh.setFormatter(formatter)
             self.logger.handlers = [fh]
         else:
             self.logger = None
+
+    def register(self, name: str, value: Any) -> None:
+        """
+        Register a name-value pair in the registry.
+
+        Args:
+            name (str): The name to register.
+            value (Any): The value associated with the name.
+
+        Raises:
+            KeyError: If the name is already registered.
+
+        Note:
+            This method ensures that each name is unique in the registry.
+        """
+        if name in self._register_values:
+            raise KeyError(f"{name} already registered")
+        self._register_values[name] = value
+
+    def lookup(self, name: str) -> Any:
+        return self._register_values.get(name)
 
     def route(
         self, path: str, method: str = "GET"
@@ -317,7 +340,7 @@ class TelePyApp:
             raise TelePyException(f"Method {method} is not supported")
 
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-            self.routers[method.upper()][path] = func
+            self._routers[method.upper()][path] = func
             return func
 
         return decorator
@@ -328,8 +351,8 @@ class TelePyApp:
             (TelePyHandler,),
             {
                 "app": self,
-                "routers": self.routers,
-                "log": self.log,
+                "routers": self._routers,
+                "log": self._log,
                 "logger": self.logger,
             },
         )
@@ -346,7 +369,7 @@ class TelePyApp:
         Returns:
             The same function that was passed in, allowing decorator usage.
         """
-        self.before_routers.append(func)
+        self._before_routers.append(func)
         return func
 
     def register_response_handler(self, func: Callable[..., Any]):
@@ -358,7 +381,7 @@ class TelePyApp:
         Returns:
             The registered function for potential decorator usage.
         """
-        self.after_routers.append(func)
+        self._after_routers.append(func)
         return func
 
     def defered_shutdown(self):
@@ -375,7 +398,13 @@ class TelePyApp:
         t.start()
 
     def close(self) -> None:
-        self.server.server_close()
+        if self.server is not None:
+            self.server.server_close()
 
     def server_close(self) -> None:
         return self.close()
+
+    def shutdown(self):
+        """Shuts down the server in a blocking manner."""
+        if self.server is not None:
+            self.server.shutdown()
