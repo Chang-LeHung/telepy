@@ -282,6 +282,7 @@ class TelePyApp:
     ) -> None:
         self.port = port
         self.host = host
+        self._close = False
 
         self._register_values: dict[str, Any] = dict()
 
@@ -393,7 +394,11 @@ class TelePyApp:
         it won't prevent program exit if still running.
         """
 
-        t = threading.Thread(target=self.server.shutdown)
+        def shutdown():
+            self.server.shutdown()
+            self._close = True
+
+        t = threading.Thread(target=shutdown)
         t.daemon = True
         t.start()
 
@@ -408,3 +413,18 @@ class TelePyApp:
         """Shuts down the server in a blocking manner."""
         if self.server is not None:
             self.server.shutdown()
+        self._close = True
+
+    @property
+    def is_alive(self) -> bool:
+        return not self._close
+
+    @staticmethod
+    def enable_address_reuse():
+        """Enable address reuse for the server socket."""
+        HTTPServer.allow_reuse_address = True
+
+    @staticmethod
+    def disable_address_reuse():
+        """Disable address reuse for the server socket."""
+        HTTPServer.allow_reuse_address = False
