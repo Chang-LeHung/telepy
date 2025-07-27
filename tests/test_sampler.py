@@ -1,8 +1,8 @@
 import threading
 
-from base import TestBase  # type: ignore
-
 import telepy
+
+from .base import TestBase  # type: ignore
 
 
 class TestAsyncSampler(TestBase):
