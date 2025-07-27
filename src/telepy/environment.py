@@ -9,7 +9,7 @@ import threading
 import time
 import types
 from multiprocessing import util
-from typing import Any
+from typing import Any, Final
 
 from rich.table import Table
 
@@ -320,6 +320,8 @@ def telepy_env(args: argparse.Namespace, code_mode: CodeMode = CodeMode.PyFile):
 # read only, if the sample count is less than this value, telely will print warning info.
 _MIN_SAMPLE_COUNT = 50
 
+TITLE: Final = "TelePy Flame Graph"
+
 
 class FlameGraphSaver:
     def __init__(
@@ -331,7 +333,7 @@ class FlameGraphSaver:
         self.args = args
         self.site_path = site.getsitepackages()[0]
         self.work_dir = os.getcwd()
-        self.title = "TelePy Flame Graph"
+        self.title = TITLE
         self.lines = sampler.dumps().splitlines()[:-1]  # ignore last empty line
         if not self.args.full_path:  # type : ignore
             self.lines = process_stack_trace(self.lines, self.site_path, self.work_dir)
@@ -342,7 +344,7 @@ class FlameGraphSaver:
     def _save_svg(self, filename: str) -> None:
         fg = FlameGraph(
             self.lines,
-            title="TelePy Flame Graph",
+            title=TITLE,
             reverse=self.args.reverse,
             command=" ".join([sys.executable, *sys.argv]),
             package_path=os.path.dirname(self.site_path),
