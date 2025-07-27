@@ -19,6 +19,7 @@ from rich_argparse import RichHelpFormatter
 from . import logger
 from .environment import CodeMode, telepy_env, telepy_finalize
 from .flamegraph import FlameGraph
+from .shell import TelePyShell
 
 install()
 
@@ -134,7 +135,7 @@ class PythonFileProfilingHandler(ArgsHandler):
 
     @override
     def handle(self, args: argparse.Namespace) -> bool:
-        if args.input is None:  # pragma: no cover
+        if args.input is None or len(args.input) == 0:  # pragma: no cover
             return False
         filename: str = args.input[0].name
 
@@ -231,7 +232,11 @@ class ShellHandler(ArgsHandler):
 
     @override
     def handle(self, args: argparse.Namespace) -> bool:
-        return False
+        if len(sys.argv) > 1:
+            return False
+        shell = TelePyShell()
+        shell.run()
+        return True
 
 
 def dispatch(args: argparse.Namespace) -> None:
