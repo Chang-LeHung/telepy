@@ -385,7 +385,7 @@ class TelePyApp:
         self._after_routers.append(func)
         return func
 
-    def defered_shutdown(self):
+    def defered_shutdown(self):  # pragma: no cover
         """Asynchronously shuts down the server in a non-blocking manner
         by spawning a daemon thread.
 
@@ -409,7 +409,7 @@ class TelePyApp:
     def server_close(self) -> None:
         return self.close()
 
-    def shutdown(self):
+    def shutdown(self):  # pragma: no cover
         """Shuts down the server in a blocking manner."""
         if self.server is not None:
             self.server.shutdown()
