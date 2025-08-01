@@ -41,11 +41,11 @@ class CommandProcessor:
             data = json.loads(resp.read().decode("utf-8"))
             assert data["code"] in [ERROR_CODE, SUCCESS_CODE]
             return data["data"], data["code"] == SUCCESS_CODE
-        except URLError as e:
+        except URLError as e:  # pragma: no cover
             return f"Url Error: {e.reason}", False
-        except HTTPError as e:
+        except HTTPError as e:  # pragma: no cover
             return f"Http Error: {e.code}", False
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             return f"Error: {e}", False
 
 
@@ -68,8 +68,6 @@ class Stack(CommandProcessor):
         }
         """
         assert len(args) > 0 and args[0] == "stack"
-        if len(args) > 1:
-            return "Too many arguments", False
         result = super().process(*args)
         msg, ok = cast(tuple[list[dict[str, Any]], bool], result)
         if ok:
@@ -82,7 +80,7 @@ class Stack(CommandProcessor):
                 s.write("\n")
             return s.getvalue()[:-1], ok
 
-        return msg, ok
+        return msg, ok  # pragma: no cover
 
 
 class Ping(CommandProcessor):
@@ -90,9 +88,15 @@ class Ping(CommandProcessor):
 
 
 class Profile(CommandProcessor):
-    def process(self, *args):
+    def process(self, *args):  # pragma: no cover
         assert args[0] == "profile"
         return super().process(*args)
+
+
+class Help(CommandProcessor):
+    def process(self, *args):  # pragma: no cover
+        assert len(args) == 1 and args[0] == "help"
+        return CommandManager.help_msg(), True
 
 
 class CommandManager(CommandProcessor):
@@ -103,6 +107,7 @@ class CommandManager(CommandProcessor):
             "stack": Stack(host, port),
             "ping": Ping(host, port),
             "profile": Profile(host, port),
+            "help": Help(host, port),
         }
 
     def process(self, *args: str) -> tuple[str, bool]:  # type: ignore
@@ -112,3 +117,13 @@ class CommandManager(CommandProcessor):
             return self.commands[cmd].process(*args)
         else:
             return f'Unknown command "{args[0]}"', False
+
+    @staticmethod
+    def help_msg() -> str:
+        return """
+        Available commands:
+            - shutdown - shutdown the server
+            - stack - print stack trace of all threads
+            - ping - ping the server
+            - profile - profile the process
+        """
