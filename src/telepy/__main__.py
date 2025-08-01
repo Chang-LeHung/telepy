@@ -231,7 +231,7 @@ class ShellHandler(ArgsHandler):
         super().__init__(name="shell", priority=priority)
 
     @override
-    def handle(self, args: argparse.Namespace) -> bool:
+    def handle(self, args: argparse.Namespace) -> bool:  # pragma: no cover
         if len(sys.argv) > 1:
             return False
         shell = TelePyShell()
