@@ -27,14 +27,31 @@ clear_docs:
 compile_commands:
 	@export TELEPY_FLAGS="-DTELEPY_TEST -g -O0" && bear -- python setup.py build_ext --inplace
 
+TEST_DIR := tests
+TEST_FILES := $(shell find $(TEST_DIR) -maxdepth 1 -name 'test_*.py')
+
 coverage:
-	coverage run --parallel-mode --source=telepy -m unittest discover -s tests
-	coverage combine
-	coverage report
-	coverage html
+	@start=$$(date +%s.%N); \
+	for file in $(TEST_FILES); do \
+		echo "Running $$file"; \
+		coverage run --parallel-mode --source=telepy -m unittest $$file || exit 1; \
+	done; \
+	coverage combine; \
+	coverage report; \
+	coverage html; \
+	end=$$(date +%s.%N); \
+	elapsed=$$(echo "$$end - $$start" | bc); \
+	printf "COVERAGE TIME: %.3f seconds\n" $$elapsed
 
 test:
-	make -C src/$(PKG_NAME)/telepysys test
-	@python -m unittest discover -s tests
+	@start=$$(date +%s.%N); \
+	make -C src/$(PKG_NAME)/telepysys test || exit 1; \
+	for file in $(TEST_FILES); do \
+		echo "Running $$file"; \
+		python -m unittest $$file || exit 1; \
+	done; \
+	end=$$(date +%s.%N); \
+	elapsed=$$(echo "$$end - $$start" | bc); \
+	printf "TEST TIME: %.3f seconds\n" $$elapsed
 
 .PHONY: build clean install uninstall docs coverage

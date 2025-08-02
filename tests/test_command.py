@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 
-from base import TestBase  # type: ignore
+from .base import TestBase  # type: ignore
 
 
 class CommandTemplate(TestBase):

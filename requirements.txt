@@ -3,9 +3,11 @@ coverage==7.9.1
 markdown-it-py==3.0.0
 mdurl==0.1.2
 packaging==25.0
+prompt-toolkit==3.0.43
 Pygments==2.19.2
 pyproject_hooks==1.2.0
 rich==14.0.0
 rich-argparse==1.7.1
 setuptools==80.9.0
+wcwidth==0.2.13
 wheel==0.45.1

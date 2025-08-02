@@ -19,6 +19,7 @@ from rich_argparse import RichHelpFormatter
 from . import logger
 from .environment import CodeMode, telepy_env, telepy_finalize
 from .flamegraph import FlameGraph
+from .shell import TelePyShell
 
 install()
 
@@ -134,7 +135,7 @@ class PythonFileProfilingHandler(ArgsHandler):
 
     @override
     def handle(self, args: argparse.Namespace) -> bool:
-        if args.input is None:  # pragma: no cover
+        if args.input is None or len(args.input) == 0:  # pragma: no cover
             return False
         filename: str = args.input[0].name
 
@@ -230,8 +231,12 @@ class ShellHandler(ArgsHandler):
         super().__init__(name="shell", priority=priority)
 
     @override
-    def handle(self, args: argparse.Namespace) -> bool:
-        return False
+    def handle(self, args: argparse.Namespace) -> bool:  # pragma: no cover
+        if len(sys.argv) > 1:
+            return False
+        shell = TelePyShell()
+        shell.run()
+        return True
 
 
 def dispatch(args: argparse.Namespace) -> None:
@@ -273,7 +278,7 @@ def main():
         arguments = arguments[: arguments.index("--")]
     parser = argparse.ArgumentParser(
         description="TelePy is a very powerful python profiler and dignostic tool."
-        " If it helps, you can star it here https://github.com/Chang-LeHung/telepy",
+        " Report bugs here https://github.com/Chang-LeHung/telepy",
         add_help=False,
         formatter_class=RichHelpFormatter,
     )

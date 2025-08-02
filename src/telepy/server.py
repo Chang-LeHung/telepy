@@ -7,10 +7,13 @@ from collections import defaultdict
 from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, override
+from typing import Any, Final, override
 from urllib.parse import parse_qs, urlparse
 
 from ._telepysys import __version__
+
+GET: Final = "GET"
+POST: Final = "POST"
 
 
 class TelePyHandler(BaseHTTPRequestHandler):
@@ -19,7 +22,7 @@ class TelePyHandler(BaseHTTPRequestHandler):
     """
 
     routers: dict[str, dict[str, Callable[..., Any]]]
-    app: "TelepyApp"
+    app: "TelePyApp"
     server: HTTPServer
 
     def __init__(self, request, client_address, server) -> None:
@@ -45,7 +48,7 @@ class TelePyHandler(BaseHTTPRequestHandler):
         """
         This method is called before the request is handled.
         """
-        for intercetor in self.app.before_routers:
+        for intercetor in self.app._before_routers:
             intercetor(self.req, self.interceptor)
             if not self.interceptor.flow:
                 return
@@ -54,7 +57,7 @@ class TelePyHandler(BaseHTTPRequestHandler):
         """
         This method is called after the request is handled.
         """
-        for resp_handler in self.app.after_routers:
+        for resp_handler in self.app._after_routers:
             resp_handler(self.req, self.resp)
             if not self.resp.flow:
                 return
@@ -117,7 +120,6 @@ class TelePyHandler(BaseHTTPRequestHandler):
             return
 
     def _request_finished(self):
-        print(f"{self.resp.headers = }")
         for key, val in self.resp.headers.items():
             self.send_header(key, val)
         self.end_headers()
@@ -126,32 +128,37 @@ class TelePyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed_url = urlparse(self.path)
         path = parsed_url.path
-        if path in self.routers["GET"]:
-
+        if path in self.routers[GET]:
             self.resp.start()
-            self.routers["GET"][path](self.req, self.resp)
+            self.routers[GET][path](self.req, self.resp)
             self.send_response(self.resp.status_code)
             self.resp.finish()
             return
 
-        self.send_error_response(
-            HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase
-        )
+        self.send_error_response(HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase)
 
     def do_POST(self):
         parsed_url = urlparse(self.path)
 
+        # Validate request body size
+        max_body_size = 10 * 1024 * 1024  # 10MB limit
+        content_length = self.req.content_length
+        if content_length > max_body_size:
+            self.send_error_response(
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE.value, "Request entity too large"
+            )
+            return
+
         path = parsed_url.path
-        if path in self.routers["POST"]:
-            req = self.req
+        if path in self.routers[POST]:
+            self.req.body = self.rfile.read(content_length)
             resp = self.resp
             resp.start()
-            self.routers["POST"][path](req, resp)
+            self.routers[POST][path](self.req, self.resp)
+            self.send_response(self.resp.status_code)
             resp.finish()
             return
-        self.send_error_response(
-            HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase
-        )
+        self.send_error_response(HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase)
 
     def send_error_response(self, status_code: int, message: str):
         self.send_response(status_code)
@@ -194,7 +201,7 @@ class TelePyException(Exception):
 class TelePyRequest:
     def __init__(
         self,
-        app: "TelepyApp",
+        app: "TelePyApp",
         headers: dict[str, str],
         body: bytes | None = None,
         url: str = "/",
@@ -209,6 +216,39 @@ class TelePyRequest:
             query = {}
         self.query = query
         self.method = method
+        self._json_data: Any | None = None
+        self._json_error: str | None = None
+
+    @property
+    def json(self) -> Any:
+        """Parse JSON data from request body."""
+        if self._json_data is not None:
+            return self._json_data
+        if self._json_error is not None:
+            raise json.JSONDecodeError(self._json_error, "", 0)
+
+        if not self.body:
+            return None
+
+        try:
+            self._json_data = json.loads(self.body.decode("utf-8"))
+            return self._json_data
+        except json.JSONDecodeError as e:
+            self._json_error = str(e)
+            raise
+
+    @property
+    def content_length(self) -> int:
+        """Get content length from headers."""
+        try:
+            return int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            return 0
+
+    @property
+    def content_type(self) -> str:
+        """Get content type from headers."""
+        return self.headers.get("Content-Type", "")
 
 
 class TelePyResponseMixin:
@@ -252,7 +292,6 @@ class TelePyResponse(TelePyResponseMixin):
 
 
 class TelePyInterceptor(TelePyResponse):
-
     def __init__(self, status_code, headers) -> None:
         super().__init__(status_code, headers)
         self._forward: bool = True
@@ -277,8 +316,8 @@ class TelePyInterceptor(TelePyResponse):
         self._flow = value
 
 
-class TelepyApp:
-    supported_methods = ("GET",)
+class TelePyApp:
+    supported_methods = ("GET", "POST")
 
     def __init__(
         self,
@@ -289,32 +328,57 @@ class TelepyApp:
     ) -> None:
         self.port = port
         self.host = host
+        self._close = False
 
-        self.routers: dict[str, dict[str, Callable[..., Any]]] = defaultdict(dict)
+        self._register_values: dict[str, Any] = dict()
 
-        self.before_routers: list[Callable[..., Any]] = []
-        self.after_routers: list[Callable[..., Any]] = []
+        self._routers: dict[str, dict[str, Callable[..., Any]]] = defaultdict(dict)
 
-        self.filename = filename
-        self.log = log
+        self._before_routers: list[Callable[..., Any]] = []
+        self._after_routers: list[Callable[..., Any]] = []
+
+        self._filename = filename
+        self._log = log
+        self.server: None | HTTPServer = None
         formatter = logging.Formatter("%(message)s")
-        if self.log and self.filename is None:
+        if self._log and self._filename is None:
             logger = logging.getLogger("http.server")
             logger.setLevel(logging.INFO)
             handler = logging.StreamHandler(sys.stdout)
             handler.setFormatter(formatter)
             logger.handlers = [handler]
             self.logger: logging.Logger | None = logger
-        elif not self.log:
+        elif not self._log:
             self.logger = None
-        elif self.filename is not None:
+        elif self._filename is not None:
             self.logger = logging.getLogger("http.server")
             self.logger.setLevel(logging.INFO)
-            fh = logging.FileHandler(self.filename)
+            fh = logging.FileHandler(self._filename)
             fh.setFormatter(formatter)
             self.logger.handlers = [fh]
         else:
             self.logger = None
+
+    def register(self, name: str, value: Any) -> None:
+        """
+        Register a name-value pair in the registry.
+
+        Args:
+            name (str): The name to register.
+            value (Any): The value associated with the name.
+
+        Raises:
+            KeyError: If the name is already registered.
+
+        Note:
+            This method ensures that each name is unique in the registry.
+        """
+        if name in self._register_values:
+            raise KeyError(f"{name} already registered")
+        self._register_values[name] = value
+
+    def lookup(self, name: str) -> Any:
+        return self._register_values.get(name)
 
     def route(
         self, path: str, method: str = "GET"
@@ -323,7 +387,7 @@ class TelepyApp:
             raise TelePyException(f"Method {method} is not supported")
 
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-            self.routers[method.upper()][path] = func
+            self._routers[method.upper()][path] = func
             return func
 
         return decorator
@@ -334,8 +398,8 @@ class TelepyApp:
             (TelePyHandler,),
             {
                 "app": self,
-                "routers": self.routers,
-                "log": self.log,
+                "routers": self._routers,
+                "log": self._log,
                 "logger": self.logger,
             },
         )
@@ -352,7 +416,7 @@ class TelepyApp:
         Returns:
             The same function that was passed in, allowing decorator usage.
         """
-        self.before_routers.append(func)
+        self._before_routers.append(func)
         return func
 
     def register_response_handler(self, func: Callable[..., Any]):
@@ -364,10 +428,10 @@ class TelepyApp:
         Returns:
             The registered function for potential decorator usage.
         """
-        self.after_routers.append(func)
+        self._after_routers.append(func)
         return func
 
-    def defered_shutdown(self):
+    def defered_shutdown(self):  # pragma: no cover
         """Asynchronously shuts down the server in a non-blocking manner
         by spawning a daemon thread.
 
@@ -376,12 +440,37 @@ class TelepyApp:
         it won't prevent program exit if still running.
         """
 
-        t = threading.Thread(target=self.server.shutdown)
+        def shutdown():
+            self.server.shutdown()
+            self._close = True
+
+        t = threading.Thread(target=shutdown)
         t.daemon = True
         t.start()
 
     def close(self) -> None:
-        self.server.server_close()
+        if self.server is not None:
+            self.server.server_close()
 
     def server_close(self) -> None:
         return self.close()
+
+    def shutdown(self):  # pragma: no cover
+        """Shuts down the server in a blocking manner."""
+        if self.server is not None:
+            self.server.shutdown()
+        self._close = True
+
+    @property
+    def is_alive(self) -> bool:
+        return not self._close
+
+    @staticmethod
+    def enable_address_reuse():
+        """Enable address reuse for the server socket."""
+        HTTPServer.allow_reuse_address = True
+
+    @staticmethod
+    def disable_address_reuse():
+        """Disable address reuse for the server socket."""
+        HTTPServer.allow_reuse_address = False

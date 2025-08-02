@@ -1,4 +1,4 @@
-from base import TestBase  # type: ignore
+from .base import TestBase  # type: ignore
 
 
 class TestTelePySys(TestBase):
@@ -59,6 +59,7 @@ class TestTelePySys(TestBase):
             if "telepy" not in frame.f_code.co_filename:
                 self.assertIn("tests/test_telesys.py", frame.f_code.co_filename)
                 self.assertIn("fib", frame.f_code.co_name)
+        t.join()
 
     def test_static_cls_method(self):
         import threading
