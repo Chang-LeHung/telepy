@@ -7,10 +7,13 @@ from collections import defaultdict
 from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, override
+from typing import Any, Final, override
 from urllib.parse import parse_qs, urlparse
 
 from ._telepysys import __version__
+
+GET: Final = "GET"
+POST: Final = "POST"
 
 
 class TelePyHandler(BaseHTTPRequestHandler):
@@ -125,9 +128,9 @@ class TelePyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed_url = urlparse(self.path)
         path = parsed_url.path
-        if path in self.routers["GET"]:
+        if path in self.routers[GET]:
             self.resp.start()
-            self.routers["GET"][path](self.req, self.resp)
+            self.routers[GET][path](self.req, self.resp)
             self.send_response(self.resp.status_code)
             self.resp.finish()
             return
@@ -137,12 +140,22 @@ class TelePyHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed_url = urlparse(self.path)
 
+        # Validate request body size
+        max_body_size = 10 * 1024 * 1024  # 10MB limit
+        content_length = self.req.content_length
+        if content_length > max_body_size:
+            self.send_error_response(
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE.value, "Request entity too large"
+            )
+            return
+
         path = parsed_url.path
-        if path in self.routers["POST"]:
-            req = self.req
+        if path in self.routers[POST]:
+            self.req.body = self.rfile.read(content_length)
             resp = self.resp
             resp.start()
-            self.routers["POST"][path](req, resp)
+            self.routers[POST][path](self.req, self.resp)
+            self.send_response(self.resp.status_code)
             resp.finish()
             return
         self.send_error_response(HTTPStatus.NOT_FOUND.value, HTTPStatus.NOT_FOUND.phrase)
@@ -203,6 +216,39 @@ class TelePyRequest:
             query = {}
         self.query = query
         self.method = method
+        self._json_data: Any | None = None
+        self._json_error: str | None = None
+
+    @property
+    def json(self) -> Any:
+        """Parse JSON data from request body."""
+        if self._json_data is not None:
+            return self._json_data
+        if self._json_error is not None:
+            raise json.JSONDecodeError(self._json_error, "", 0)
+
+        if not self.body:
+            return None
+
+        try:
+            self._json_data = json.loads(self.body.decode("utf-8"))
+            return self._json_data
+        except json.JSONDecodeError as e:
+            self._json_error = str(e)
+            raise
+
+    @property
+    def content_length(self) -> int:
+        """Get content length from headers."""
+        try:
+            return int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            return 0
+
+    @property
+    def content_type(self) -> str:
+        """Get content type from headers."""
+        return self.headers.get("Content-Type", "")
 
 
 class TelePyResponseMixin:
@@ -271,7 +317,7 @@ class TelePyInterceptor(TelePyResponse):
 
 
 class TelePyApp:
-    supported_methods = ("GET",)
+    supported_methods = ("GET", "POST")
 
     def __init__(
         self,
