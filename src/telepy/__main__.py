@@ -278,7 +278,7 @@ def main():
         arguments = arguments[: arguments.index("--")]
     parser = argparse.ArgumentParser(
         description="TelePy is a very powerful python profiler and dignostic tool."
-        " If it helps, you can star it here https://github.com/Chang-LeHung/telepy",
+        " Report bugs here https://github.com/Chang-LeHung/telepy",
         add_help=False,
         formatter_class=RichHelpFormatter,
     )
