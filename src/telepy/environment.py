@@ -18,16 +18,35 @@ from ._telepysys import sched_yield
 from .flamegraph import FlameGraph, process_stack_trace
 from .sampler import TelepySysAsyncWorkerSampler
 
-_lock = threading.RLock()
+# String constants
+CMD_SEPARATOR: Final = "--"
 
-# read only for other modules
-sampler: None | TelepySysAsyncWorkerSampler = None
-# read only for other modules
-args: None | argparse.Namespace = None
+MODULE_MAIN: Final = "__main__"
+MODULE_TELEPY_MAIN: Final = "__telepy_main__"
+MODULE_FILE: Final = "__file__"
+MODULE_BUILTINS: Final = "__builtins__"
+
+ERROR_SAMPLER_EXISTS: Final = "A sampler instance already exists in this process"
+ERROR_ENV_INITIALIZED: Final = "telepy environment has been initialized."
+ERROR_ENV_NOT_INITIALIZED: Final = "telepy environment is not initialized"
+ERROR_INVALID_CODE_MODE: Final = "telepy: invalid code mode"
+
+MESSAGE_FORKSERVER_NO_MERGE: Final = (
+    "Because you are using the multiprocessing module with "
+    "the forkserver mode, we will not merge the flamegraphs."
+)
+
+TITLE: Final = "TelePy Flame Graph"
+TITLE_SAMPLER_METRICS: Final = "TelePySampler Metrics"
+
+INTERNAL_ARGV: Final = "telepy_argv"
+
+_lock = threading.RLock()
 
 
 def patch_os_fork_in_child():
-    global sampler, args
+    sampler = Environment.get_sampler()
+    args = Environment.get_args()
     assert sampler is not None
     assert args is not None
     sampler.clear()
@@ -46,7 +65,8 @@ def patch_os_fork_in_child():
 
 
 def patch_os_fork_in_parent():
-    global sampler, args
+    sampler = Environment.get_sampler()
+    args = Environment.get_args()
     assert sampler is not None
     assert args is not None
     if sampler.is_root:
@@ -54,13 +74,14 @@ def patch_os_fork_in_parent():
 
 
 def patch_before_fork():
-    global sampler, args
+    sampler = Environment.get_sampler()
+    args = Environment.get_args()
     assert sampler is not None
     assert args is not None
 
 
 def filter_child_args() -> list[str]:
-    global args
+    args = Environment.get_args()
     assert args is not None
     res = []
     if args.debug:
@@ -98,7 +119,8 @@ def patch_multiprocesssing():
     """
     Patches the multiprocessing spawn mechanism to inject telepy code to profile.
     """
-    global args, sampler
+    args = Environment.get_args()
+    sampler = Environment.get_sampler()
     assert sampler is not None
     assert args is not None
 
@@ -122,13 +144,10 @@ def patch_multiprocesssing():
                     + args[idx : idx + 2]
                 )
                 if not parser_args.no_verbose:
-                    logger.log_warning_panel(
-                        "Because you are using the multiprocessing module with "
-                        "the forkserver mode, we will not merge the flamegraphs."
-                    )
+                    logger.log_warning_panel(MESSAGE_FORKSERVER_NO_MERGE)
                 rest = args[idx + 2 :]
                 if rest:  # pragma: no cover
-                    new_args += ["--", *rest]
+                    new_args += [CMD_SEPARATOR, *rest]
                 args = new_args
             elif "resource_tracker" not in cmd:
                 # spawn mode
@@ -140,7 +159,7 @@ def patch_multiprocesssing():
                 )
                 rest = args[idx + 2 :]
                 if rest:
-                    new_args += ["--", *rest]
+                    new_args += [CMD_SEPARATOR, *rest]
                 args = new_args
                 sampler.child_cnt += 1
         ret = _spawnv_passfds(path, args, passfds)
@@ -155,26 +174,53 @@ class CodeMode(enum.Enum):
     PyModule = 2
 
 
-_internal_argv = "telepy_argv"
-
-
 class Environment:
     initialized = False
-
     sampler_created = False
-
     code_mode = CodeMode.PyFile
-
     _sys_exit = sys.exit
     _os_exit = os._exit
 
+    # Class attributes to store singleton instances
+    _sampler: None | TelepySysAsyncWorkerSampler = None
+    _args: None | argparse.Namespace = None
+
     @classmethod
-    def patch_sys_exit(cls, *_args, **kwargs):
+    def get_sampler(cls) -> None | TelepySysAsyncWorkerSampler:
+        """Get the singleton sampler instance."""
+        return cls._sampler
+
+    @classmethod
+    def set_sampler(cls, sampler: TelepySysAsyncWorkerSampler) -> None:
+        """Set the singleton sampler instance."""
+        if cls._sampler is not None:
+            raise RuntimeError(ERROR_SAMPLER_EXISTS)
+        cls._sampler = sampler
+
+    @classmethod
+    def get_args(cls) -> None | argparse.Namespace:
+        """Get the singleton args instance."""
+        return cls._args
+
+    @classmethod
+    def set_args(cls, args: argparse.Namespace) -> None:
+        """Set the singleton args instance."""
+        cls._args = args
+
+    @classmethod
+    def clear_instances(cls) -> None:
+        """Clear the singleton instances."""
+        cls._sampler = None
+        cls._args = None
+
+    @classmethod
+    def patch_sys_exit(cls, *_args, **kwargs):  # pragma: no cover
         """
         `telepy_finalize` will not be called when the process exits. We need to stop the
         sampler and save the data.
         """
-        global sampler, args
+        sampler = cls.get_sampler()
+        args = cls.get_args()
         if sampler is not None and sampler.started:
             if not args.no_verbose:
                 logger.log_success_panel(
@@ -194,7 +240,8 @@ class Environment:
         `telepy_finalize` will not be called when the process exits. We need to stop the
         sampler and save the data.
         """
-        global sampler, args
+        sampler = cls.get_sampler()
+        args = cls.get_args()
         if sampler is not None and sampler.started:  # pragma: no cover
             if not args.no_verbose:
                 logger.log_success_panel(
@@ -216,24 +263,28 @@ class Environment:
         Args:
             args_ (argparse.Namespace): The arguments for the process.
         """
-        global sampler, args, _lock, filename
-        args = args_
         cls.code_mode = mode
         with _lock:
             if cls.initialized:
-                raise RuntimeError("telepy environment has been initialized.")
+                raise RuntimeError(ERROR_ENV_INITIALIZED)
 
+            # Set the args first
+            cls.set_args(args_)
+
+            # Create and set the sampler
             sampler = TelepySysAsyncWorkerSampler(
-                args.interval,
-                debug=args.debug,
-                ignore_frozen=args.ignore_frozen,
-                ignore_self=not args.include_telepy,
-                tree_mode=args.tree_mode,
-                is_root=not (args.fork_server or args.mp),
-                forkserver=args.fork_server,
-                from_mp=args.mp,
+                args_.interval,
+                debug=args_.debug,
+                ignore_frozen=args_.ignore_frozen,
+                ignore_self=not args_.include_telepy,
+                tree_mode=args_.tree_mode,
+                is_root=not (args_.fork_server or args_.mp),
+                forkserver=args_.fork_server,
+                from_mp=args_.mp,
             )
             sampler.adjust()
+            cls.set_sampler(sampler)
+
             sys.exit = cls.patch_sys_exit
             os._exit = cls.patch_os__exit
             if not cls.sampler_created:
@@ -246,30 +297,30 @@ class Environment:
             cls.sampler_created = True
             cls.initialized = True
             if mode == CodeMode.PyFile:
-                main_mod = types.ModuleType("__main__")
-                setattr(main_mod, "__file__", os.path.abspath(args.input[0].name))
-                setattr(main_mod, "__builtins__", globals()["__builtins__"])
-                sys.modules["__telepy_main__"] = sys.modules["__main__"]
-                sys.modules["__main__"] = main_mod
+                main_mod = types.ModuleType(MODULE_MAIN)
+                setattr(main_mod, MODULE_FILE, os.path.abspath(args_.input[0].name))
+                setattr(main_mod, MODULE_BUILTINS, globals()[MODULE_BUILTINS])
+                sys.modules[MODULE_TELEPY_MAIN] = sys.modules[MODULE_MAIN]
+                sys.modules[MODULE_MAIN] = main_mod
                 old_arg = sys.argv
-                setattr(sys, _internal_argv, old_arg)
-                if "--" in old_arg:
-                    idx = old_arg.index("--")
-                    sys.argv = [args.input[0].name] + old_arg[idx + 1 :]
+                setattr(sys, INTERNAL_ARGV, old_arg)
+                if CMD_SEPARATOR in old_arg:
+                    idx = old_arg.index(CMD_SEPARATOR)
+                    sys.argv = [args_.input[0].name] + old_arg[idx + 1 :]
                 else:
-                    sys.argv = [args.input[0].name]
+                    sys.argv = [args_.input[0].name]
                 sys.path.append(os.getcwd())
                 return main_mod.__dict__
             elif mode == CodeMode.PyString:
-                string_mod = types.ModuleType("__main__")
-                setattr(string_mod, "__file__", "<string>")
-                setattr(string_mod, "__builtins__", globals()["__builtins__"])
-                sys.modules["__telepy_main__"] = sys.modules["__main__"]
-                sys.modules["__main__"] = string_mod
+                string_mod = types.ModuleType(MODULE_MAIN)
+                setattr(string_mod, MODULE_FILE, "<string>")
+                setattr(string_mod, MODULE_BUILTINS, globals()[MODULE_BUILTINS])
+                sys.modules[MODULE_TELEPY_MAIN] = sys.modules[MODULE_MAIN]
+                sys.modules[MODULE_MAIN] = string_mod
                 old_arg = sys.argv
-                setattr(sys, _internal_argv, old_arg)
-                if "--" in old_arg:
-                    idx = old_arg.index("--")
+                setattr(sys, INTERNAL_ARGV, old_arg)
+                if CMD_SEPARATOR in old_arg:
+                    idx = old_arg.index(CMD_SEPARATOR)
                     sys.argv = ["-c"] + old_arg[idx + 1 :]
                 else:
                     sys.argv = ["-c"]
@@ -277,42 +328,69 @@ class Environment:
                 return string_mod.__dict__
             elif mode == CodeMode.PyModule:
                 old_arg = sys.argv
-                setattr(sys, _internal_argv, old_arg)
-                if "--" in old_arg:
-                    idx = old_arg.index("--")
+                setattr(sys, INTERNAL_ARGV, old_arg)
+                if CMD_SEPARATOR in old_arg:
+                    idx = old_arg.index(CMD_SEPARATOR)
                     sys.argv = [old_arg[0]] + old_arg[idx + 1 :]
                 else:
                     sys.argv = [old_arg[0]]
                 sys.path.append(os.getcwd())
                 return {}
-            raise RuntimeError("telepy: invalid code mode")  # pragma: no cover
+            raise RuntimeError(ERROR_INVALID_CODE_MODE)  # pragma: no cover
 
     @classmethod
     def destory_telepy_enviroment(cls):
+        """
+        Cleans up and restores the environment set up by Telepy.
+
+        This method reverses the changes made during the initialization of the Telepy environment.
+        It restores the original `sys.exit` and `os._exit` functions, resets `sys.modules` and `sys.argv`
+        if code was executed in file or string mode, and removes the current working directory from `sys.path`.
+        It also marks the environment as uninitialized.
+
+        Returns:
+            None
+        """  # noqa: E501
         with _lock:
             if not cls.initialized:
                 return
             sys.exit = cls._sys_exit
             os._exit = cls._os_exit
             if cls.code_mode in (CodeMode.PyFile, CodeMode.PyString):
-                sys.modules["__main__"] = sys.modules["__telepy_main__"]
-                del sys.modules["__telepy_main__"]
-                sys.argv = getattr(sys, _internal_argv)
-                delattr(sys, _internal_argv)
+                sys.modules[MODULE_MAIN] = sys.modules[MODULE_TELEPY_MAIN]
+                del sys.modules[MODULE_TELEPY_MAIN]
+                sys.argv = getattr(sys, INTERNAL_ARGV)
+                delattr(sys, INTERNAL_ARGV)
                 sys.path.remove(os.getcwd())
             elif cls.code_mode == CodeMode.PyModule:
-                sys.argv = getattr(sys, _internal_argv)
-                delattr(sys, _internal_argv)
+                sys.argv = getattr(sys, INTERNAL_ARGV)
+                delattr(sys, INTERNAL_ARGV)
                 sys.path.remove(os.getcwd())
             cls.initialized = False
 
 
 @contextlib.contextmanager
 def telepy_env(args: argparse.Namespace, code_mode: CodeMode = CodeMode.PyFile):
-    global sampler
+    """
+    Context manager for initializing and cleaning up the Telepy environment.
+
+    Args:
+        args (argparse.Namespace): The command-line arguments for configuring the environment.
+        code_mode (CodeMode, optional): The mode in which the code is executed. Defaults to CodeMode.PyFile.
+
+    Yields:
+        Tuple[dict, Any]: A tuple containing the global environment dictionary and the current sampler.
+
+    Raises:
+        Any exceptions raised during environment initialization are propagated.
+
+    Ensures:
+        The Telepy environment is properly destroyed after use, even if an exception occurs.
+    """  # noqa: E501
     try:
         global_dict = Environment.init_telepy_environment(args, code_mode)
-        yield global_dict, sampler
+        current_sampler = Environment.get_sampler()
+        yield global_dict, current_sampler
     finally:
         Environment.destory_telepy_enviroment()
 
@@ -320,17 +398,13 @@ def telepy_env(args: argparse.Namespace, code_mode: CodeMode = CodeMode.PyFile):
 # read only, if the sample count is less than this value, telely will print warning info.
 _MIN_SAMPLE_COUNT = 50
 
-TITLE: Final = "TelePy Flame Graph"
-
 
 class FlameGraphSaver:
     def __init__(
         self, agrs: argparse.Namespace, sampler: TelepySysAsyncWorkerSampler
     ) -> None:
-        assert args is not None
-        self.args = args
+        self.args = agrs  # Use the parameter directly
         self.sampler = sampler
-        self.args = args
         self.site_path = site.getsitepackages()[0]
         self.work_dir = os.getcwd()
         self.title = TITLE
@@ -543,40 +617,66 @@ class FlameGraphSaver:
             logger.log_error_panel("Timeout waiting for child processes to complete")
 
 
+def clear_resources():
+    """
+    Clears all resource instances managed by the Environment.
+
+    This function calls the `clear_instances` method of the `Environment` class,
+    removing all currently stored or active resource instances. Use this to reset
+    the environment state and release any held resources.
+
+    This function should be called to reset the environment and free up any resources
+    if you do not want to call `telepy_finalize`.
+    """
+    Environment.clear_instances()
+
+
 def telepy_finalize() -> None:
     """Stop and clean up the global sampler resource.
 
     This function should be called to properly finalize the telepy environment
     by stopping the global sampler instance and save the profiling data.
     """
-    global sampler
     if not Environment.sampler_created:
-        raise RuntimeError("telepy environment is not initialized")
-    assert sampler is not None
-    assert args is not None
+        raise RuntimeError(ERROR_ENV_NOT_INITIALIZED)
+
+    current_sampler = Environment.get_sampler()
+    current_args = Environment.get_args()
+
+    assert current_sampler is not None
+    assert current_args is not None
     # forserver mode will not start the sampler.
-    if sampler.started:
-        sampler.stop()
+    if current_sampler.started:
+        current_sampler.stop()
         _do_save()
+    Environment.clear_instances()
 
 
 def _do_save():
-    global args, sampler
-    saver = FlameGraphSaver(args, sampler)
+    current_args = Environment.get_args()
+    current_sampler = Environment.get_sampler()
+    saver = FlameGraphSaver(current_args, current_sampler)
     saver.save()
-    if args.debug:
+    if current_args.debug:
         from .logger import console
 
-        acc = sampler.acc_sampling_time
-        start = sampler.start_time
-        end = sampler.end_time
-        title = "TelePySampler Metrics"
-        if sampler.child_cnt > 0 and (sampler.from_fork):  # pragma: no cover
-            title += f" pid = {os.getpid()} (with {sampler.child_cnt} child process(es)) "
-            f"ppid = {os.getppid()}"
-        elif sampler.child_cnt > 0:
-            title += f" pid = {os.getpid()} (with {sampler.child_cnt} child process(es))"
-        elif sampler.from_fork or sampler.from_mp:
+        acc = current_sampler.acc_sampling_time
+        start = current_sampler.start_time
+        end = current_sampler.end_time
+        title = TITLE_SAMPLER_METRICS
+        if (
+            current_sampler.child_cnt > 0 and current_sampler.from_fork
+        ):  # pragma: no cover
+            title += (
+                f" pid = {os.getpid()} (with {current_sampler.child_cnt} "
+                f"child process(es)) ppid = {os.getppid()}"
+            )
+        elif current_sampler.child_cnt > 0:
+            title += (
+                f" pid = {os.getpid()} (with {current_sampler.child_cnt} "
+                f"child process(es))"
+            )
+        elif current_sampler.from_fork or current_sampler.from_mp:
             title += f" pid = {os.getpid()} ppid = {os.getppid()}"
 
         table = Table(title=title, expand=True)
@@ -590,6 +690,6 @@ def _do_save():
         )
         table.add_row("TelePy Sampler Start Time (Monotonic Mircoseconds)", f"{start}")
         table.add_row("TelePy Sampler End Time (Monotonic Mircoseconds)", f"{end}")
-        table.add_row("Sampling Count", str(sampler.sampling_times))
+        table.add_row("Sampling Count", str(current_sampler.sampling_times))
 
         console.print(table)
