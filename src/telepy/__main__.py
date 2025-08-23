@@ -22,8 +22,6 @@ from .environment import CodeMode, telepy_env, telepy_finalize
 from .flamegraph import FlameGraph
 from .shell import TelePyShell
 
-install()
-
 console = logger.console
 
 
