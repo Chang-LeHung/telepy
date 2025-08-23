@@ -34,7 +34,7 @@ coverage:
 	@start=$$(date +%s.%N); \
 	for file in $(TEST_FILES); do \
 		echo "Running $$file"; \
-		coverage run --parallel-mode --source=telepy -m unittest $$file || exit 1; \
+		TELEPY_SUPPRESS_OUTPUT=1 coverage run --parallel-mode --source=telepy -m unittest $$file || exit 1; \
 	done; \
 	coverage combine; \
 	coverage report; \
@@ -48,7 +48,7 @@ test:
 	make -C src/$(PKG_NAME)/telepysys test || exit 1; \
 	for file in $(TEST_FILES); do \
 		echo "Running $$file"; \
-		python -m unittest $$file || exit 1; \
+		TELEPY_SUPPRESS_OUTPUT=1 python -m unittest $$file || exit 1; \
 	done; \
 	end=$$(date +%s.%N); \
 	elapsed=$$(echo "$$end - $$start" | bc); \
