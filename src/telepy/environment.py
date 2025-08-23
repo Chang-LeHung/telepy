@@ -193,7 +193,7 @@ class Environment:
     @classmethod
     def set_sampler(cls, sampler: TelepySysAsyncWorkerSampler) -> None:
         """Set the singleton sampler instance."""
-        if cls._sampler is not None:
+        if cls._sampler is not None:  # pragma: no cover
             raise RuntimeError(ERROR_SAMPLER_EXISTS)
         cls._sampler = sampler
 
@@ -235,14 +235,14 @@ class Environment:
         cls._sys_exit(*_args, **kwargs)
 
     @classmethod
-    def patch_os__exit(cls, *_args, **kwargs):
+    def patch_os__exit(cls, *_args, **kwargs):  # pragma: no cover
         """
         `telepy_finalize` will not be called when the process exits. We need to stop the
         sampler and save the data.
         """
         sampler = cls.get_sampler()
         args = cls.get_args()
-        if sampler is not None and sampler.started:  # pragma: no cover
+        if sampler is not None and sampler.started:
             if not args.no_verbose:
                 logger.log_success_panel(
                     f"Process {os.getpid()} exited early via os._exit(), "
@@ -253,7 +253,7 @@ class Environment:
             if sampler.started:
                 sampler.stop()
                 _do_save()
-        cls._os_exit(*_args, **kwargs)  # pragma: no cover
+        cls._os_exit(*_args, **kwargs)
 
     @classmethod
     def init_telepy_environment(

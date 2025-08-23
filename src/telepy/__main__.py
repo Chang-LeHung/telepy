@@ -17,6 +17,7 @@ from rich.traceback import Traceback, install
 from rich_argparse import RichHelpFormatter
 
 from . import logger
+from .config import TelePyConfig, merge_config_with_args
 from .environment import CodeMode, telepy_env, telepy_finalize
 from .flamegraph import FlameGraph
 from .shell import TelePyShell
@@ -245,7 +246,7 @@ def dispatch(args: argparse.Namespace) -> None:
             return
 
     raise RuntimeError(
-        f"not found a proper handler to handle the arguments {args}, [green]please check your arguments.[/green]"  # noqa: E501
+        f"not found a proper handler to handle the arguments {args}, please check your arguments."  # noqa: E501
     )
 
 
@@ -266,9 +267,14 @@ def telepy_help(parser: argparse.ArgumentParser):
     console.print(table)
 
 
-def _pre_chceck(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+def _pre_check(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if args.help:
         telepy_help(parser)
+        sys.exit(0)
+
+    if args.create_config:
+        config_manager = TelePyConfig()
+        config_manager.create_example_config()
         sys.exit(0)
 
 
@@ -276,6 +282,10 @@ def main():
     arguments = sys.argv[1:]
     if "--" in arguments:
         arguments = arguments[: arguments.index("--")]
+
+    # Merge configuration file with command line arguments
+    arguments = merge_config_with_args(arguments)
+
     parser = argparse.ArgumentParser(
         description="TelePy is a very powerful python profiler and dignostic tool."
         " Report bugs here https://github.com/Chang-LeHung/telepy",
@@ -386,9 +396,9 @@ def main():
         help="Using call site line number instead of the first line of function(method).",
     )
     parser.add_argument(
-        "--disbale-traceback",
+        "--disable-traceback",
         action="store_true",
-        help="Disable the rich(colorfule) traceback and use the default traceback.",
+        help="Disable the rich(colorful) traceback and use the default traceback.",
     )
     parser.add_argument(
         "-c",
@@ -402,31 +412,37 @@ def main():
         type=str,
         help="Module to run (default: None).",
     )
+    parser.add_argument(
+        "--create-config",
+        action="store_true",
+        help="Create an example configuration file at ~/.telepy/.telepyrc and exit.",
+    )
 
     args = parser.parse_args(arguments)
-    _pre_chceck(args, parser)
-    if not args.disbale_traceback:
+    _pre_check(args, parser)
+    if not args.disable_traceback:
         install()
     try:
         dispatch(args)
-    except Exception as _:
-        console.print(
-            Panel(
-                "[bold red]The following traceback may be useful for debugging.[/bold red]"  # noqa: E501
-                " If [bold cyan]telepy[/bold cyan] leads to this error, please report it at:"  # noqa: E501
-                " [underline blue]https://github.com/Chang-LeHung/telepy/issues[/underline blue]",  # noqa: E501
-                title="[bold yellow]⚠ Error Traceback[/bold yellow]",
-                style="red",
-                border_style="bright_red",
+    except Exception as e:
+        if not args.disable_traceback:
+            console.print(
+                Panel(
+                    "[bold red]The following traceback may be useful for debugging.[/bold red]"  # noqa: E501
+                    " If [bold cyan]telepy[/bold cyan] leads to this error, please report it at:"  # noqa: E501
+                    " [underline blue]https://github.com/Chang-LeHung/telepy/issues[/underline blue]",  # noqa: E501
+                    title="[bold yellow]⚠ Error Traceback[/bold yellow]",
+                    style="red",
+                    border_style="bright_red",
+                )
             )
-        )
-        if not args.disbale_traceback:
             tb = Traceback()
             console.print(tb)
+            console.print(
+                "[bold cyan]You can also try running with --disable-traceback for a simpler output.[/bold cyan]"  # noqa: E501
+            )
         else:
-            import traceback
-
-            traceback.print_exc()
+            print(str(e), file=sys.stderr)
         sys.exit(1)
 
 

@@ -173,9 +173,10 @@ class TestCommand(CommandTemplate):
             "--no-merge",
             "--timeout TIMEOUT",
             "--tree-mode",
-            "--disbale-traceback",
+            "--disable-traceback",
             "-c, --cmd CMD",
             "--module, -m MODULE",
+            "--create-config",
         ]
         self.run_command(
             ["-h"],
@@ -230,7 +231,7 @@ class TestCommand(CommandTemplate):
                 "--no-merge",
                 "--timeout TIMEOUT",
                 "--tree-mode",
-                "--disbale-traceback",
+                "--disable-traceback",
                 "-c, --cmd CMD",
                 "--module, -m MODULE",
             ],
@@ -318,7 +319,7 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
 
     def test_py_error_raw(self):
         self.run_command(
-            options=["-c", "a = 1 / 0", "--disbale-traceback"],
+            options=["-c", "a = 1 / 0", "--disable-traceback"],
             stdout_check_list=[
                 "The following traceback may be useful for debugging",
             ],
