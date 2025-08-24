@@ -664,6 +664,8 @@ def telepy_finalize() -> None:
 def _do_save():
     current_args = Environment.get_args()
     current_sampler = Environment.get_sampler()
+    assert current_args is not None
+    assert current_sampler is not None
     saver = FlameGraphSaver(current_args, current_sampler)
     saver.save()
     if current_args.debug:
