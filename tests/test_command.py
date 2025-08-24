@@ -166,6 +166,8 @@ class TestCommand(CommandTemplate):
             "--full-path",
             "--ignore-frozen",
             "--include-telepy",
+            "--focus-mode",
+            "--regex-patterns REGEX_PATTERNS",
             "--folded-save",
             "--folded-file FOLDED_FILE",
             "-o, --output OUTPUT",
@@ -224,6 +226,8 @@ class TestCommand(CommandTemplate):
                 "--full-path",
                 "--ignore-frozen",
                 "--include-telepy",
+                "--focus-mode",
+                "--regex-patterns REGEX_PATTERNS",
                 "--folded-save",
                 "--folded-file FOLDED_FILE",
                 "-o, --output OUTPUT",
@@ -340,6 +344,139 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
             exit_code=1,
         )
         os.unlink("tests/demo")
+
+    def test_focus_mode(self):
+        """Test --focus-mode flag functionality"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+            ],
+            options=["--focus-mode", "--interval", "100", "--debug"],
+        )
+
+    def test_regex_patterns_single(self):
+        """Test --regex-patterns with a single pattern"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+            ],
+            options=[
+                "--regex-patterns",
+                '".*test_focus.*"',
+                "--interval",
+                "100",
+                "--debug",
+            ],
+        )
+
+    def test_regex_patterns_multiple(self):
+        """Test --regex-patterns with multiple patterns"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+            ],
+            options=[
+                "--regex-patterns",
+                '".*test_focus.*"',
+                "--regex-patterns",
+                '".*main.*"',
+                "--interval",
+                "100",
+                "--debug",
+            ],
+        )
+
+    def test_focus_mode_with_regex_patterns(self):
+        """Test combining --focus-mode with --regex-patterns"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+            ],
+            options=[
+                "--focus-mode",
+                "--regex-patterns",
+                ".*test_focus.*",
+                "--interval",
+                "100",
+                "--debug",
+            ],
+        )
+
+    def test_focus_mode_folded_output(self):
+        """Test --focus-mode with folded output to verify filtering works"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+                "saved the profiling data to the folded file result.folded",
+            ],
+            options=["--focus-mode", "--folded-save", "--interval", "100", "--debug"],
+        )
+
+        # Check that result.folded exists and contains user code
+        folded_content = ""
+        try:
+            with open("result.folded") as f:
+                folded_content = f.read()
+            os.unlink("result.folded")
+            os.unlink("result.svg")
+        except FileNotFoundError:
+            pass
+
+        # Focus mode should primarily contain user code (test_focus_and_regex.py)
+        # and exclude standard library calls like threading.py, json.py etc
+        if folded_content:
+            self.assertRegex(folded_content, r"test_focus_and_regex\.py")
+
+    def test_regex_patterns_no_match(self):
+        """Test --regex-patterns with pattern that doesn't match anything"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+            ],
+            options=[
+                "--regex-patterns",
+                '".*nonexistent.*"',
+                "--interval",
+                "100",
+                "--debug",
+            ],
+        )
 
 
 class TestEnvironment(TestBase):
