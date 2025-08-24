@@ -105,3 +105,7 @@ def install_monitor(
         t.daemon = True
         t.start()
     return monitor
+
+
+class Profiler(TelepySysAsyncWorkerSampler):
+    pass
