@@ -1,4 +1,3 @@
-import argparse
 import contextlib
 import enum
 import functools
@@ -15,6 +14,7 @@ from rich.table import Table
 
 from . import logger
 from ._telepysys import sched_yield
+from .config import TelePySamplerConfig
 from .flamegraph import FlameGraph, process_stack_trace
 from .sampler import TelepySysAsyncWorkerSampler
 
@@ -183,7 +183,7 @@ class Environment:
 
     # Class attributes to store singleton instances
     _sampler: None | TelepySysAsyncWorkerSampler = None
-    _args: None | argparse.Namespace = None
+    _args: None | TelePySamplerConfig = None
 
     @classmethod
     def get_sampler(cls) -> None | TelepySysAsyncWorkerSampler:
@@ -198,12 +198,12 @@ class Environment:
         cls._sampler = sampler
 
     @classmethod
-    def get_args(cls) -> None | argparse.Namespace:
+    def get_args(cls) -> None | TelePySamplerConfig:
         """Get the singleton args instance."""
         return cls._args
 
     @classmethod
-    def set_args(cls, args: argparse.Namespace) -> None:
+    def set_args(cls, args: TelePySamplerConfig) -> None:
         """Set the singleton args instance."""
         cls._args = args
 
@@ -257,30 +257,33 @@ class Environment:
 
     @classmethod
     def init_telepy_environment(
-        cls, args_: argparse.Namespace, mode: CodeMode = CodeMode.PyFile
+        cls, config: TelePySamplerConfig, mode: CodeMode = CodeMode.PyFile
     ) -> dict[str, Any]:
         """
+        Initialize telepy environment from TelePySamplerConfig.
+
         Args:
-            args_ (argparse.Namespace): The arguments for the process.
+            config (TelePySamplerConfig): The configuration for the process.
+            mode (CodeMode): The code execution mode.
         """
         cls.code_mode = mode
         with _lock:
             if cls.initialized:
                 raise RuntimeError(ERROR_ENV_INITIALIZED)
 
-            # Set the args first
-            cls.set_args(args_)
+            # Set the config
+            cls.set_args(config)
 
             # Create and set the sampler
             sampler = TelepySysAsyncWorkerSampler(
-                args_.interval,
-                debug=args_.debug,
-                ignore_frozen=args_.ignore_frozen,
-                ignore_self=not args_.include_telepy,
-                tree_mode=args_.tree_mode,
-                is_root=not (args_.fork_server or args_.mp),
-                forkserver=args_.fork_server,
-                from_mp=args_.mp,
+                config.interval,
+                debug=config.debug,
+                ignore_frozen=config.ignore_frozen,
+                ignore_self=not config.include_telepy,
+                tree_mode=config.tree_mode,
+                is_root=not (config.fork_server or config.mp),
+                forkserver=config.fork_server,
+                from_mp=config.mp,
             )
             sampler.adjust()
             cls.set_sampler(sampler)
@@ -298,7 +301,13 @@ class Environment:
             cls.initialized = True
             if mode == CodeMode.PyFile:
                 main_mod = types.ModuleType(MODULE_MAIN)
-                setattr(main_mod, MODULE_FILE, os.path.abspath(args_.input[0].name))
+                # For PyFile mode, we need the input file name from config
+                if config.input and len(config.input) > 0:
+                    setattr(main_mod, MODULE_FILE, os.path.abspath(config.input[0].name))
+                    file_name = config.input[0].name
+                else:
+                    setattr(main_mod, MODULE_FILE, "<unknown>")
+                    file_name = "<unknown>"
                 setattr(main_mod, MODULE_BUILTINS, globals()[MODULE_BUILTINS])
                 sys.modules[MODULE_TELEPY_MAIN] = sys.modules[MODULE_MAIN]
                 sys.modules[MODULE_MAIN] = main_mod
@@ -306,9 +315,9 @@ class Environment:
                 setattr(sys, INTERNAL_ARGV, old_arg)
                 if CMD_SEPARATOR in old_arg:
                     idx = old_arg.index(CMD_SEPARATOR)
-                    sys.argv = [args_.input[0].name] + old_arg[idx + 1 :]
+                    sys.argv = [file_name] + old_arg[idx + 1 :]
                 else:
-                    sys.argv = [args_.input[0].name]
+                    sys.argv = [file_name]
                 sys.path.append(os.getcwd())
                 return main_mod.__dict__
             elif mode == CodeMode.PyString:
@@ -370,12 +379,12 @@ class Environment:
 
 
 @contextlib.contextmanager
-def telepy_env(args: argparse.Namespace, code_mode: CodeMode = CodeMode.PyFile):
+def telepy_env(config: TelePySamplerConfig, code_mode: CodeMode = CodeMode.PyFile):
     """
     Context manager for initializing and cleaning up the Telepy environment.
 
     Args:
-        args (argparse.Namespace): The command-line arguments for configuring the environment.
+        config (TelePySamplerConfig): The configuration for the telepy environment.
         code_mode (CodeMode, optional): The mode in which the code is executed. Defaults to CodeMode.PyFile.
 
     Yields:
@@ -388,7 +397,7 @@ def telepy_env(args: argparse.Namespace, code_mode: CodeMode = CodeMode.PyFile):
         The Telepy environment is properly destroyed after use, even if an exception occurs.
     """  # noqa: E501
     try:
-        global_dict = Environment.init_telepy_environment(args, code_mode)
+        global_dict = Environment.init_telepy_environment(config, code_mode)
         current_sampler = Environment.get_sampler()
         yield global_dict, current_sampler
     finally:
@@ -401,9 +410,9 @@ _MIN_SAMPLE_COUNT = 50
 
 class FlameGraphSaver:
     def __init__(
-        self, agrs: argparse.Namespace, sampler: TelepySysAsyncWorkerSampler
+        self, args: TelePySamplerConfig, sampler: TelepySysAsyncWorkerSampler
     ) -> None:
-        self.args = agrs  # Use the parameter directly
+        self.args = args
         self.sampler = sampler
         self.site_path = site.getsitepackages()[0]
         self.work_dir = os.getcwd()
