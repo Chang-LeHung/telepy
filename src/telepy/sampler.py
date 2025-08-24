@@ -63,6 +63,21 @@ class SamplerMixin(ABC):
         """
         return sys.getswitchinterval()
 
+    def _compile_regex_patterns(self, patterns: list[str] | None) -> list | None:
+        """Compile regex patterns for stack trace filtering."""
+        if patterns is None or len(patterns) == 0:
+            return None
+
+        compiled_patterns = []
+        for pattern in patterns:
+            try:
+                compiled_patterns.append(re.compile(pattern))
+            except re.error as e:
+                # If regex compilation fails, raise an error with context
+                raise ValueError(f"Invalid regex pattern '{pattern}': {e}") from e
+
+        return compiled_patterns
+
 
 class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
     """
@@ -124,21 +139,6 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         self.from_fork = from_fork
         self.from_mp = from_mp
         self.forkserver = forkserver
-
-    def _compile_regex_patterns(self, patterns: list[str] | None) -> list | None:
-        """Compile regex patterns for stack trace filtering."""
-        if patterns is None or len(patterns) == 0:
-            return None
-
-        compiled_patterns = []
-        for pattern in patterns:
-            try:
-                compiled_patterns.append(re.compile(pattern))
-            except re.error as e:
-                # If regex compilation fails, raise an error with context
-                raise ValueError(f"Invalid regex pattern '{pattern}': {e}") from e
-
-        return compiled_patterns
 
     def adjust_interval(self) -> bool:
         """
@@ -244,21 +244,6 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self.from_fork = from_fork
         self.from_mp = from_mp
         self.forkserver = forkserver
-
-    def _compile_regex_patterns(self, patterns: list[str] | None) -> list | None:
-        """Compile regex patterns for stack trace filtering."""
-        if patterns is None or len(patterns) == 0:
-            return None
-
-        compiled_patterns = []
-        for pattern in patterns:
-            try:
-                compiled_patterns.append(re.compile(pattern))
-            except re.error as e:
-                # If regex compilation fails, raise an error with context
-                raise ValueError(f"Invalid regex pattern '{pattern}': {e}") from e
-
-        return compiled_patterns
 
     @override
     def save(self, filename: str) -> None:
