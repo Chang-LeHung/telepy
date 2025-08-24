@@ -234,8 +234,8 @@ class TelePySamplerConfig:
                 packages in stack traces, focusing only on user code.
                 Default: False.
             regex_patterns: List of regex pattern strings for filtering stack
-                traces. Only files matching at least one pattern will be included.
-                If None or empty, all files are included. Default: None.
+                traces. Only files or function/class names matching at least one pattern
+                will be included. If None or empty, all files are included. Default: None.
             output: Output filename for the SVG flamegraph file.
                 Default: "result.svg".
             folded_file: Output filename for the folded stack trace file, which

@@ -113,7 +113,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
             focus_mode (bool):
                 Whether to focus on user code by ignoring standard library and third-party packages.
             regex_patterns (list | None):
-                List of regex pattern strings for filtering stack traces. Only files matching
+                List of regex pattern strings for filtering stack traces. Only files or function/class names matching
                 at least one pattern will be included. If None or empty, all files are included.
             is_root (bool):
                 Whether the sampler is running in the root process.
@@ -217,7 +217,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
             focus_mode (bool):
                 Whether to focus on user code by ignoring standard library and third-party packages.
             regex_patterns (list | None):
-                List of regex pattern strings for filtering stack traces. Only files matching
+                List of regex pattern strings for filtering stack traces. Only files or function/class names matching
                 at least one pattern will be included. If None or empty, all files are included.
             is_root (bool):
                 Whether the sampler is running in the root process.

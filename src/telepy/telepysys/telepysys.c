@@ -208,6 +208,9 @@ call_stack(SamplerObject* self,
         PyObject* filename = code->co_filename;
         PyObject* name = code->co_name;
 
+#if PY_VERSION_HEX >= 0x030B00F0
+        name = code->co_qualname;
+#endif
         // Apply focus_mode filtering
         if (FOCUS_MODE_ENABLED(self) && is_stdlib_or_third_party(filename)) {
             Py_DECREF(code);
@@ -215,7 +218,8 @@ call_stack(SamplerObject* self,
         }
 
         // Apply regex pattern filtering
-        if (!matches_regex_patterns(filename, self->regex_patterns)) {
+        if (!matches_regex_patterns(filename, self->regex_patterns) ||
+            !matches_regex_patterns(name, self->regex_patterns)) {
             Py_DECREF(code);
             continue;
         }
@@ -236,9 +240,6 @@ call_stack(SamplerObject* self,
         int lineno = code->co_firstlineno;
         if (TREE_MODE_ENABLED(self))
             lineno = PyFrame_GetLineNumber(frame);
-#if PY_VERSION_HEX >= 0x030B00F0
-        name = code->co_qualname;
-#endif
         size_t ret = 0;
         const char* format = NULL;
         if (i > 0) {
