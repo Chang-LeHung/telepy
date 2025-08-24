@@ -345,6 +345,18 @@ def main():
         help="Whether to include telepy in the stack trace (default: False).",
     )
     parser.add_argument(
+        "--focus-mode",
+        action="store_true",
+        help="Focus on user code by ignoring standard library and "
+        "third-party packages (default: False).",
+    )
+    parser.add_argument(
+        "--regex-patterns",
+        action="append",
+        help="Regex patterns for filtering stack traces. Only files matching "
+        "at least one pattern will be included. Can be specified multiple times.",
+    )
+    parser.add_argument(
         "--folded-save",
         action="store_true",
         help="Save folded stack traces to a file (default: False).",

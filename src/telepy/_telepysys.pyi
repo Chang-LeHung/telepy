@@ -38,6 +38,8 @@ class Sampler:
         self.ignore_frozen: bool = False
         self.ignore_self: bool = False
         self.tree_mode: bool = False
+        self.focus_mode: bool = False
+        self.regex_patterns: list | None = None
 
     def start(self) -> None:
         """start the sampler"""
@@ -83,6 +85,8 @@ class AsyncSampler:
         self.end_time: int
         self.ignore_self: bool = False
         self.tree_mode: bool = False
+        self.focus_mode: bool = False
+        self.regex_patterns: list | None = None
 
     def start(self) -> None:
         """start the sampler"""

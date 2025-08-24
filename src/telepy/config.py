@@ -185,6 +185,8 @@ class TelePySamplerConfig:
         # Filtering options
         ignore_frozen: bool = False,
         include_telepy: bool = False,
+        focus_mode: bool = False,
+        regex_patterns: list[str] | None = None,
         # Output configuration
         output: str = "result.svg",
         folded_file: str = "result.folded",
@@ -228,6 +230,12 @@ class TelePySamplerConfig:
             include_telepy: Whether to include telepy profiler code itself in
                 the stack trace. Usually disabled to focus on user code.
                 Default: False.
+            focus_mode: When enabled, ignores standard library and third-party
+                packages in stack traces, focusing only on user code.
+                Default: False.
+            regex_patterns: List of regex pattern strings for filtering stack
+                traces. Only files matching at least one pattern will be included.
+                If None or empty, all files are included. Default: None.
             output: Output filename for the SVG flamegraph file.
                 Default: "result.svg".
             folded_file: Output filename for the folded stack trace file, which
@@ -273,6 +281,8 @@ class TelePySamplerConfig:
         # Filtering options
         self.ignore_frozen = ignore_frozen
         self.include_telepy = include_telepy
+        self.focus_mode = focus_mode
+        self.regex_patterns = regex_patterns
 
         # Output configuration
         self.output = output
@@ -316,6 +326,8 @@ class TelePySamplerConfig:
             reverse=getattr(args_namespace, "reverse", False),
             ignore_frozen=getattr(args_namespace, "ignore_frozen", False),
             include_telepy=getattr(args_namespace, "include_telepy", False),
+            focus_mode=getattr(args_namespace, "focus_mode", False),
+            regex_patterns=getattr(args_namespace, "regex_patterns", None),
             output=getattr(args_namespace, "output", "result.svg"),
             folded_file=getattr(args_namespace, "folded_file", "result.folded"),
             folded_save=getattr(args_namespace, "folded_save", False),

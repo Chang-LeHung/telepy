@@ -1,3 +1,4 @@
+import re
 import signal
 import sys
 import threading
@@ -75,6 +76,8 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         ignore_frozen: bool = False,
         ignore_self: bool = True,
         tree_mode: bool = False,
+        focus_mode: bool = False,
+        regex_patterns: list | None = None,
         is_root: bool = True,
         from_fork: bool = False,
         from_mp: bool = False,
@@ -92,6 +95,11 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
                 Whether to ignore the current thread stack trace data.
             tree_mode (bool):
                 Whether to use the tree mode.
+            focus_mode (bool):
+                Whether to focus on user code by ignoring standard library and third-party packages.
+            regex_patterns (list | None):
+                List of regex pattern strings for filtering stack traces. Only files matching
+                at least one pattern will be included. If None or empty, all files are included.
             is_root (bool):
                 Whether the sampler is running in the root process.
             from_fork (bool):
@@ -110,10 +118,27 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         self.ignore_frozen = ignore_frozen
         self.ignore_self = ignore_self
         self.tree_mode = tree_mode
+        self.focus_mode = focus_mode
+        self.regex_patterns = self._compile_regex_patterns(regex_patterns)
         self.is_root = is_root
         self.from_fork = from_fork
         self.from_mp = from_mp
         self.forkserver = forkserver
+
+    def _compile_regex_patterns(self, patterns: list[str] | None) -> list | None:
+        """Compile regex patterns for stack trace filtering."""
+        if patterns is None or len(patterns) == 0:
+            return None
+
+        compiled_patterns = []
+        for pattern in patterns:
+            try:
+                compiled_patterns.append(re.compile(pattern))
+            except re.error as e:
+                # If regex compilation fails, raise an error with context
+                raise ValueError(f"Invalid regex pattern '{pattern}': {e}") from e
+
+        return compiled_patterns
 
     def adjust_interval(self) -> bool:
         """
@@ -170,6 +195,8 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         ignore_frozen: bool = False,
         ignore_self: bool = True,
         tree_mode: bool = False,
+        focus_mode: bool = False,
+        regex_patterns: list | None = None,
         is_root: bool = True,
         from_fork: bool = False,
         from_mp: bool = False,
@@ -187,6 +214,11 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
                 Whether to ignore the current thread stack trace data.
             tree_mode (bool):
                 Whether to use the tree mode.
+            focus_mode (bool):
+                Whether to focus on user code by ignoring standard library and third-party packages.
+            regex_patterns (list | None):
+                List of regex pattern strings for filtering stack traces. Only files matching
+                at least one pattern will be included. If None or empty, all files are included.
             is_root (bool):
                 Whether the sampler is running in the root process.
             from_fork (bool):
@@ -206,10 +238,27 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self.ignore_frozen = ignore_frozen
         self.ignore_self = ignore_self
         self.tree_mode = tree_mode
+        self.focus_mode = focus_mode
+        self.regex_patterns = self._compile_regex_patterns(regex_patterns)
         self.is_root = is_root
         self.from_fork = from_fork
         self.from_mp = from_mp
         self.forkserver = forkserver
+
+    def _compile_regex_patterns(self, patterns: list[str] | None) -> list | None:
+        """Compile regex patterns for stack trace filtering."""
+        if patterns is None or len(patterns) == 0:
+            return None
+
+        compiled_patterns = []
+        for pattern in patterns:
+            try:
+                compiled_patterns.append(re.compile(pattern))
+            except re.error as e:
+                # If regex compilation fails, raise an error with context
+                raise ValueError(f"Invalid regex pattern '{pattern}': {e}") from e
+
+        return compiled_patterns
 
     @override
     def save(self, filename: str) -> None:

@@ -94,6 +94,12 @@ def filter_child_args() -> list[str]:
         res.append("--ignore-frozen")
     if args.include_telepy:
         res.append("--include-telepy")
+    if args.focus_mode:
+        res.append("--focus-mode")
+    if args.regex_patterns:
+        for pattern in args.regex_patterns:
+            res.append("--regex-patterns")
+            res.append(pattern)
     if args.timeout:
         res.append("--timeout")
         res.append(str(args.timeout))
@@ -281,6 +287,8 @@ class Environment:
                 ignore_frozen=config.ignore_frozen,
                 ignore_self=not config.include_telepy,
                 tree_mode=config.tree_mode,
+                focus_mode=config.focus_mode,
+                regex_patterns=config.regex_patterns,
                 is_root=not (config.fork_server or config.mp),
                 forkserver=config.fork_server,
                 from_mp=config.mp,
