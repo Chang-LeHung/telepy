@@ -46,6 +46,16 @@ class SamplerMixin(ABC):
         """Stop the sampler and release any resources."""
         pass  # pragma: no cover
 
+    def __enter__(self):
+        """Context manager entry point. Starts the sampler."""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit point. Stops the sampler."""
+        self.stop()
+        return False
+
     @staticmethod
     def setswitchinterval(val: float) -> None:
         """
