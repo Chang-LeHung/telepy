@@ -305,7 +305,7 @@ class Environment:
                 if config.input and len(config.input) > 0:
                     setattr(main_mod, MODULE_FILE, os.path.abspath(config.input[0].name))
                     file_name = config.input[0].name
-                else:
+                else:  # pragma: no cover
                     setattr(main_mod, MODULE_FILE, "<unknown>")
                     file_name = "<unknown>"
                 setattr(main_mod, MODULE_BUILTINS, globals()[MODULE_BUILTINS])
