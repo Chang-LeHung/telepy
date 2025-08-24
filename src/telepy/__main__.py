@@ -17,6 +17,7 @@ from rich.traceback import Traceback, install
 from rich_argparse import RichHelpFormatter
 
 from . import logger
+from ._telepysys import __version__
 from .config import TelePyConfig, TelePySamplerConfig, merge_config_with_args
 from .environment import CodeMode, telepy_env, telepy_finalize
 from .flamegraph import FlameGraph
@@ -269,9 +270,13 @@ def telepy_help(parser: argparse.ArgumentParser):
     console.print(table)
 
 
-def _pre_check(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+def _pre_checks(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if args.help:
         telepy_help(parser)
+        sys.exit(0)
+
+    if args.version:
+        print(f"TelePy version {__version__}")
         sys.exit(0)
 
     if args.create_config:
@@ -296,6 +301,9 @@ def main():
     )
     parser.add_argument(
         "-h", "--help", action="store_true", help="Show this help message and exit."
+    )
+    parser.add_argument(
+        "-v", "--version", action="store_true", help="Show version information and exit."
     )
     parser.add_argument(
         "--no-verbose",
@@ -433,7 +441,7 @@ def main():
     )
 
     args = parser.parse_args(arguments)
-    _pre_check(args, parser)
+    _pre_checks(args, parser)
     if not args.disable_traceback:
         install()
     try:

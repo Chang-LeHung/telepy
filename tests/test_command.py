@@ -159,6 +159,7 @@ class TestCommand(CommandTemplate):
     def test_help(self):
         expected = [
             "-h, --help",
+            "-v, --version",
             "--no-verbose",
             "-p, --parse",
             "--interval INTERVAL",
@@ -187,6 +188,24 @@ class TestCommand(CommandTemplate):
         self.run_command(
             ["--help"],
             stdout_check_list=expected,
+        )
+
+    def test_version(self):
+        """Test --version and -v flags functionality"""
+        # Test short version flag
+        self.run_command(
+            ["-v"],
+            stdout_check_list=[
+                r"TelePy version \d+\.\d+\.\d+",
+            ],
+        )
+
+        # Test long version flag
+        self.run_command(
+            ["--version"],
+            stdout_check_list=[
+                r"TelePy version \d+\.\d+\.\d+",
+            ],
         )
 
     def test_run_site(self):
