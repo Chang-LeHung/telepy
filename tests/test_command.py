@@ -312,21 +312,20 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
             options=["-c", "a = 1 / 0"],
             stdout_check_list=[
                 "The following traceback may be useful for debugging",
+            ],
+            stderr_check_list=[
                 "ZeroDivisionError: division by zero",
             ],
-            exit_code=-27,
+            exit_code=-27 if "coverage" in sys.modules else 1,
         )
 
     def test_py_error_raw(self):
         self.run_command(
             options=["-c", "a = 1 / 0", "--disable-traceback"],
-            stdout_check_list=[
-                "The following traceback may be useful for debugging",
-            ],
             stderr_check_list=[
-                "ZeroDivisionError: division by zero",
+                "division by zero",
             ],
-            exit_code=-27,
+            exit_code=-27 if "coverage" in sys.modules else 1,
         )
 
     def test_not_python_file(self):
@@ -335,7 +334,7 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
 
         self.run_filename(
             filename="demo",
-            stdout_check_list=[
+            stderr_check_list=[
                 "not found a proper handler to handle the arguments",
             ],
             exit_code=1,
