@@ -324,6 +324,7 @@ def main():
         "such as `telepy -p result.folded`.",
     )
     parser.add_argument(
+        "-i",
         "--interval",
         type=int,
         default=8000,

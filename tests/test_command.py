@@ -162,7 +162,7 @@ class TestCommand(CommandTemplate):
             "-v, --version",
             "--no-verbose",
             "-p, --parse",
-            "--interval INTERVAL",
+            "-i, --interval INTERVAL",
             "--debug",
             "--full-path",
             "--ignore-frozen",
@@ -208,6 +208,31 @@ class TestCommand(CommandTemplate):
             ],
         )
 
+    def test_interval_short_option(self):
+        """Test -i short option for interval functionality"""
+        # Test short interval option
+        self.run_command(
+            ["-c", "import time; time.sleep(0.01); print('Test with -i')", "-i", "1000"],
+            stdout_check_list=[
+                "Test with -i",
+                "saved the profiling data to the svg file result.svg",
+            ],
+        )
+
+        # Verify that both -i and --interval work the same way
+        self.run_command(
+            [
+                "-c",
+                "import time; time.sleep(0.01); print('Test with --interval')",
+                "--interval",
+                "1000",
+            ],
+            stdout_check_list=[
+                "Test with --interval",
+                "saved the profiling data to the svg file result.svg",
+            ],
+        )
+
     def test_run_site(self):
         self.run_command(
             ["-m", "site"],
@@ -240,7 +265,7 @@ class TestCommand(CommandTemplate):
                 "-h, --help",
                 "--no-verbose",
                 "-p, --parse",
-                "--interval INTERVAL",
+                "-i, --interval INTERVAL",
                 "--debug",
                 "--full-path",
                 "--ignore-frozen",
