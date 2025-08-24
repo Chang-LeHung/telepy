@@ -363,7 +363,8 @@ def main():
         "--regex-patterns",
         action="append",
         help="Regex patterns for filtering stack traces. Only files or function/class "
-        "names matching at least one pattern will be included. Can be specified multiple times.",
+        "names matching at least one pattern will be included. Can be specified multiple"
+        " times.",
     )
     parser.add_argument(
         "--folded-save",
