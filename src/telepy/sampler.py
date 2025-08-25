@@ -24,6 +24,10 @@ class MultiProcessEnv:
 
 
 class SamplerMixin(ABC):
+    def __init__(self):
+        self._context_depth = 0
+        self._context_lock = threading.Lock()
+
     @abstractmethod
     def adjust(self) -> bool:
         """Adjust the sampler's parameters and return whether updates occurred.
@@ -47,13 +51,24 @@ class SamplerMixin(ABC):
         pass  # pragma: no cover
 
     def __enter__(self):
-        """Context manager entry point. Starts the sampler."""
-        self.start()
+        """Context manager entry point. Starts the sampler on first entry."""
+        assert self._context_depth >= 0
+        with self._context_lock:
+            self._context_depth += 1
+            if self._context_depth == 1:
+                # Only start the sampler on the first nested call if not already started
+                self.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit point. Stops the sampler."""
-        self.stop()
+        """Context manager exit point. Stops the sampler on last exit."""
+        assert self._context_depth > 0
+        with self._context_lock:
+            self._context_depth -= 1
+            if self._context_depth == 0:
+                # Only stop the sampler when all nested contexts are exited
+                # and the context manager originally started it
+                self.stop()
         return False
 
     @staticmethod
@@ -134,7 +149,8 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
             forkserver (bool):
                 Whether the current process is the forkserver.
         """  # noqa: E501
-        super().__init__()
+        _telepysys.Sampler.__init__(self)
+        SamplerMixin.__init__(self)
         MultiProcessEnv.__init__(self)
         if not debug and sampling_interval < 5:
             sampling_interval = 5  # pragma: no cover
@@ -238,7 +254,8 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
             forkserver (bool):
                 Whether the current process is the forkserver.
         """  # noqa: E501
-        super().__init__()
+        _telepysys.AsyncSampler.__init__(self)
+        SamplerMixin.__init__(self)
         MultiProcessEnv.__init__(self)
         if not debug and sampling_interval < 5:
             # this line is hard to be coveraged
