@@ -238,7 +238,7 @@ class TestAsyncSamplerFocusMode(TestBase):
             return threading.current_thread().name
 
         sampler = telepy.TelepySysAsyncWorkerSampler(
-            sampling_interval=100,
+            sampling_interval=10,
             focus_mode=True,
             debug=False,
         )
