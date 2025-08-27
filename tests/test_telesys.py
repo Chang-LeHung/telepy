@@ -1,7 +1,17 @@
+import os
+
 from .base import TestBase  # type: ignore
 
 
 class TestTelePySys(TestBase):
+    def tearDown(self):
+        """Clean up test files after each test."""
+        super().tearDown()
+        test_files = ["test_sampler.stack"]
+        for file in test_files:
+            if os.path.exists(file):
+                os.remove(file)
+
     def test_telepysys_version(self):
         import telepy
 
@@ -107,6 +117,14 @@ class TestTelePySys(TestBase):
 
 
 class TestSampler(TestBase):
+    def tearDown(self):
+        """Clean up test files after each test."""
+        super().tearDown()
+        test_files = ["test_sampler.stack"]
+        for file in test_files:
+            if os.path.exists(file):
+                os.remove(file)
+
     def test_sampler(self):
         import telepy
 

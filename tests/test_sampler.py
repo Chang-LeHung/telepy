@@ -1,3 +1,4 @@
+import os
 import threading
 
 import telepy
@@ -6,6 +7,14 @@ from .base import TestBase  # type: ignore
 
 
 class TestAsyncSampler(TestBase):
+    def tearDown(self):
+        """Clean up test files after each test."""
+        super().tearDown()
+        test_files = ["test_async_sampler.stack", "test_worker_sampler.stack"]
+        for file in test_files:
+            if os.path.exists(file):
+                os.remove(file)
+
     def test_sampler(self):
         self.assertEqual(threading.current_thread(), threading.main_thread())
 
