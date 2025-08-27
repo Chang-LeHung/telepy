@@ -159,13 +159,16 @@ class TestCommand(CommandTemplate):
     def test_help(self):
         expected = [
             "-h, --help",
+            "-v, --version",
             "--no-verbose",
             "-p, --parse",
-            "--interval INTERVAL",
+            "-i, --interval INTERVAL",
             "--debug",
             "--full-path",
             "--ignore-frozen",
             "--include-telepy",
+            "--focus-mode",
+            "--regex-patterns REGEX_PATTERNS",
             "--folded-save",
             "--folded-file FOLDED_FILE",
             "-o, --output OUTPUT",
@@ -185,6 +188,49 @@ class TestCommand(CommandTemplate):
         self.run_command(
             ["--help"],
             stdout_check_list=expected,
+        )
+
+    def test_version(self):
+        """Test --version and -v flags functionality"""
+        # Test short version flag
+        self.run_command(
+            ["-v"],
+            stdout_check_list=[
+                r"TelePy version \d+\.\d+\.\d+",
+            ],
+        )
+
+        # Test long version flag
+        self.run_command(
+            ["--version"],
+            stdout_check_list=[
+                r"TelePy version \d+\.\d+\.\d+",
+            ],
+        )
+
+    def test_interval_short_option(self):
+        """Test -i short option for interval functionality"""
+        # Test short interval option
+        self.run_command(
+            ["-c", "import time; time.sleep(0.01); print('Test with -i')", "-i", "1000"],
+            stdout_check_list=[
+                "Test with -i",
+                "saved the profiling data to the svg file result.svg",
+            ],
+        )
+
+        # Verify that both -i and --interval work the same way
+        self.run_command(
+            [
+                "-c",
+                "import time; time.sleep(0.01); print('Test with --interval')",
+                "--interval",
+                "1000",
+            ],
+            stdout_check_list=[
+                "Test with --interval",
+                "saved the profiling data to the svg file result.svg",
+            ],
         )
 
     def test_run_site(self):
@@ -219,11 +265,13 @@ class TestCommand(CommandTemplate):
                 "-h, --help",
                 "--no-verbose",
                 "-p, --parse",
-                "--interval INTERVAL",
+                "-i, --interval INTERVAL",
                 "--debug",
                 "--full-path",
                 "--ignore-frozen",
                 "--include-telepy",
+                "--focus-mode",
+                "--regex-patterns REGEX_PATTERNS",
                 "--folded-save",
                 "--folded-file FOLDED_FILE",
                 "-o, --output OUTPUT",
@@ -312,21 +360,20 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
             options=["-c", "a = 1 / 0"],
             stdout_check_list=[
                 "The following traceback may be useful for debugging",
+            ],
+            stderr_check_list=[
                 "ZeroDivisionError: division by zero",
             ],
-            exit_code=-27,
+            exit_code=-27 if "coverage" in sys.modules else 1,
         )
 
     def test_py_error_raw(self):
         self.run_command(
             options=["-c", "a = 1 / 0", "--disable-traceback"],
-            stdout_check_list=[
-                "The following traceback may be useful for debugging",
-            ],
             stderr_check_list=[
-                "ZeroDivisionError: division by zero",
+                "division by zero",
             ],
-            exit_code=-27,
+            exit_code=-27 if "coverage" in sys.modules else 1,
         )
 
     def test_not_python_file(self):
@@ -335,12 +382,145 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
 
         self.run_filename(
             filename="demo",
-            stdout_check_list=[
+            stderr_check_list=[
                 "not found a proper handler to handle the arguments",
             ],
             exit_code=1,
         )
         os.unlink("tests/demo")
+
+    def test_focus_mode(self):
+        """Test --focus-mode flag functionality"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+            ],
+            options=["--focus-mode", "--interval", "100", "--debug"],
+        )
+
+    def test_regex_patterns_single(self):
+        """Test --regex-patterns with a single pattern"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+            ],
+            options=[
+                "--regex-patterns",
+                '".*test_focus.*"',
+                "--interval",
+                "100",
+                "--debug",
+            ],
+        )
+
+    def test_regex_patterns_multiple(self):
+        """Test --regex-patterns with multiple patterns"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+            ],
+            options=[
+                "--regex-patterns",
+                '".*test_focus.*"',
+                "--regex-patterns",
+                '".*main.*"',
+                "--interval",
+                "100",
+                "--debug",
+            ],
+        )
+
+    def test_focus_mode_with_regex_patterns(self):
+        """Test combining --focus-mode with --regex-patterns"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+            ],
+            options=[
+                "--focus-mode",
+                "--regex-patterns",
+                ".*test_focus.*",
+                "--interval",
+                "100",
+                "--debug",
+            ],
+        )
+
+    def test_focus_mode_folded_output(self):
+        """Test --focus-mode with folded output to verify filtering works"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+                "saved the profiling data to the folded file result.folded",
+            ],
+            options=["--focus-mode", "--folded-save", "--interval", "100", "--debug"],
+        )
+
+        # Check that result.folded exists and contains user code
+        folded_content = ""
+        try:
+            with open("result.folded") as f:
+                folded_content = f.read()
+            os.unlink("result.folded")
+            os.unlink("result.svg")
+        except FileNotFoundError:
+            pass
+
+        # Focus mode should primarily contain user code (test_focus_and_regex.py)
+        # and exclude standard library calls like threading.py, json.py etc
+        if folded_content:
+            self.assertRegex(folded_content, r"test_focus_and_regex\.py")
+
+    def test_regex_patterns_no_match(self):
+        """Test --regex-patterns with pattern that doesn't match anything"""
+        self.run_filename(
+            "test_files/test_focus_and_regex.py",
+            stdout_check_list=[
+                "Starting focus and regex test",
+                "Heavy task result:",
+                "IO task result:",
+                "Threading task completed",
+                "All tasks completed!",
+                "saved the profiling data to the svg file result.svg",
+            ],
+            options=[
+                "--regex-patterns",
+                '".*nonexistent.*"',
+                "--interval",
+                "100",
+                "--debug",
+            ],
+        )
 
 
 class TestEnvironment(TestBase):

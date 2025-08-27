@@ -169,6 +169,181 @@ def load_config_if_exists() -> dict[str, Any]:
     return config_manager.load_config()
 
 
+class TelePySamplerConfig:
+    """Configuration class to replace argparse.Namespace dependency."""
+
+    def __init__(
+        self,
+        *,
+        # Sampler configuration
+        interval: int = 8000,
+        timeout: float = 10,
+        debug: bool = False,
+        full_path: bool = False,
+        tree_mode: bool = False,
+        reverse: bool = False,
+        # Filtering options
+        ignore_frozen: bool = False,
+        include_telepy: bool = False,
+        focus_mode: bool = False,
+        regex_patterns: list[str] | None = None,
+        # Output configuration
+        output: str = "result.svg",
+        folded_file: str = "result.folded",
+        folded_save: bool = False,
+        # Process handling
+        merge: bool = True,
+        mp: bool = False,
+        fork_server: bool = False,
+        # Interface options
+        no_verbose: bool = False,
+        disable_traceback: bool = False,
+        create_config: bool = False,
+        # Input options
+        input=None,
+        parse: bool = False,
+        cmd: str | None = None,
+        module: str | None = None,
+    ):
+        """Initialize TelePySamplerConfig with keyword-only arguments.
+
+        Args:
+            interval: Sampling interval in microseconds. Controls how frequently
+                the profiler samples the call stack. Smaller values provide more
+                detailed profiling but increase overhead. Default: 8000 (8ms).
+            timeout: Timeout in seconds for parent process to wait for child
+                processes to merge flamegraph files in multiprocess scenarios.
+                Default: 10.
+            debug: Enable debug mode to print additional diagnostic information
+                during profiling. Useful for troubleshooting. Default: False.
+            full_path: Display absolute file paths in the flamegraph instead of
+                relative paths. Makes the graph more verbose but can be helpful
+                for debugging. Default: False.
+            tree_mode: Use call site line numbers instead of the first line of
+                function/method definitions. Provides more precise location
+                information. Default: False.
+            reverse: Generate reversed flamegraphs (currently not fully implemented).
+                Default: False.
+            ignore_frozen: Ignore frozen modules (compiled modules) in the stack
+                trace. Helps focus on user code by excluding standard library
+                internals. Default: False.
+            include_telepy: Whether to include telepy profiler code itself in
+                the stack trace. Usually disabled to focus on user code.
+                Default: False.
+            focus_mode: When enabled, ignores standard library and third-party
+                packages in stack traces, focusing only on user code.
+                Default: False.
+            regex_patterns: List of regex pattern strings for filtering stack
+                traces. Only files or function/class names matching at least one pattern
+                will be included. If None or empty, all files are included. Default: None.
+            output: Output filename for the SVG flamegraph file.
+                Default: "result.svg".
+            folded_file: Output filename for the folded stack trace file, which
+                contains the raw profiling data in a text format.
+                Default: "result.folded".
+            folded_save: Save the folded stack traces to a file. The folded
+                format can be used for further analysis or re-generating
+                flamegraphs. Default: False.
+            merge: Merge multiple flamegraph files in multiprocess environments.
+                When True, child process data is combined into a single output.
+                When False, separate files are created for each process.
+                Default: True.
+            mp: Internal flag indicating this is a multiprocess child process.
+                Used internally by the profiler. Default: False.
+            fork_server: Internal flag indicating this is running in forkserver
+                mode. Used internally by the profiler. Default: False.
+            no_verbose: Disable verbose output messages during profiling.
+                When True, suppresses most status and progress messages.
+                Default: False.
+            disable_traceback: Disable the rich (colorful) traceback display
+                and use the default Python traceback format instead.
+                Default: False.
+            create_config: Create an example configuration file at
+                ~/.telepy/.telepyrc and exit immediately. Used for initial
+                setup. Default: False.
+            input: Input file(s) to profile. Can be a list of file objects or
+                None. Used when profiling specific files. Default: None.
+            parse: Parse existing stack trace data to generate a flamegraph
+                instead of running live profiling. Default: False.
+            cmd: Command string to execute and profile. Used with -c option.
+                Default: None.
+            module: Module name to profile when using -m option.
+                Default: None.
+        """
+        # Sampler configuration
+        self.interval = interval
+        self.timeout = timeout
+        self.debug = debug
+        self.full_path = full_path
+        self.tree_mode = tree_mode
+        self.reverse = reverse
+
+        # Filtering options
+        self.ignore_frozen = ignore_frozen
+        self.include_telepy = include_telepy
+        self.focus_mode = focus_mode
+        self.regex_patterns = regex_patterns
+
+        # Output configuration
+        self.output = output
+        self.folded_file = folded_file
+        self.folded_save = folded_save
+
+        # Process handling
+        self.merge = merge
+        self.mp = mp
+        self.fork_server = fork_server
+
+        # Interface options
+        self.no_verbose = no_verbose
+        self.disable_traceback = disable_traceback
+        self.create_config = create_config
+
+        # Input options
+        self.input = input
+        self.parse = parse
+        self.cmd = cmd
+        self.module = module
+
+    @classmethod
+    def from_namespace(cls, args_namespace) -> "TelePySamplerConfig":
+        """Create TelePySamplerConfig from argparse.Namespace.
+
+        Args:
+            args_namespace: An argparse.Namespace object containing the parsed
+                command line arguments.
+
+        Returns:
+            A new TelePySamplerConfig instance with values extracted from the
+            namespace, using appropriate defaults for missing attributes.
+        """
+        return cls(
+            interval=getattr(args_namespace, "interval", 8000),
+            timeout=getattr(args_namespace, "timeout", 10),
+            debug=getattr(args_namespace, "debug", False),
+            full_path=getattr(args_namespace, "full_path", False),
+            tree_mode=getattr(args_namespace, "tree_mode", False),
+            reverse=getattr(args_namespace, "reverse", False),
+            ignore_frozen=getattr(args_namespace, "ignore_frozen", False),
+            include_telepy=getattr(args_namespace, "include_telepy", False),
+            focus_mode=getattr(args_namespace, "focus_mode", False),
+            regex_patterns=getattr(args_namespace, "regex_patterns", None),
+            output=getattr(args_namespace, "output", "result.svg"),
+            folded_file=getattr(args_namespace, "folded_file", "result.folded"),
+            folded_save=getattr(args_namespace, "folded_save", False),
+            merge=getattr(args_namespace, "merge", True),
+            mp=getattr(args_namespace, "mp", False),
+            fork_server=getattr(args_namespace, "fork_server", False),
+            no_verbose=getattr(args_namespace, "no_verbose", False),
+            disable_traceback=getattr(args_namespace, "disable_traceback", False),
+            create_config=getattr(args_namespace, "create_config", False),
+            input=getattr(args_namespace, "input", None),
+            parse=getattr(args_namespace, "parse", False),
+            cmd=getattr(args_namespace, "cmd", None),
+            module=getattr(args_namespace, "module", None),
+        )
+
+
 def merge_config_with_args(cmd_args: list[str]) -> list[str]:
     """
     Convenience function to merge configuration with command line arguments.

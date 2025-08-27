@@ -17,14 +17,14 @@ from rich.traceback import Traceback, install
 from rich_argparse import RichHelpFormatter
 
 from . import logger
-from .config import TelePyConfig, merge_config_with_args
+from ._telepysys import __version__
+from .config import TelePyConfig, TelePySamplerConfig, merge_config_with_args
 from .environment import CodeMode, telepy_env, telepy_finalize
 from .flamegraph import FlameGraph
 from .shell import TelePyShell
 
-install()
-
 console = logger.console
+err_console = logger.err_console
 
 
 in_coverage = "coverage" in sys.modules
@@ -143,15 +143,16 @@ class PythonFileProfilingHandler(ArgsHandler):
         if not filename.endswith(".py"):
             return False
 
-        with telepy_env(args, CodeMode.PyFile) as (global_dict, sampler):
+        config = TelePySamplerConfig.from_namespace(args)
+        with telepy_env(config, CodeMode.PyFile) as (global_dict, sampler):
             assert sampler is not None
             assert global_dict is not None
             code = args.input[0].read()
             pyc = compile(code, os.path.abspath(filename), "exec")
             sampler.start()
-            exec(pyc, global_dict)
             if not in_coverage:
                 weakref.finalize(sampler, telepy_finalize)  # pragma: no cover
+            exec(pyc, global_dict)
         if in_coverage:
             telepy_finalize()
         return True
@@ -171,16 +172,17 @@ class PyCommandStringProfilingHandler(ArgsHandler):
         if args.cmd is None:
             return False
         str_code = args.cmd
-        with telepy_env(args, CodeMode.PyString) as (global_dict, sampler):
+        config = TelePySamplerConfig.from_namespace(args)
+        with telepy_env(config, CodeMode.PyString) as (global_dict, sampler):
             assert sampler is not None
             assert global_dict is not None
             pyc = compile(str_code, "<string>", "exec")
             # see the enviroment.py:patch_multiprocesssing and patch_os_fork_in_child
-            if not args.fork_server:
+            if not config.fork_server:
                 sampler.start()
-            exec(pyc, global_dict)
             if not in_coverage:
                 weakref.finalize(sampler, telepy_finalize)  # pragma: no cover
+            exec(pyc, global_dict)
         if in_coverage:
             telepy_finalize()
         return True
@@ -200,7 +202,8 @@ class PyCommandModuleProfilingHandler(ArgsHandler):
         if args.module is None:
             return False
         module_name = args.module
-        with telepy_env(args, CodeMode.PyModule) as (global_dict, sampler):
+        config = TelePySamplerConfig.from_namespace(args)
+        with telepy_env(config, CodeMode.PyModule) as (global_dict, sampler):
             assert sampler is not None
             assert global_dict is not None
             import runpy
@@ -211,11 +214,11 @@ class PyCommandModuleProfilingHandler(ArgsHandler):
                 "modname": module_name,
             }
             pyc = compile(code, "<string>", "exec")
-            if not sampler.forkserver:
+            if not config.fork_server:
                 sampler.start()
-            exec(pyc, global_dict)
             if not in_coverage:  # pragma: no cover
                 weakref.finalize(sampler, telepy_finalize)
+            exec(pyc, global_dict)
         # coverage do not cover this line, god knows why
         if in_coverage:  # pragma: no cover
             telepy_finalize()
@@ -267,9 +270,13 @@ def telepy_help(parser: argparse.ArgumentParser):
     console.print(table)
 
 
-def _pre_check(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+def _pre_checks(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if args.help:
         telepy_help(parser)
+        sys.exit(0)
+
+    if args.version:
+        print(f"TelePy version {__version__}")
         sys.exit(0)
 
     if args.create_config:
@@ -296,6 +303,9 @@ def main():
         "-h", "--help", action="store_true", help="Show this help message and exit."
     )
     parser.add_argument(
+        "-v", "--version", action="store_true", help="Show version information and exit."
+    )
+    parser.add_argument(
         "--no-verbose",
         action="store_true",
         help="Disable verbose mode (default: False).",
@@ -314,6 +324,7 @@ def main():
         "such as `telepy -p result.folded`.",
     )
     parser.add_argument(
+        "-i",
         "--interval",
         type=int,
         default=8000,
@@ -341,6 +352,19 @@ def main():
         "--include-telepy",
         action="store_true",
         help="Whether to include telepy in the stack trace (default: False).",
+    )
+    parser.add_argument(
+        "--focus-mode",
+        action="store_true",
+        help="Focus on user code by ignoring standard library and "
+        "third-party packages (default: False).",
+    )
+    parser.add_argument(
+        "--regex-patterns",
+        action="append",
+        help="Regex patterns for filtering stack traces. Only files or function/class "
+        "names matching at least one pattern will be included. Can be specified multiple"
+        " times.",
     )
     parser.add_argument(
         "--folded-save",
@@ -380,9 +404,9 @@ def main():
     parser.add_argument(
         "--timeout",
         type=float,
-        default=10.0,
+        default=10,
         help="Timeout (in seconds) for parent process to wait for child processes"
-        " to merge flamegraph files (default: 10.0).",
+        " to merge flamegraph files (default: 10).",
     )
     parser.add_argument(
         "-r",
@@ -419,7 +443,7 @@ def main():
     )
 
     args = parser.parse_args(arguments)
-    _pre_check(args, parser)
+    _pre_checks(args, parser)
     if not args.disable_traceback:
         install()
     try:
@@ -437,8 +461,8 @@ def main():
                 )
             )
             tb = Traceback()
-            console.print(tb)
-            console.print(
+            err_console.print(tb)
+            err_console.print(
                 "[bold cyan]You can also try running with --disable-traceback for a simpler output.[/bold cyan]"  # noqa: E501
             )
         else:

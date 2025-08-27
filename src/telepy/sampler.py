@@ -1,3 +1,4 @@
+import re
 import signal
 import sys
 import threading
@@ -23,6 +24,10 @@ class MultiProcessEnv:
 
 
 class SamplerMixin(ABC):
+    def __init__(self):
+        self._context_depth = 0
+        self._context_lock = threading.Lock()
+
     @abstractmethod
     def adjust(self) -> bool:
         """Adjust the sampler's parameters and return whether updates occurred.
@@ -45,6 +50,27 @@ class SamplerMixin(ABC):
         """Stop the sampler and release any resources."""
         pass  # pragma: no cover
 
+    def __enter__(self):
+        """Context manager entry point. Starts the sampler on first entry."""
+        assert self._context_depth >= 0
+        with self._context_lock:
+            self._context_depth += 1
+            if self._context_depth == 1:
+                # Only start the sampler on the first nested call if not already started
+                self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit point. Stops the sampler on last exit."""
+        assert self._context_depth > 0
+        with self._context_lock:
+            self._context_depth -= 1
+            if self._context_depth == 0:
+                # Only stop the sampler when all nested contexts are exited
+                # and the context manager originally started it
+                self.stop()
+        return False
+
     @staticmethod
     def setswitchinterval(val: float) -> None:
         """
@@ -62,6 +88,21 @@ class SamplerMixin(ABC):
         """
         return sys.getswitchinterval()
 
+    def _compile_regex_patterns(self, patterns: list[str] | None) -> list | None:
+        """Compile regex patterns for stack trace filtering."""
+        if patterns is None or len(patterns) == 0:
+            return None
+
+        compiled_patterns = []
+        for pattern in patterns:
+            try:
+                compiled_patterns.append(re.compile(pattern))
+            except re.error as e:
+                # If regex compilation fails, raise an error with context
+                raise ValueError(f"Invalid regex pattern '{pattern}': {e}") from e
+
+        return compiled_patterns
+
 
 class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
     """
@@ -75,6 +116,8 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         ignore_frozen: bool = False,
         ignore_self: bool = True,
         tree_mode: bool = False,
+        focus_mode: bool = False,
+        regex_patterns: list | None = None,
         is_root: bool = True,
         from_fork: bool = False,
         from_mp: bool = False,
@@ -92,6 +135,11 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
                 Whether to ignore the current thread stack trace data.
             tree_mode (bool):
                 Whether to use the tree mode.
+            focus_mode (bool):
+                Whether to focus on user code by ignoring standard library and third-party packages.
+            regex_patterns (list | None):
+                List of regex pattern strings for filtering stack traces. Only files or function/class names matching
+                at least one pattern will be included. If None or empty, all files are included.
             is_root (bool):
                 Whether the sampler is running in the root process.
             from_fork (bool):
@@ -101,7 +149,8 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
             forkserver (bool):
                 Whether the current process is the forkserver.
         """  # noqa: E501
-        super().__init__()
+        _telepysys.Sampler.__init__(self)
+        SamplerMixin.__init__(self)
         MultiProcessEnv.__init__(self)
         if not debug and sampling_interval < 5:
             sampling_interval = 5  # pragma: no cover
@@ -110,6 +159,8 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         self.ignore_frozen = ignore_frozen
         self.ignore_self = ignore_self
         self.tree_mode = tree_mode
+        self.focus_mode = focus_mode
+        self.regex_patterns = self._compile_regex_patterns(regex_patterns)
         self.is_root = is_root
         self.from_fork = from_fork
         self.from_mp = from_mp
@@ -170,6 +221,8 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         ignore_frozen: bool = False,
         ignore_self: bool = True,
         tree_mode: bool = False,
+        focus_mode: bool = False,
+        regex_patterns: list | None = None,
         is_root: bool = True,
         from_fork: bool = False,
         from_mp: bool = False,
@@ -187,6 +240,11 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
                 Whether to ignore the current thread stack trace data.
             tree_mode (bool):
                 Whether to use the tree mode.
+            focus_mode (bool):
+                Whether to focus on user code by ignoring standard library and third-party packages.
+            regex_patterns (list | None):
+                List of regex pattern strings for filtering stack traces. Only files or function/class names matching
+                at least one pattern will be included. If None or empty, all files are included.
             is_root (bool):
                 Whether the sampler is running in the root process.
             from_fork (bool):
@@ -196,7 +254,8 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
             forkserver (bool):
                 Whether the current process is the forkserver.
         """  # noqa: E501
-        super().__init__()
+        _telepysys.AsyncSampler.__init__(self)
+        SamplerMixin.__init__(self)
         MultiProcessEnv.__init__(self)
         if not debug and sampling_interval < 5:
             # this line is hard to be coveraged
@@ -206,6 +265,8 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self.ignore_frozen = ignore_frozen
         self.ignore_self = ignore_self
         self.tree_mode = tree_mode
+        self.focus_mode = focus_mode
+        self.regex_patterns = self._compile_regex_patterns(regex_patterns)
         self.is_root = is_root
         self.from_fork = from_fork
         self.from_mp = from_mp

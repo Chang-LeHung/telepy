@@ -38,6 +38,7 @@ typedef struct TelePySysState {
 #define SAMPLING 3
 #define IGNORE_SELF 4
 #define TREE_MODE 5
+#define FOCUS_MODE 6
 
 #define Sample_Enabled(s) (BIT_CHECK((s)->flags, ENABLED))
 #define Sample_Disable(s) (BIT_CLEAR((s)->flags, ENABLED))
@@ -63,6 +64,10 @@ typedef struct TelePySysState {
 #define DISABLE_TREE_MODE(s) (BIT_CLEAR((s)->flags, TREE_MODE))
 #define TREE_MODE_ENABLED(s) (BIT_CHECK((s)->flags, TREE_MODE))
 
+#define ENABLE_FOCUS_MODE(s) (BIT_SET((s)->flags, FOCUS_MODE))
+#define DISABLE_FOCUS_MODE(s) (BIT_CLEAR((s)->flags, FOCUS_MODE))
+#define FOCUS_MODE_ENABLED(s) (BIT_CHECK((s)->flags, FOCUS_MODE))
+
 #define CHECK_FALG(s, flag) (BIT_CHECK((s)->flags, flag))
 
 typedef struct SamplerObject {
@@ -78,6 +83,9 @@ typedef struct SamplerObject {
     // profiling data
     Telepy_time acc_sampling_time;  // accumulated sampling time
     Telepy_time life_time;          // sampling thread life time
+
+    // filtering options
+    PyObject* regex_patterns;  // list of compiled regex patterns
 
     uint32_t flags;
 } SamplerObject;

@@ -15,6 +15,7 @@ from prompt_toolkit.output import Output
 from pygments.lexers.python import PythonLexer  # type: ignore
 from rich import print
 
+from ._telepysys import __version__
 from .commands import CommandManager
 
 MAX_HISTORY_SIZE: Final = 10000
@@ -22,6 +23,15 @@ MAX_HISTORY_SIZE: Final = 10000
 MAX_UNIQUE_COMMANDS: Final = 1000
 
 EXIT_COMMANDS: Final = ["exit", "quit", "q"]
+
+PROMPT: Final = rf""" Welcome to TelePy Shell {__version__}
+  ______     __     ____           _____ __         ____
+ /_  __/__  / /__  / __ \__  __   / ___// /_  ___  / / /
+  / / / _ \/ / _ \/ /_/ / / / /   \__ \/ __ \/ _ \/ / /
+ / / /  __/ /  __/ ____/ /_/ /   ___/ / / / /  __/ / /
+/_/  \___/_/\___/_/    \__, /   /____/_/ /_/\___/_/_/
+                      /____/
+"""
 
 
 class CaseInsensitiveFrequencyCompleter(Completer):
@@ -153,6 +163,10 @@ class TelePyShell:
         raise RuntimeError("Invalid state")
 
     def run(self) -> None:
+        """
+        Run the shell.
+        """
+        print(PROMPT)
         while True:
             try:
                 ipt = self.session.prompt(">>> ")

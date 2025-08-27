@@ -2,6 +2,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 console = Console()
+err_console = Console(stderr=True)
 
 
 def log_success_panel(content: str) -> None:
@@ -9,7 +10,7 @@ def log_success_panel(content: str) -> None:
 
 
 def log_error_panel(content: str) -> None:  # pragma: no cover
-    console.print(Panel(content, style="red", title="Error"))
+    err_console.print(Panel(content, style="red", title="Error"))
 
 
 def log_warning_panel(content: str) -> None:

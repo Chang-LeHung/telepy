@@ -7,6 +7,7 @@
 #include <Python.h>
 #include <sched.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 
@@ -116,6 +117,70 @@ PyUnicode_start_with(PyObject* filename, const char* str) {
     return strncmp(f, str, strlen(str)) == 0;
 }
 
+static inline int
+is_stdlib_or_third_party(PyObject* filename) {
+    // Check if the file is in standard library or third-party packages
+    const char* filepath = PyUnicode_AsUTF8(filename);
+    if (!filepath) {
+        return 0;
+    }
+
+    // Common patterns for standard library and third-party packages
+    if (strstr(filepath, "site-packages/") != NULL ||
+        strstr(filepath, "/lib/python") != NULL ||
+        strstr(filepath, "/usr/lib/python") != NULL ||
+        strstr(filepath, "/usr/local/lib/python") != NULL ||
+        strstr(filepath, "lib64/python") != NULL ||
+        PyUnicode_start_with(filename, "<frozen")) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static inline int
+matches_regex_patterns(PyObject* filename, PyObject* regex_patterns) {
+    if (regex_patterns == NULL || regex_patterns == Py_None) {
+        return 1;  // No patterns means match everything
+    }
+
+    if (!PyList_Check(regex_patterns)) {
+        return 1;  // Invalid patterns, default to match
+    }
+
+    Py_ssize_t pattern_count = PyList_Size(regex_patterns);
+    if (pattern_count == 0) {
+        return 1;  // Empty list means match everything
+    }
+
+    const char* filepath = PyUnicode_AsUTF8(filename);
+    if (!filepath) {
+        return 0;
+    }
+
+    for (Py_ssize_t i = 0; i < pattern_count; i++) {
+        PyObject* pattern = PyList_GetItem(regex_patterns, i);
+        if (pattern == NULL) {
+            continue;
+        }
+
+        // Call pattern.search(filepath)
+        PyObject* result =
+            PyObject_CallMethod(pattern, "search", "s", filepath);
+        if (result != NULL) {
+            int matched = (result != Py_None);
+            Py_DECREF(result);
+            if (matched) {
+                return 1;  // Found a match
+            }
+        } else {
+            PyErr_Clear();  // Clear any errors from regex matching
+        }
+    }
+
+    return 0;  // No patterns matched
+}
+
 
 // return 0 on success, other on failure and set python error
 static int
@@ -142,6 +207,23 @@ call_stack(SamplerObject* self,
         PyCodeObject* code = PyFrame_GetCode(frame);  // New reference
         PyObject* filename = code->co_filename;
         PyObject* name = code->co_name;
+
+#if PY_VERSION_HEX >= 0x030B00F0
+        name = code->co_qualname;
+#endif
+        // Apply focus_mode filtering
+        if (FOCUS_MODE_ENABLED(self) && is_stdlib_or_third_party(filename)) {
+            Py_DECREF(code);
+            continue;
+        }
+
+        // Apply regex pattern filtering
+        if (!matches_regex_patterns(filename, self->regex_patterns) ||
+            !matches_regex_patterns(name, self->regex_patterns)) {
+            Py_DECREF(code);
+            continue;
+        }
+
         if (IGNORE_SELF_ENABLED(self) &&
             (PyUnicode_Contain(filename, "/site-packages/telepy") ||
              PyUnicode_Contain(filename, "/bin/telepy"))) {
@@ -158,9 +240,6 @@ call_stack(SamplerObject* self,
         int lineno = code->co_firstlineno;
         if (TREE_MODE_ENABLED(self))
             lineno = PyFrame_GetLineNumber(frame);
-#if PY_VERSION_HEX >= 0x030B00F0
-        name = code->co_qualname;
-#endif
         size_t ret = 0;
         const char* format = NULL;
         if (i > 0) {
@@ -582,7 +661,7 @@ Sampler_set_tree_mode(SamplerObject* self,
                       PyObject* value,
                       void* Py_UNUSED(closure)) {
     if (!PyBool_Check(value)) {
-        PyErr_Format(PyExc_TypeError, "ignore_self must be a bool");
+        PyErr_Format(PyExc_TypeError, "tree_mode must be a bool");
         return -1;
     }
     if (Py_IsTrue(value)) {
@@ -590,6 +669,59 @@ Sampler_set_tree_mode(SamplerObject* self,
     } else {
         DISABLE_TREE_MODE(self);
     }
+    return 0;
+}
+
+
+static PyObject*
+Sampler_get_focus_mode(SamplerObject* self, void* Py_UNUSED(closure)) {
+    if (FOCUS_MODE_ENABLED(self)) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
+
+static int
+Sampler_set_focus_mode(SamplerObject* self,
+                       PyObject* value,
+                       void* Py_UNUSED(closure)) {
+    if (!PyBool_Check(value)) {
+        PyErr_Format(PyExc_TypeError, "focus_mode must be a bool");
+        return -1;
+    }
+    if (Py_IsTrue(value)) {
+        ENABLE_FOCUS_MODE(self);
+    } else {
+        DISABLE_FOCUS_MODE(self);
+    }
+    return 0;
+}
+
+
+static PyObject*
+Sampler_get_regex_patterns(SamplerObject* self, void* Py_UNUSED(closure)) {
+    if (self->regex_patterns == NULL) {
+        Py_RETURN_NONE;
+    }
+    return Py_NewRef(self->regex_patterns);
+}
+
+
+static int
+Sampler_set_regex_patterns(SamplerObject* self,
+                           PyObject* value,
+                           void* Py_UNUSED(closure)) {
+    if (value != Py_None && !PyList_Check(value)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "regex_patterns must be a list or None");
+        return -1;
+    }
+
+    Py_XINCREF(value);
+    Py_CLEAR(self->regex_patterns);
+    self->regex_patterns = value;
+
     return 0;
 }
 
@@ -652,6 +784,20 @@ static PyGetSetDef Sampler_getset[] = {
         NULL,
     },
     {
+        "focus_mode",
+        (getter)Sampler_get_focus_mode,
+        (setter)Sampler_set_focus_mode,
+        "focus mode - ignore stdlib and third-party libraries",
+        NULL,
+    },
+    {
+        "regex_patterns",
+        (getter)Sampler_get_regex_patterns,
+        (setter)Sampler_set_regex_patterns,
+        "compiled regex patterns for filtering stack traces",
+        NULL,
+    },
+    {
         "sampling_times",
         (getter)Sampler_get_sampling_times,
         NULL,
@@ -666,6 +812,7 @@ static int
 Sampler_traverse(SamplerObject* self, visitproc visit, void* arg) {
     Py_VISIT(self->sampling_thread);
     Py_VISIT(self->sampling_interval);
+    Py_VISIT(self->regex_patterns);
     return 0;
 }
 
@@ -674,6 +821,7 @@ static void
 Sampler_dealloc(SamplerObject* self) {
     Py_CLEAR(self->sampling_thread);
     Py_CLEAR(self->sampling_interval);
+    Py_CLEAR(self->regex_patterns);
     if (self->tree) {
         FreeTree(self->tree);
     }
@@ -685,6 +833,7 @@ static int
 Sampler_clear(SamplerObject* self) {
     Py_CLEAR(self->sampling_thread);
     Py_CLEAR(self->sampling_interval);
+    Py_CLEAR(self->regex_patterns);
     if (self->tree) {
         FreeTree(self->tree);
         self->tree = NULL;
@@ -703,6 +852,7 @@ Sampler_new(PyTypeObject* type,
     self = (SamplerObject*)type->tp_alloc(type, 0);
     if (self != NULL) {
         self->sampling_thread = NULL;
+        self->regex_patterns = NULL;
         self->sampling_interval = PyLong_FromLong(10000);  // 10ms
         if (!self->sampling_interval) {
             Py_DECREF(self);
@@ -846,6 +996,20 @@ static PyGetSetDef AsyncSampler_getset[] = {
         (getter)Sampler_get_ignore_self,  // share it
         (setter)Sampler_set_ignore_self,  // share it
         "ignore self or not",
+        NULL,
+    },
+    {
+        "focus_mode",
+        (getter)Sampler_get_focus_mode,  // share it
+        (setter)Sampler_set_focus_mode,  // share it
+        "focus mode - ignore stdlib and third-party libraries",
+        NULL,
+    },
+    {
+        "regex_patterns",
+        (getter)Sampler_get_regex_patterns,  // share it
+        (setter)Sampler_set_regex_patterns,  // share it
+        "compiled regex patterns for filtering stack traces",
         NULL,
     },
     {
@@ -1119,6 +1283,7 @@ static PyMethodDef AsyncSampler_methods[] = {
 static int
 AsyncSampler_clear(AsyncSamplerObject* self) {
     Py_CLEAR(self->base.sampling_interval);
+    Py_CLEAR(self->base.regex_patterns);
     Py_CLEAR(self->threading);
     if (self->base.tree) {
         FreeTree(self->base.tree);
@@ -1146,6 +1311,7 @@ AsyncSampler_new(PyTypeObject* type,
     self = (AsyncSamplerObject*)type->tp_alloc(type, 0);
     if (self != NULL) {
         self->base.sampling_tid = 0;
+        self->base.regex_patterns = NULL;
         self->base.sampling_interval = PyLong_FromLong(10000);  // 10ms
         if (!self->base.sampling_interval) {
             Py_DECREF(self);
@@ -1171,6 +1337,7 @@ AsyncSampler_new(PyTypeObject* type,
 static int
 AsyncSampler_traverse(AsyncSamplerObject* self, visitproc visit, void* arg) {
     Py_VISIT(self->base.sampling_interval);
+    Py_VISIT(self->base.regex_patterns);
     // we do need to visit self->base.sampling_thread
     // we do use it in async profiler
     Py_VISIT(self->threading);
