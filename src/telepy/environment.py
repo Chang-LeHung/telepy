@@ -80,45 +80,10 @@ def patch_before_fork():
     assert args is not None
 
 
-def filter_child_args() -> list[str]:
+def get_child_process_args() -> list[str]:
     args = Environment.get_args()
     assert args is not None
-    res = []
-    if args.debug:
-        res.append("--debug")
-    if args.full_path:
-        res.append("--full-path")
-    if not args.merge:
-        res.append("--no-merge")
-    if args.ignore_frozen:
-        res.append("--ignore-frozen")
-    if args.include_telepy:
-        res.append("--include-telepy")
-    if args.focus_mode:
-        res.append("--focus-mode")
-    if args.regex_patterns:
-        for pattern in args.regex_patterns:
-            res.append("--regex-patterns")
-            res.append(pattern)
-    if args.timeout:
-        res.append("--timeout")
-        res.append(str(args.timeout))
-    if args.tree_mode:
-        res.append("--tree-mode")
-    if args.interval:
-        res.append("--interval")
-        res.append(str(args.interval))
-    if args.folded_save:
-        res.append("--folded-save")
-    if args.folded_file:
-        res.append("--folded-file")
-        res.append(args.folded_file)
-    if args.mp:
-        res.append("--mp")
-    if args.fork_server:  # pragma: no cover
-        # nobody writes code to use it.
-        res.append("--fork-server")
-    return res
+    return args.to_cli_args()
 
 
 def patch_multiprocesssing():
@@ -146,7 +111,7 @@ def patch_multiprocesssing():
                 new_args = (
                     args[:idx]
                     + ["-m", "telepy", "--fork-server", "--no-merge"]
-                    + filter_child_args()
+                    + get_child_process_args()
                     + args[idx : idx + 2]
                 )
                 if not parser_args.no_verbose:
@@ -160,7 +125,7 @@ def patch_multiprocesssing():
                 new_args = (
                     args[:idx]
                     + ["-m", "telepy", "--mp"]
-                    + filter_child_args()
+                    + get_child_process_args()
                     + args[idx : idx + 2]
                 )
                 rest = args[idx + 2 :]

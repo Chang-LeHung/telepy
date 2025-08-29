@@ -343,6 +343,50 @@ class TelePySamplerConfig:
             module=getattr(args_namespace, "module", None),
         )
 
+    def to_cli_args(self) -> list[str]:
+        """Convert configuration to command line arguments.
+
+        Returns:
+            A list of command line arguments that represent the current
+            configuration, suitable for passing to child processes.
+        """
+        res = []
+        if self.debug:
+            res.append("--debug")
+        if self.full_path:
+            res.append("--full-path")
+        if not self.merge:
+            res.append("--no-merge")
+        if self.ignore_frozen:
+            res.append("--ignore-frozen")
+        if self.include_telepy:
+            res.append("--include-telepy")
+        if self.focus_mode:
+            res.append("--focus-mode")
+        if self.regex_patterns:
+            for pattern in self.regex_patterns:
+                res.append("--regex-patterns")
+                res.append(pattern)
+        if self.timeout:
+            res.append("--timeout")
+            res.append(str(self.timeout))
+        if self.tree_mode:
+            res.append("--tree-mode")
+        if self.interval:
+            res.append("--interval")
+            res.append(str(self.interval))
+        if self.folded_save:
+            res.append("--folded-save")
+        if self.folded_file:
+            res.append("--folded-file")
+            res.append(self.folded_file)
+        if self.mp:
+            res.append("--mp")
+        if self.fork_server:  # pragma: no cover
+            # nobody writes code to use it.
+            res.append("--fork-server")
+        return res
+
 
 def merge_config_with_args(cmd_args: list[str]) -> list[str]:
     """
