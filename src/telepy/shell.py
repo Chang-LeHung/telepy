@@ -24,7 +24,7 @@ MAX_UNIQUE_COMMANDS: Final = 1000
 
 EXIT_COMMANDS: Final = ["exit", "quit", "q"]
 
-PROMPT: Final = rf""" Welcome to TelePy Shell {__version__}
+PROMPT: Final = rf"""Welcome to TelePy Shell {__version__}
   ______     __     ____           _____ __         ____
  /_  __/__  / /__  / __ \__  __   / ___// /_  ___  / / /
   / / / _ \/ / _ \/ /_/ / / / /   \__ \/ __ \/ _ \/ / /
