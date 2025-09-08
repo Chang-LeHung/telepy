@@ -16,7 +16,7 @@ from pygments.lexers.python import PythonLexer  # type: ignore
 from rich import print
 
 from ._telepysys import __version__
-from .commands import CommandManager
+from .commands import COMMAND_REGISTRY, CommandManager
 
 MAX_HISTORY_SIZE: Final = 10000
 
@@ -24,7 +24,7 @@ MAX_UNIQUE_COMMANDS: Final = 1000
 
 EXIT_COMMANDS: Final = ["exit", "quit", "q"]
 
-PROMPT: Final = rf""" Welcome to TelePy Shell {__version__}
+PROMPT: Final = rf"""Welcome to TelePy Shell {__version__}
   ______     __     ____           _____ __         ____
  /_  __/__  / /__  / __ \__  __   / ___// /_  ___  / / /
   / / / _ \/ / _ \/ /_/ / / / /   \__ \/ __ \/ _ \/ / /
@@ -36,7 +36,11 @@ PROMPT: Final = rf""" Welcome to TelePy Shell {__version__}
 
 class CaseInsensitiveFrequencyCompleter(Completer):
     def __init__(self, history: str | None = None):
-        self.commands = ["help", "exit", "stack", "attach", "shutdown", "ping", "profile"]
+        # Get commands from the global registry and add shell-specific commands
+        registry_commands = list(COMMAND_REGISTRY.keys())
+        shell_commands = ["exit", "attach"]  # Commands specific to shell
+        self.commands = registry_commands + shell_commands
+
         self.history = history
         if not self.history:
             self.history = os.path.join(os.path.expanduser("~"), ".telepy", "history")

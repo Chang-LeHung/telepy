@@ -8,12 +8,41 @@ ERROR_CODE: Final = -1
 
 SUCCESS_CODE: Final = 0
 
+# Global registry for commands
+COMMAND_REGISTRY: dict[str, type["CommandProcessor"]] = {}
+
+
+def register_command(name: str, help_text: str):
+    """
+    Decorator to register a command with the global command registry.
+
+    Args:
+        name: The command name
+        help_text: Help text for this command
+    """
+
+    def decorator(cls: type["CommandProcessor"]) -> type["CommandProcessor"]:
+        cls._command_name = name  # type: ignore
+        cls._help_text = help_text  # type: ignore
+        COMMAND_REGISTRY[name] = cls
+        return cls
+
+    return decorator
+
 
 class CommandProcessor:
+    _command_name: str = ""
+    _help_text: str = ""
+
     def __init__(self, host: str = "127.0.0.1", port: int = 8026, timeout=5) -> None:
         self.host = host
         self.port = port
         self.timeout = timeout
+
+    @classmethod
+    def get_help(cls) -> str:
+        """Return help text for this command."""
+        return getattr(cls, "_help_text", "No help available")
 
     def process(self, *args: str) -> tuple[Any, bool]:  # type: ignore
         """
@@ -49,10 +78,12 @@ class CommandProcessor:
             return f"Error: {e}", False
 
 
+@register_command("shutdown", "shutdown the server")
 class Shutdown(CommandProcessor):
     pass
 
 
+@register_command("stack", "print stack trace of all threads")
 class Stack(CommandProcessor):
     def process(self, *args):
         """
@@ -83,16 +114,19 @@ class Stack(CommandProcessor):
         return msg, ok  # pragma: no cover
 
 
+@register_command("ping", "ping the server")
 class Ping(CommandProcessor):
     pass
 
 
+@register_command("profile", "profile the process")
 class Profile(CommandProcessor):
     def process(self, *args):  # pragma: no cover
         assert args[0] == "profile"
         return super().process(*args)
 
 
+@register_command("help", "show available commands")
 class Help(CommandProcessor):
     def process(self, *args):  # pragma: no cover
         assert len(args) == 1 and args[0] == "help"
@@ -101,14 +135,11 @@ class Help(CommandProcessor):
 
 class CommandManager(CommandProcessor):
     def __init__(self, host: str = "127.0.0.1", port: int = 8026) -> None:
-        # attach is a special command that doesn't need to be processed
-        self.commands: dict[str, CommandProcessor] = {
-            "shutdown": Shutdown(host, port),
-            "stack": Stack(host, port),
-            "ping": Ping(host, port),
-            "profile": Profile(host, port),
-            "help": Help(host, port),
-        }
+        super().__init__(host, port)
+        # Initialize commands from global registry
+        self.commands: dict[str, CommandProcessor] = {}
+        for name, cmd_class in COMMAND_REGISTRY.items():
+            self.commands[name] = cmd_class(host, port)
 
     def process(self, *args: str) -> tuple[str, bool]:  # type: ignore
         assert len(args) > 0
@@ -120,10 +151,10 @@ class CommandManager(CommandProcessor):
 
     @staticmethod
     def help_msg() -> str:
-        return """
-        Available commands:
-            - shutdown - shutdown the server
-            - stack - print stack trace of all threads
-            - ping - ping the server
-            - profile - profile the process
-        """
+        """Generate help message from registered commands."""
+        lines = ["", "Available commands:"]
+        for name, cmd_class in COMMAND_REGISTRY.items():
+            help_text = cmd_class.get_help()
+            lines.append(f"  • {name:<12} - {help_text}")
+        lines.append("")
+        return "\n".join(lines)
