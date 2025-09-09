@@ -218,8 +218,8 @@ call_stack(SamplerObject* self,
         }
 
         // Apply regex pattern filtering
-        if (!matches_regex_patterns(filename, self->regex_patterns) &&
-            !matches_regex_patterns(name, self->regex_patterns)) {
+        if (!matches_regex_patterns(name, self->regex_patterns) &&
+            !matches_regex_patterns(filename, self->regex_patterns)) {
             Py_DECREF(code);
             continue;
         }

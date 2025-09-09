@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shlex
 import site
 
 from IPython.core.interactiveshell import InteractiveShell
@@ -102,15 +103,20 @@ class TelePyMagics(Magics):
         """
         try:
             args = (
-                self._parser.parse_args(line.split())
+                self._parser.parse_args(shlex.split(line))
                 if line
                 else self._parser.parse_args([])
             )
-        except SystemExit:
+        except (SystemExit, ValueError) as e:
             # Show help-like guidance when parsing fails
-            raise ValueError(
-                "Invalid arguments for %%telepy. Check options or run with no args for defaults."  # noqa: E501
-            )
+            if isinstance(e, ValueError):
+                # shlex parsing error (e.g., unmatched quotes)
+                raise ValueError(f"Invalid quote syntax in arguments: {e}")
+            else:
+                # argparse error
+                raise ValueError(
+                    "Invalid arguments for %%telepy. Check options or run with no args for defaults."  # noqa: E501
+                )
 
         sampler = TelepySysAsyncWorkerSampler(
             sampling_interval=args.interval,
