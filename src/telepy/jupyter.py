@@ -43,8 +43,8 @@ from __future__ import annotations
 import argparse
 import os
 import site
-from typing import Any
 
+from IPython.core.interactiveshell import InteractiveShell
 from IPython.core.magic import Magics, cell_magic, magics_class
 from IPython.display import HTML, display
 
@@ -89,7 +89,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 @magics_class
 class TelePyMagics(Magics):
-    def __init__(self, shell):  # type: ignore[no-untyped-def]
+    def __init__(self, shell: InteractiveShell) -> None:
         super().__init__(shell)
         self._parser = _build_parser()
 
@@ -181,11 +181,11 @@ class TelePyMagics(Magics):
         return None
 
 
-def load_ipython_extension(ipython: Any) -> None:
+def load_ipython_extension(ipython: InteractiveShell) -> None:
     """IPython entrypoint: %load_ext telepy.jupyter"""
     ipython.register_magics(TelePyMagics)
 
 
-def unload_ipython_extension(ipython: Any) -> None:  # pragma: no cover
+def unload_ipython_extension(ipython: InteractiveShell) -> None:  # pragma: no cover
     # Nothing persistent to clean up
     pass
