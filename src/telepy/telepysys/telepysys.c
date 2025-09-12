@@ -139,6 +139,26 @@ is_stdlib_or_third_party(PyObject* filename) {
 }
 
 static inline int
+has_content_after_thread_name(const char* buf, Py_ssize_t thread_name_size) {
+    // Check if there's meaningful content after the thread name and semicolon
+    // buf format: "ThreadName;actual_stack_content"
+    // thread_name_size includes the semicolon
+    if (buf == NULL || thread_name_size < 0) {
+        return 0;
+    }
+
+    // Check if there's at least one non-whitespace character after thread name
+    const char* content_start = buf + thread_name_size;
+    if (*content_start != '\0' && *content_start != ' ' &&
+        *content_start != '\t' && *content_start != '\n' &&
+        *content_start != '\r') {
+        return 1;  // Found meaningful content
+    }
+
+    return 0;  // No meaningful content after thread name
+}
+
+static inline int
 matches_regex_patterns(PyObject* filename, PyObject* regex_patterns) {
     if (regex_patterns == NULL || regex_patterns == Py_None) {
         return 1;  // No patterns means match everything
@@ -379,7 +399,9 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
                 Py_DECREF(threads);
                 goto error;
             }
-            AddCallStack(self->tree, buf);
+            if (has_content_after_thread_name(buf, size)) {
+                AddCallStack(self->tree, buf);
+            }
         }
         Py_DECREF(frames);
         Py_DECREF(threads);
@@ -1144,7 +1166,9 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
             Py_XDECREF(frames);
             return NULL;
         }
-        AddCallStack(base->tree, buf);
+        if (has_content_after_thread_name(buf, size)) {
+            AddCallStack(base->tree, buf);
+        }
     }
     PyObject* threads = get_all_threads(threading);  // New reference
     if (threads == NULL || PyErr_Occurred()) {
@@ -1183,7 +1207,9 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
         if (overflow) {
             goto error;
         }
-        AddCallStack(base->tree, buf);
+        if (has_content_after_thread_name(buf, size)) {
+            AddCallStack(base->tree, buf);
+        }
     }
 
     Py_DECREF(frames);

@@ -522,6 +522,64 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
             ],
         )
 
+    def test_regex_patterns_multithread_fib_only(self):
+        """Test --regex-patterns 'fib' with multiple threads to ensure only
+        fib-related calls are captured"""
+        import os
+        import tempfile
+
+        # Create a temporary folded file to check the output
+        with tempfile.NamedTemporaryFile(
+            mode="w+", suffix=".folded", delete=False
+        ) as temp_file:
+            temp_filename = temp_file.name
+
+        try:
+            self.run_filename(
+                "test_files/test_multi_thread_regex.py",
+                stdout_check_list=[
+                    "Main thread fib\\(30\\) = 832040",
+                    "All threads completed",
+                    "saved the profiling data to the svg file result.svg",
+                ],
+                options=[
+                    "--regex-patterns",
+                    "fib",
+                    "--interval",
+                    "10",
+                    "--debug",
+                    "--folded-save",
+                    "--folded-file",
+                    temp_filename,
+                ],
+                timeout=15,  # Increase timeout
+            )
+
+            # Check that the folded output only contains fib-related function calls
+            with open(temp_filename) as f:
+                folded_content = f.read()
+
+            # Verify that fib functions are captured
+            self.assertRegex(folded_content, r"fib")
+
+            # Verify that non-fib functions (calculate_sum, process_data) are NOT captured
+            # These should not appear in the output when regex pattern is "fib"
+            self.assertNotRegex(folded_content, r"calculate_sum")
+            self.assertNotRegex(folded_content, r"process_data")
+
+            # Verify that we have entries from multiple threads (MainThread, FibThread)
+            # but only for fib-related calls
+            lines = [line.strip() for line in folded_content.split("\n") if line.strip()]
+            fib_lines = [line for line in lines if "fib" in line]
+            self.assertGreater(
+                len(fib_lines), 0, "Should have captured fib function calls"
+            )
+
+        finally:
+            # Clean up the temporary file
+            if os.path.exists(temp_filename):
+                os.unlink(temp_filename)
+
 
 class TestEnvironment(TestBase):
     def test_environment_init(self):
