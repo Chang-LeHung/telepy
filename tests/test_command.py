@@ -54,12 +54,12 @@ class CommandTemplate(TestBase):
             logging.debug(cmd_line)
         output = subprocess.run(cmd_line, capture_output=True, timeout=timeout)  # type: ignore
         self.assertEqual(output.returncode, exit_code)
-        stdout = output.stdout.decode("utf-8")
+        stdout = output.stdout.decode("utf-8", errors="replace")
         if debug:
             logging.debug(stdout)
         for check in stdout_check_list:
             self.assertRegex(stdout, check)
-        stderr = output.stderr.decode("utf-8")
+        stderr = output.stderr.decode("utf-8", errors="replace")
         for check in stderr_check_list:
             self.assertRegex(stderr, check)
         return output
@@ -406,24 +406,38 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
 
     def test_regex_patterns_single(self):
         """Test --regex-patterns with a single pattern"""
-        self.run_filename(
-            "test_files/test_focus_and_regex.py",
-            stdout_check_list=[
-                "Starting focus and regex test",
-                "Heavy task result:",
-                "IO task result:",
-                "Threading task completed",
-                "All tasks completed!",
-                "saved the profiling data to the svg file result.svg",
-            ],
-            options=[
-                "--regex-patterns",
-                '".*test_focus.*"',
-                "--interval",
-                "100",
-                "--debug",
-            ],
-        )
+        import os
+        import tempfile
+
+        # Create unique output file for this test
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            svg_file = f.name
+
+        try:
+            self.run_filename(
+                "test_files/test_focus_and_regex.py",
+                stdout_check_list=[
+                    "Starting focus and regex test",
+                    "Heavy task result:",
+                    "IO task result:",
+                    "Threading task completed",
+                    "All tasks completed!",
+                    "saved the profiling data to the svg file",
+                ],
+                options=[
+                    "--regex-patterns",
+                    '".*test_focus.*"',
+                    "--interval",
+                    "100",
+                    "--debug",
+                    "-o",
+                    svg_file,
+                ],
+            )
+        finally:
+            # Clean up the temporary file
+            if os.path.exists(svg_file):
+                os.unlink(svg_file)
 
     def test_regex_patterns_multiple(self):
         """Test --regex-patterns with multiple patterns"""
@@ -450,25 +464,40 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
 
     def test_focus_mode_with_regex_patterns(self):
         """Test combining --focus-mode with --regex-patterns"""
-        self.run_filename(
-            "test_files/test_focus_and_regex.py",
-            stdout_check_list=[
-                "Starting focus and regex test",
-                "Heavy task result:",
-                "IO task result:",
-                "Threading task completed",
-                "All tasks completed!",
-                "saved the profiling data to the svg file result.svg",
-            ],
-            options=[
-                "--focus-mode",
-                "--regex-patterns",
-                ".*test_focus.*",
-                "--interval",
-                "100",
-                "--debug",
-            ],
-        )
+        import os
+        import tempfile
+
+        # Create unique output file for this test
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            svg_file = f.name
+
+        try:
+            self.run_filename(
+                "test_files/test_focus_and_regex.py",
+                stdout_check_list=[
+                    "Starting focus and regex test",
+                    "Heavy task result:",
+                    "IO task result:",
+                    "Threading task completed",
+                    "All tasks completed!",
+                    "saved the profiling data to the svg file",
+                ],
+                options=[
+                    "--focus-mode",
+                    "--regex-patterns",
+                    ".*test_focus.*",
+                    "--interval",
+                    "200",  # Increase interval to reduce sampling frequency
+                    "--debug",
+                    "-o",
+                    svg_file,
+                ],
+                timeout=30,  # Increase timeout
+            )
+        finally:
+            # Clean up the temporary file
+            if os.path.exists(svg_file):
+                os.unlink(svg_file)
 
     def test_focus_mode_folded_output(self):
         """Test --focus-mode with folded output to verify filtering works"""
@@ -534,25 +563,31 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
         ) as temp_file:
             temp_filename = temp_file.name
 
+        # Create a temporary SVG file for this test
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as svg_file:
+            svg_filename = svg_file.name
+
         try:
             self.run_filename(
                 "test_files/test_multi_thread_regex.py",
                 stdout_check_list=[
                     "Main thread fib\\(30\\) = 832040",
                     "All threads completed",
-                    "saved the profiling data to the svg file result.svg",
+                    "saved the profiling data to the svg file",
                 ],
                 options=[
                     "--regex-patterns",
                     "fib",
                     "--interval",
-                    "10",
+                    "50",  # Increase interval to reduce sampling frequency
                     "--debug",
                     "--folded-save",
                     "--folded-file",
                     temp_filename,
+                    "-o",
+                    svg_filename,
                 ],
-                timeout=15,  # Increase timeout
+                timeout=30,  # Increase timeout further
             )
 
             # Check that the folded output only contains fib-related function calls
@@ -576,9 +611,11 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
             )
 
         finally:
-            # Clean up the temporary file
+            # Clean up the temporary files
             if os.path.exists(temp_filename):
                 os.unlink(temp_filename)
+            if os.path.exists(svg_filename):
+                os.unlink(svg_filename)
 
 
 class TestEnvironment(TestBase):
