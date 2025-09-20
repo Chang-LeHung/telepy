@@ -159,7 +159,6 @@ class TelePyMagics(Magics):
 
         fg = FlameGraph(
             lines,
-            reverse=False,
             height=args.height,
             width=args.width,
             minwidth=args.minwidth,

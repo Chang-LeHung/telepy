@@ -394,7 +394,7 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
         )
         f.close()
         self.run_command(
-            options=[f"{f.name}", "--parse", "--debug", "--reverse"],
+            options=[f"{f.name}", "--parse", "--debug"],
         )
         os.unlink(f.name)
         os.unlink("result.svg")

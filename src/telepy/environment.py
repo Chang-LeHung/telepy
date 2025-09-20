@@ -401,7 +401,6 @@ class FlameGraphSaver:
         fg = FlameGraph(
             self.lines,
             title=TITLE,
-            reverse=self.args.reverse,
             command=" ".join([sys.executable, *sys.argv]),
             package_path=os.path.dirname(self.site_path),
             work_dir=self.work_dir,

@@ -8,17 +8,6 @@ Similar to Brendan Gregg's flamegraph.pl, but implemented in pure Python.
 Usage:
   python flamegraph.py [options] input_file > output.svg
 
-Options:
-  --title TEXT      Set title of flame graph
-  --width NUM       Width of SVG image (default 1200)
-  --height NUM      Height per sample (default 15)
-  --minwidth NUM    Omit smaller functions (in pixels)
-  --palette         Color palette (hot, mem, io, wakeup, chain, python)
-  --countname TEXT  Count type label (samples, bytes, etc.)
-  --reverse         Generate reverse flame graph
-  --inverted        Generate icicle graph
-  --flamechart      Generate flame chart (sort by time, not alphabetically)
-
 Input format:
   Each line should contain a semicolon-separated stack trace followed by a space and a count:
     func_a;func_b;func_c 100
@@ -132,7 +121,7 @@ class FlameGraph:
 
             frames = stack.split(";")
 
-            self.stacks[";".join(frames)] += count
+            self.stacks[stack] += count
             self.total_samples += count
             self.max_depth = max(self.max_depth, len(frames))
 

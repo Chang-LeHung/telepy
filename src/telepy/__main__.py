@@ -103,9 +103,7 @@ class StackTraceHandler(ArgsHandler):
         return False
 
     def parse_stack_trace(self, args: argparse.Namespace) -> None:
-        flamegraph = FlameGraph(
-            [line for line in args.input[0] if line.strip() != ""], reverse=args.reverse
-        )
+        flamegraph = FlameGraph([line for line in args.input[0] if line.strip() != ""])
         flamegraph.parse_input()
         svg = flamegraph.generate_svg()
 

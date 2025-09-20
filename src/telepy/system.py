@@ -113,7 +113,6 @@ class TelePySystem:
         fg = FlameGraph(
             lines,
             title=title,
-            reverse=False,
             command=" ".join([sys.executable, *sys.argv]),
             package_path=os.path.dirname(site_path),
             work_dir=os.getcwd(),
