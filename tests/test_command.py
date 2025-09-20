@@ -771,3 +771,37 @@ class TestFlameGraph(TestBase):
         self.assertEqual(node.name, "test")
         self.assertEqual(str(node), "test (0)")
         self.assertEqual(repr(node), "test (0)")
+
+    def test_flamegraph_svg_caching(self):
+        """Test that generate_svg() caches results and only executes once"""
+        from telepy.flamegraph import FlameGraph
+
+        # Sample stack trace data
+        test_lines = ["main;func_a;func_b 10", "main;func_a;func_c 5", "main;func_d 3"]
+
+        flamegraph = FlameGraph(test_lines)
+        flamegraph.parse_input()
+
+        # Verify initial state
+        self.assertFalse(flamegraph._svg_generated)
+        self.assertEqual(flamegraph._cached_svg, "")
+
+        # First call should generate SVG
+        svg1 = flamegraph.generate_svg()
+        self.assertTrue(flamegraph._svg_generated)
+        self.assertEqual(flamegraph._cached_svg, svg1)
+        self.assertIn("main", svg1)  # Verify SVG contains expected content
+        self.assertIn("func_a", svg1)
+
+        # Second call should return cached result
+        svg2 = flamegraph.generate_svg()
+        self.assertEqual(svg1, svg2)  # Should be identical
+
+        # Third call should also return cached result
+        svg3 = flamegraph.generate_svg()
+        self.assertEqual(svg1, svg3)  # Should still be identical
+
+        # Verify the SVG is valid (contains expected SVG structure)
+        self.assertIn('<?xml version="1.0"', svg1)
+        self.assertIn("<svg", svg1)
+        self.assertIn("</svg>", svg1)

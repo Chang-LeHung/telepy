@@ -69,7 +69,6 @@ class FlameGraph:
     def __init__(
         self,
         lines: list[str],
-        reverse: bool = False,
         height: int = 15,
         width: int = 1200,
         minwidth: float = 0.1,
@@ -83,7 +82,6 @@ class FlameGraph:
 
         Args:
             lines (list[str]): List of stack trace lines to process.
-            reverse (bool): If True, reverse the stack order (default: False).
             height (int): Height of the flame graph in lines (default: 15).
             width (int): Width of the flame graph in characters (default: 1200).
             minwidth (float): Minimum width percentage for a frame to be shown (default: 0.1).
@@ -95,7 +93,6 @@ class FlameGraph:
             output_file (str): Path to save the output flame graph.
         """  # noqa: E501
         self.lines = lines
-        self.reverse = reverse
         self.height = height
         self.width = width
         self.minwidth = minwidth
@@ -107,9 +104,14 @@ class FlameGraph:
         self.stacks: dict[str, int] = defaultdict(int)
         self.total_samples = 0
         self.max_depth = 0
+        self._svg_generated = False
+        self._cached_svg = ""
 
-    def parse_input(self) -> None:
-        """Parse input file and aggregate stack counts"""
+    def _parse_input(self) -> None:
+        """Parse input file and aggregate stack counts.
+        Example input line:
+            func_a;func_b;func_c 100
+        """
         for line in self.lines:
             line = line.strip()
             if not line:  # pragma: no cover
@@ -130,18 +132,19 @@ class FlameGraph:
 
             frames = stack.split(";")
 
-            if self.reverse:
-                frames.reverse()
-
             self.stacks[";".join(frames)] += count
             self.total_samples += count
             self.max_depth = max(self.max_depth, len(frames))
+
+    def parse_input(self) -> None:
+        """Public interface for parsing input - delegates to private method."""
+        self._parse_input()
 
     @property
     def sample_count(self):
         return self.total_samples
 
-    def build_call_tree(self):
+    def _build_call_tree(self):
         """Builds a call tree from collected stack traces.
 
         Processes each stack trace in self.stacks, splitting it into individual frames
@@ -171,7 +174,9 @@ class FlameGraph:
 
         return root
 
-    def layout_tree(self, node: Node, x: float, scale: float, L: float, R: float) -> None:
+    def _layout_tree(
+        self, node: Node, x: float, scale: float, L: float, R: float
+    ) -> None:
         """Recursively layout a flame graph tree node and its children.
 
         Args:
@@ -197,10 +202,10 @@ class FlameGraph:
 
         current_x = x
         for child in sorted_children:
-            self.layout_tree(child, current_x, scale, node.x, node.x + node.width)
+            self._layout_tree(child, current_x, scale, node.x, node.x + node.width)
             current_x -= child.width
 
-    def collect_nodes_by_depth(self, root: Node) -> dict[int, list[Node]]:
+    def _collect_nodes_by_depth(self, root: Node) -> dict[int, list[Node]]:
         """Collect nodes grouped by their depth using BFS traversal.
 
         Args:
@@ -226,14 +231,17 @@ class FlameGraph:
 
     def generate_svg(self) -> str:
         """Generate SVG flame graph with proper layout"""
-        root = self.build_call_tree()
+        if self._svg_generated:
+            return self._cached_svg
+
+        root = self._build_call_tree()
         root.total = max(1, root.total)
         self.total_samples = max(1, self.total_samples)
         scale = (self.width - 20) / root.total
         root.depth = 1
-        self.layout_tree(root, self.width - 10, scale, 10, self.width - 10)
+        self._layout_tree(root, self.width - 10, scale, 10, self.width - 10)
 
-        nodes_by_depth = self.collect_nodes_by_depth(root)
+        nodes_by_depth = self._collect_nodes_by_depth(root)
         max_depth = max(nodes_by_depth.keys()) if nodes_by_depth else 0
         height = max_depth * self.height + 170
 
@@ -265,7 +273,7 @@ class FlameGraph:
             ".parent { opacity: 0.5; }",
             "</style>",
             '<script type="text/ecmascript">\n<![CDATA[',
-            self.get_javascript(),
+            self._get_javascript(),
             "]]>\n</script>",
             f'<rect x="0" y="0" width="{self.width}" height="{height}" fill="url(#background)" rx="2" ry="2" />',  # noqa: E501
             f'<text id="title" x="{self.width // 2}" y="24">{self.title}</text>',
@@ -287,8 +295,8 @@ class FlameGraph:
                 if width < self.minwidth:  # pragma: no cover
                     continue
 
-                color = self.get_color(node.name)
-                text = self.trim_text(node.name, width)
+                color = self._get_color(node.name)
+                text = self._trim_text(node.name, width)
 
                 frame_svg = [
                     "<g>",
@@ -300,9 +308,11 @@ class FlameGraph:
                 svg.extend(frame_svg)
 
         svg.extend(["</g>", "</svg>"])
-        return "\n".join(svg)
+        self._cached_svg = "\n".join(svg)
+        self._svg_generated = True
+        return self._cached_svg
 
-    def get_color(self, frame):
+    def _get_color(self, frame):
         """Generate color for frame based on its name"""
         # Hash function name to get consistent color
         hash_val = int(hashlib.md5(frame.encode()).hexdigest()[:8], 16)
@@ -311,7 +321,7 @@ class FlameGraph:
         lum = 65 + (hash_val % 10)
         return f"hsl({hue}, {sat}%, {lum}%)"
 
-    def trim_text(self, text: str, width: float) -> str:
+    def _trim_text(self, text: str, width: float) -> str:
         """Trim text to fit in the given width"""
         if width / 6.5 < 3:
             return ""
@@ -320,7 +330,7 @@ class FlameGraph:
         max_chars = int(width / 6.5) - 2
         return text[:max_chars] + ".."
 
-    def get_javascript(self):
+    def _get_javascript(self):
         """Return the JavaScript code for interactive features"""
         base = os.path.dirname(os.path.abspath(__file__))
         script = os.path.join(base, "script.js")
@@ -367,9 +377,6 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("--height", type=int, default=15, help="Frame height")
     parser.add_argument("--minwidth", type=float, default=0.1, help="Minimum frame width")
     parser.add_argument("--countname", default="samples", help="Count type label")
-    parser.add_argument(
-        "--reverse", action="store_true", help="Generate reverse flame graph"
-    )
     parser.add_argument("-o", "--output", help="Output file (default: result.svg)")
 
     args = parser.parse_args()
@@ -378,7 +385,6 @@ def main() -> None:  # pragma: no cover
         process_stack_trace(
             args.input.readlines(), site.getsitepackages()[0], os.getcwd()
         ),
-        reverse=args.reverse,
         height=args.height,
         width=args.width,
         minwidth=args.minwidth,
