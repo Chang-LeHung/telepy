@@ -56,7 +56,7 @@ from .sampler import TelepySysAsyncWorkerSampler
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
     # Sampler options
-    parser.add_argument("--interval", type=int, default=8000)
+    parser.add_argument("-i", "--interval", type=int, default=8000)
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--ignore-frozen", action="store_true", default=False)
     parser.add_argument("--include-telepy", action="store_true", default=False)
