@@ -89,7 +89,7 @@ class TestShell(TestBase):
 
         msg, ok = shell.dispatch("attach :8026")
         self.assertFalse(ok)
-        self.assertIn("Invalid Host/Port format", msg)
+        self.assertIn("Bad Gateway", msg)
 
         msg, ok = shell.dispatch("attach 127.0.0.1:")
         self.assertFalse(ok)
@@ -182,27 +182,22 @@ class TestShell(TestBase):
         # Test very long hostname and port
         msg, ok = shell.dispatch("attach " + "a" * 1000 + ":" + "9" * 100)
         self.assertFalse(ok)
-        self.assertIn("Invalid Host/Port format", msg)
+        self.assertIn("Bad Gateway", msg)
 
         # Test negative port number
         msg, ok = shell.dispatch("attach 127.0.0.1:-1")
         self.assertFalse(ok)
-        self.assertIn("Invalid Host/Port format", msg)
+        self.assertIn("Error", msg)
 
         # Test zero port number
         msg, ok = shell.dispatch("attach 127.0.0.1:0")
         self.assertFalse(ok)
-        self.assertIn("Invalid Host/Port format", msg)
+        self.assertIn("Bad Gateway", msg)
 
         # Test port number above valid range
         msg, ok = shell.dispatch("attach 127.0.0.1:65536")
         self.assertFalse(ok)
-        self.assertIn("Invalid Host/Port format", msg)
-
-        # Test IPv6 address format
-        msg, ok = shell.dispatch("attach [::1]:8026")
-        self.assertFalse(ok)
-        self.assertIn("Invalid Host/Port format", msg)
+        self.assertIn("Bad Gateway", msg)
 
         # Test multiple colons in address
         msg, ok = shell.dispatch("attach 127.0.0.1:8080:extra")

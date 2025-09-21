@@ -42,11 +42,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import shlex
 import site
-from typing import Any
 
+from IPython.core.interactiveshell import InteractiveShell
 from IPython.core.magic import Magics, cell_magic, magics_class
-from IPython.display import HTML, display
+from IPython.display import SVG, display
 
 from .flamegraph import FlameGraph, process_stack_trace
 from .sampler import TelepySysAsyncWorkerSampler
@@ -55,7 +56,7 @@ from .sampler import TelepySysAsyncWorkerSampler
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
     # Sampler options
-    parser.add_argument("--interval", type=int, default=8000)
+    parser.add_argument("-i", "--interval", type=int, default=8000)
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--ignore-frozen", action="store_true", default=False)
     parser.add_argument("--include-telepy", action="store_true", default=False)
@@ -89,7 +90,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 @magics_class
 class TelePyMagics(Magics):
-    def __init__(self, shell):  # type: ignore[no-untyped-def]
+    def __init__(self, shell: InteractiveShell) -> None:
         super().__init__(shell)
         self._parser = _build_parser()
 
@@ -102,15 +103,20 @@ class TelePyMagics(Magics):
         """
         try:
             args = (
-                self._parser.parse_args(line.split())
+                self._parser.parse_args(shlex.split(line))
                 if line
                 else self._parser.parse_args([])
             )
-        except SystemExit:
+        except (SystemExit, ValueError) as e:
             # Show help-like guidance when parsing fails
-            raise ValueError(
-                "Invalid arguments for %%telepy. Check options or run with no args for defaults."  # noqa: E501
-            )
+            if isinstance(e, ValueError):
+                # shlex parsing error (e.g., unmatched quotes)
+                raise ValueError(f"Invalid quote syntax in arguments: {e}")
+            else:
+                # argparse error
+                raise ValueError(
+                    "Invalid arguments for %%telepy. Check options or run with no args for defaults."  # noqa: E501
+                )
 
         sampler = TelepySysAsyncWorkerSampler(
             sampling_interval=args.interval,
@@ -153,7 +159,6 @@ class TelePyMagics(Magics):
 
         fg = FlameGraph(
             lines,
-            reverse=False,
             height=args.height,
             width=args.width,
             minwidth=args.minwidth,
@@ -171,21 +176,21 @@ class TelePyMagics(Magics):
 
         # Render inline only (no text output)
         try:
-            display(HTML(svg))
+            display(SVG(svg))
         except Exception:
             # Fallback to raw HTML if SVG wrapper fails
-            display(HTML(svg))
+            display(SVG(svg))
         if getattr(args, "var", None):
             # Save SVG string to a notebook variable, without printing
             self.shell.user_ns[args.var] = svg  # type: ignore[attr-defined]
         return None
 
 
-def load_ipython_extension(ipython: Any) -> None:
+def load_ipython_extension(ipython: InteractiveShell) -> None:
     """IPython entrypoint: %load_ext telepy.jupyter"""
     ipython.register_magics(TelePyMagics)
 
 
-def unload_ipython_extension(ipython: Any) -> None:  # pragma: no cover
+def unload_ipython_extension(ipython: InteractiveShell) -> None:  # pragma: no cover
     # Nothing persistent to clean up
     pass

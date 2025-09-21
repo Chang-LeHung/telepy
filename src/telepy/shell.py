@@ -150,7 +150,7 @@ class TelePyShell:
                     res, ok = self.cmd_manager.process("ping")
                     if not ok or res != "pong":
                         return (
-                            f"Invalid Host/Port format {cmd}.",
+                            res,
                             False,
                         )
                     self.state = ShellState.ATTACHED

@@ -1,7 +1,7 @@
 
 PKG_NAME = $(shell python setup.py --name)
 
-build: compile_commands
+build:
 	@python -m build
 
 build_debug: compile_commands

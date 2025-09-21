@@ -103,9 +103,7 @@ class StackTraceHandler(ArgsHandler):
         return False
 
     def parse_stack_trace(self, args: argparse.Namespace) -> None:
-        flamegraph = FlameGraph(
-            [line for line in args.input[0] if line.strip() != ""], reverse=args.reverse
-        )
+        flamegraph = FlameGraph([line for line in args.input[0] if line.strip() != ""])
         flamegraph.parse_input()
         svg = flamegraph.generate_svg()
 
@@ -407,12 +405,6 @@ def main():
         default=10,
         help="Timeout (in seconds) for parent process to wait for child processes"
         " to merge flamegraph files (default: 10).",
-    )
-    parser.add_argument(
-        "-r",
-        "--reverse",
-        action="store_true",
-        help=argparse.SUPPRESS,  # TODO: implement it!
     )
     parser.add_argument(
         "--tree-mode",
