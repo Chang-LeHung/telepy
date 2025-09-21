@@ -47,7 +47,7 @@ import site
 
 from IPython.core.interactiveshell import InteractiveShell
 from IPython.core.magic import Magics, cell_magic, magics_class
-from IPython.display import HTML, display
+from IPython.display import SVG, display
 
 from .flamegraph import FlameGraph, process_stack_trace
 from .sampler import TelepySysAsyncWorkerSampler
@@ -176,10 +176,10 @@ class TelePyMagics(Magics):
 
         # Render inline only (no text output)
         try:
-            display(HTML(svg))
+            display(SVG(svg))
         except Exception:
             # Fallback to raw HTML if SVG wrapper fails
-            display(HTML(svg))
+            display(SVG(svg))
         if getattr(args, "var", None):
             # Save SVG string to a notebook variable, without printing
             self.shell.user_ns[args.var] = svg  # type: ignore[attr-defined]
