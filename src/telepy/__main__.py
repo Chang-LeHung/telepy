@@ -407,12 +407,6 @@ def main():
         " to merge flamegraph files (default: 10).",
     )
     parser.add_argument(
-        "-r",
-        "--reverse",
-        action="store_true",
-        help=argparse.SUPPRESS,  # TODO: implement it!
-    )
-    parser.add_argument(
         "--tree-mode",
         action="store_true",
         help="Using call site line number instead of the first line of function(method).",
