@@ -292,7 +292,7 @@ class _FunctionProfiler:
 
         # Get the raw profiling data
         content = self._sampler.dumps()
-        lines = content.splitlines()[:-1]  # Remove last empty line
+        lines = content.splitlines()  # No more last empty line
 
         if truncate and self.function_name:
             # Filter lines to only include stacks that contain the target function

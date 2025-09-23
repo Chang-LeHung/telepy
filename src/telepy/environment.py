@@ -390,7 +390,7 @@ class FlameGraphSaver:
         self.site_path = site.getsitepackages()[0]
         self.work_dir = os.getcwd()
         self.title = TITLE
-        self.lines = sampler.dumps().splitlines()[:-1]  # ignore last empty line
+        self.lines = sampler.dumps().splitlines()  # no more last empty line
         if not self.args.full_path:  # type : ignore
             self.lines = process_stack_trace(self.lines, self.site_path, self.work_dir)
 

@@ -329,7 +329,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         """
         content = self.dumps()
         with open(filename, "w") as f:
-            f.write(content[:-1])  #   remove the last new line
+            f.write(content)  # no need to remove last newline anymore
 
     @override
     def start(self) -> None:
@@ -442,7 +442,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         """
         content = self.dumps()
         with open(filename, "w") as f:
-            f.write(content[:-1])  #   remove the last new line
+            f.write(content)  # no need to remove last newline anymore
 
     @property
     def started(self):

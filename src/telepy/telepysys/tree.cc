@@ -105,6 +105,8 @@ struct StackTree {
 
     void Save(std::ostream& out) {
         std::vector<std::string> res;
+        std::string output_buffer;
+        
         std::function<void(Node*)> f = [&](Node* node) {
             if (node == nullptr) {
                 return;
@@ -119,12 +121,14 @@ struct StackTree {
 
             if (node->cnt > 0) {
                 for (size_t i = 0; i < res.size(); ++i) {
-                    out << res[i];
+                    output_buffer += res[i];
                     if (i + 1 < res.size()) {
-                        out << DLIM;
+                        output_buffer += DLIM;
                     }
                 }
-                out << ' ' << node->cnt << '\n';
+                output_buffer += ' ';
+                output_buffer += std::to_string(node->cnt);
+                output_buffer += '\n';
             }
 
             if (node->name != NAME) {
@@ -134,6 +138,13 @@ struct StackTree {
             f(node->sibling);
         };
         f(root);
+        
+        // Remove the last character if it's a newline
+        if (!output_buffer.empty() && output_buffer.back() == '\n') {
+            output_buffer.pop_back();
+        }
+        
+        out << output_buffer;
     }
 
     virtual ~StackTree() { delete root; }
@@ -216,7 +227,7 @@ TestCaseSingle() {
     tree->AddCallStack("main.py;hello;world");
     std::ostringstream s;
     tree->Save(s);
-    assert(s.str() == "main.py;hello;world 4\n");
+    assert(s.str() == "main.py;hello;world 4");
     std::cout << SuccessMessage("Test case single stack trace passed")
               << std::endl;
     delete tree;
@@ -232,7 +243,7 @@ TestCaseMultiply() {
     tree->AddCallStack("main.py;hello;world");
     std::ostringstream s;
     tree->Save(s);
-    assert(s.str() == "main.py;hello;world 3\nmain.py;hello;x 1\n");
+    assert(s.str() == "main.py;hello;world 3\nmain.py;hello;x 1");
     std::cout << SuccessMessage("Test case multiply stack traces passed")
               << std::endl;
     delete tree;
@@ -265,7 +276,7 @@ TestCaseOrderExchange() {
     std::string res = "main.py;hello;x 8\n";
     res += "main.py;hello;b 6\n";
     res += "main.py;hello;world 3\n";
-    res += "main.py;hello;c 1\n";
+    res += "main.py;hello;c 1";
     assert(s.str() == res);
     std::cout << SuccessMessage("Test case order exchange passed")
               << std::endl;
@@ -288,7 +299,7 @@ TestCaseComplicated() {
     std::string res = "MainThread;main.py;hello;world 2\n";
     res += "main.py;hello;world 2\n";
     res += "main.py;hello;x 1\n";
-    res += "main.py;hello;b 1\n";
+    res += "main.py;hello;b 1";
     assert(s.str() == res);
     std::cout << SuccessMessage("Test case complicated passed") << std::endl;
     delete tree;
