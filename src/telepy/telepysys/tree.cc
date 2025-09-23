@@ -4,10 +4,10 @@
 #include <cassert>
 #include <condition_variable>
 #include <cstdlib>
-#include <fstream>
-#include <iostream>
-#include <functional>
 #include <cstring>
+#include <fstream>
+#include <functional>
+#include <iostream>
 #include <mutex>
 #include <queue>
 #include <sstream>
@@ -106,7 +106,7 @@ struct StackTree {
     void Save(std::ostream& out) {
         std::vector<std::string> res;
         std::string output_buffer;
-        
+
         std::function<void(Node*)> f = [&](Node* node) {
             if (node == nullptr) {
                 return;
@@ -138,12 +138,12 @@ struct StackTree {
             f(node->sibling);
         };
         f(root);
-        
+
         // Remove the last character if it's a newline
         if (!output_buffer.empty() && output_buffer.back() == '\n') {
             output_buffer.pop_back();
         }
-        
+
         out << output_buffer;
     }
 
