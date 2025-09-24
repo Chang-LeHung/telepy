@@ -248,7 +248,7 @@ class SamplerMixin(ABC):
         return compiled_patterns
 
 
-# DEPRECATED: Use TelepySysAsyncWorkerSampler instead.
+# Deprecated: Use TelepySysAsyncWorkerSampler instead.
 class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
     """
     Inherited sampler for TelepySys.
