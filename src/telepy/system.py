@@ -124,5 +124,5 @@ class TelePySystem:
         folded_filename = folded_filename or f"{filename}.folded"
         if save_folded:
             with open(folded_filename, "w") as f:
-                f.writelines([line + "\n" for line in lines])
+                f.write("\n".join(lines))
         return os.path.abspath(filename), os.path.abspath(folded_filename)
