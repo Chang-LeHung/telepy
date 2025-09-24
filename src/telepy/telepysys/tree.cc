@@ -105,7 +105,7 @@ struct StackTree {
 
     void Save(std::ostream& out) {
         std::vector<std::string> res;
-        std::string output_buffer;
+        bool first_output = true;
 
         std::function<void(Node*)> f = [&](Node* node) {
             if (node == nullptr) {
@@ -120,15 +120,19 @@ struct StackTree {
             f(node->child);
 
             if (node->cnt > 0) {
+                // Add newline before output if this is not the first line
+                if (!first_output) {
+                    out << '\n';
+                }
+                first_output = false;
+
                 for (size_t i = 0; i < res.size(); ++i) {
-                    output_buffer += res[i];
+                    out << res[i];
                     if (i + 1 < res.size()) {
-                        output_buffer += DLIM;
+                        out << DLIM;
                     }
                 }
-                output_buffer += ' ';
-                output_buffer += std::to_string(node->cnt);
-                output_buffer += '\n';
+                out << ' ' << node->cnt;
             }
 
             if (node->name != NAME) {
@@ -138,13 +142,6 @@ struct StackTree {
             f(node->sibling);
         };
         f(root);
-
-        // Remove the last character if it's a newline
-        if (!output_buffer.empty() && output_buffer.back() == '\n') {
-            output_buffer.pop_back();
-        }
-
-        out << output_buffer;
     }
 
     virtual ~StackTree() { delete root; }
