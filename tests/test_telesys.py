@@ -175,7 +175,7 @@ class TestSampler(TestBase):
         t2.join()
         sampler.stop()
         sampler.join_sampling_thread()
-        result = sampler.dumps()[:-1]  # eliminate newline
+        result = sampler.dumps()  # no need to eliminate newline anymore
         self.assertIn("fib", result)
         self.assertIn("MainThread", result)
         self.assertIn("Thread-", result)

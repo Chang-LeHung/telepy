@@ -46,6 +46,21 @@ class SamplerMiddleware(ABC):
         """
         pass
 
+    def process_dump(
+        self, sampler: "TelepySysAsyncSampler | TelepySysSampler", dump_str: str
+    ) -> str | None:
+        """Process the dump string before it's returned.
+
+        Args:
+            sampler: The sampler instance that produced the dump.
+            dump_str: The original dump string from the sampler.
+
+        Returns:
+            str: A processed dump string to use instead of the original.
+            None: Use the original dump string unchanged.
+        """
+        return None
+
 
 class MultiProcessEnv:
     """
@@ -322,6 +337,30 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         """
         return self.acc_sampling_time / self.sampler_life_time
 
+    def dumps(self) -> str:
+        """Get the sampler data as a string, processed through middleware.
+
+        Returns:
+            str: The sampler data, potentially processed by middleware.
+        """
+        # Get the original dump from the parent class
+        original_dump = super().dumps()
+
+        # Process through middleware
+        with self._middleware_lock:
+            middleware_list = self._middleware.copy()
+
+        result = original_dump
+        for middleware in middleware_list:
+            try:
+                processed = middleware.process_dump(self, result)
+                if processed is not None:
+                    result = processed
+            except Exception as e:
+                print(f"Warning: Middleware {middleware} failed in process_dump: {e}")
+
+        return result
+
     @override
     def save(self, filename: str) -> None:
         """
@@ -329,7 +368,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         """
         content = self.dumps()
         with open(filename, "w") as f:
-            f.write(content[:-1])  #   remove the last new line
+            f.write(content)  # no need to remove last newline anymore
 
     @override
     def start(self) -> None:
@@ -442,7 +481,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         """
         content = self.dumps()
         with open(filename, "w") as f:
-            f.write(content[:-1])  #   remove the last new line
+            f.write(content)  # no need to remove last newline anymore
 
     @property
     def started(self):
@@ -450,6 +489,30 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         Return True if the sampler is started.
         """
         return self.enabled()
+
+    def dumps(self) -> str:
+        """Get the sampler data as a string, processed through middleware.
+
+        Returns:
+            str: The sampler data, potentially processed by middleware.
+        """
+        # Get the original dump from the parent class
+        original_dump = super().dumps()
+
+        # Process through middleware
+        with self._middleware_lock:
+            middleware_list = self._middleware.copy()
+
+        result = original_dump
+        for middleware in middleware_list:
+            try:
+                processed = middleware.process_dump(self, result)
+                if processed is not None:
+                    result = processed
+            except Exception as e:
+                print(f"Warning: Middleware {middleware} failed in process_dump: {e}")
+
+        return result
 
     @override
     def start(self) -> None:
