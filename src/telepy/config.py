@@ -192,7 +192,7 @@ class TelePySamplerConfig:
         output: str = "result.svg",
         folded_file: str = "result.folded",
         folded_save: bool = False,
-    width: int = 1200,
+        width: int = 1200,
         # Process handling
         merge: bool = True,
         mp: bool = False,
