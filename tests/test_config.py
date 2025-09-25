@@ -300,6 +300,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         # Check defaults for unspecified parameters
         self.assertEqual(config.timeout, 10)  # default
         self.assertFalse(config.tree_mode)  # default
+        self.assertFalse(config.inverted)  # default
         self.assertEqual(config.folded_file, "result.folded")  # default
 
     def test_init_with_defaults(self):
@@ -312,6 +313,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertFalse(config.debug)
         self.assertFalse(config.full_path)
         self.assertFalse(config.tree_mode)
+        self.assertFalse(config.inverted)
         self.assertFalse(config.reverse)
         self.assertFalse(config.ignore_frozen)
         self.assertFalse(config.include_telepy)
@@ -343,6 +345,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         args.debug = True
         args.full_path = True
         args.tree_mode = False
+        args.inverted = True
         args.reverse = True
         args.ignore_frozen = True
         args.include_telepy = False
@@ -366,6 +369,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertTrue(config.debug)
         self.assertTrue(config.full_path)
         self.assertFalse(config.tree_mode)
+        self.assertTrue(config.inverted)
         self.assertTrue(config.reverse)
         self.assertTrue(config.ignore_frozen)
         self.assertFalse(config.include_telepy)
@@ -400,6 +404,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertEqual(config.timeout, 10)  # default
         self.assertFalse(config.full_path)  # default
         self.assertFalse(config.tree_mode)  # default
+        self.assertFalse(config.inverted)  # default
         self.assertEqual(config.folded_file, "result.folded")  # default
         self.assertTrue(config.merge)  # default
         self.assertFalse(config.mp)  # default
@@ -415,6 +420,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertEqual(config.timeout, 10)
         self.assertFalse(config.debug)
         self.assertEqual(config.output, "result.svg")
+        self.assertFalse(config.inverted)
         self.assertTrue(config.merge)
 
     def test_parameter_types(self):
@@ -444,6 +450,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
             debug=True,
             full_path=True,
             tree_mode=True,
+            inverted=True,
             reverse=False,
             # Filtering options
             ignore_frozen=True,
@@ -472,6 +479,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertTrue(config.debug)
         self.assertTrue(config.full_path)
         self.assertTrue(config.tree_mode)
+        self.assertTrue(config.inverted)
         self.assertFalse(config.reverse)
         self.assertTrue(config.ignore_frozen)
         self.assertTrue(config.include_telepy)
@@ -512,6 +520,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
                 self.debug = False
                 self.full_path = False
                 self.tree_mode = False
+                self.inverted = False
                 self.reverse = False
                 self.ignore_frozen = False
                 self.include_telepy = False

@@ -126,6 +126,13 @@ def profile(req: TelePyRequest, resp: TelePyResponse):
             default=None,
             help="Filename to save the flame graph",
         )
+        parser.add_argument(
+            "--inverted",
+            action="store_true",
+            default=False,
+            help="Render flame graphs with the root frame at the top "
+            "(inverted orientation)",
+        )
         return parser
 
     args = req.headers["args"].split()
@@ -170,6 +177,7 @@ def profile(req: TelePyRequest, resp: TelePyResponse):
                 filename=parse_args.filename,
                 save_folded=parse_args.save_folded,
                 folded_filename=parse_args.folded_filename,
+                inverted=parse_args.inverted,
             )
             msg = f"Profiler stopped, flame graph was saved to {filename}"
             if parse_args.save_folded:

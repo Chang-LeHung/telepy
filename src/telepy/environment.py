@@ -404,6 +404,7 @@ class FlameGraphSaver:
             command=" ".join([sys.executable, *sys.argv]),
             package_path=os.path.dirname(self.site_path),
             work_dir=self.work_dir,
+            inverted=self.args.inverted,
         )
 
         fg.parse_input()

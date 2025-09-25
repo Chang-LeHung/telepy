@@ -1,6 +1,6 @@
 
 "use strict";
-var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn, orientationInverted;
 function init(evt) {
 	details = document.getElementById("details").firstChild;
 	searchbtn = document.getElementById("search");
@@ -10,6 +10,15 @@ function init(evt) {
 	svg = document.getElementsByTagName("svg")[0];
 	searching = 0;
 	currentSearchTerm = null;
+	orientationInverted = false;
+	var framesGroup = document.getElementById("frames");
+	if (svg || framesGroup) {
+		var orientationAttr = null;
+		if (svg) orientationAttr = svg.getAttribute("data-orientation");
+		if (!orientationAttr && framesGroup)
+			orientationAttr = framesGroup.getAttribute("data-orientation");
+		orientationInverted = orientationAttr === "inverted";
+	}
 
 	// use GET parameters to restore a flamegraphs state.
 	var params = get_params();
@@ -228,11 +237,11 @@ function zoom(node) {
 		var ex = parseFloat(a.x.value);
 		var ew = parseFloat(a.width.value);
 		var upstack;
-		// Is it an ancestor
-		if (0 == 0) {
-			upstack = parseFloat(a.y.value) > ymin;
+		var ay = parseFloat(a.y.value);
+		if (orientationInverted) {
+			upstack = ay < ymin;
 		} else {
-			upstack = parseFloat(a.y.value) < ymin;
+			upstack = ay > ymin;
 		}
 		if (upstack) {
 			// Direct ancestor
