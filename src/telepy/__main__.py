@@ -72,6 +72,13 @@ class ArgsHandler(ABC):
 handlers: list[ArgsHandler] = []
 
 
+def _positive_int(value: str) -> int:
+    ivalue = int(value)
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError("width must be a positive integer")
+    return ivalue
+
+
 def register_handler(handler: type[ArgsHandler]) -> None:
     """Register a handler class to be used in the application.
 
@@ -106,6 +113,7 @@ class StackTraceHandler(ArgsHandler):
         flamegraph = FlameGraph(
             [line for line in args.input[0] if line.strip() != ""],
             inverted=getattr(args, "inverted", False),
+            width=getattr(args, "width", 1200),
         )
         flamegraph.parse_input()
         svg = flamegraph.generate_svg()
@@ -381,6 +389,12 @@ def main():
     )
     parser.add_argument(
         "-o", "--output", default="result.svg", help="Output file (default: result.svg)."
+    )
+    parser.add_argument(
+        "--width",
+        type=_positive_int,
+        default=1200,
+        help="SVG width in pixels for generated flamegraphs (default: 1200).",
     )
     parser.add_argument(
         "--merge",

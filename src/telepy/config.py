@@ -192,6 +192,7 @@ class TelePySamplerConfig:
         output: str = "result.svg",
         folded_file: str = "result.folded",
         folded_save: bool = False,
+    width: int = 1200,
         # Process handling
         merge: bool = True,
         mp: bool = False,
@@ -247,6 +248,8 @@ class TelePySamplerConfig:
             folded_save: Save the folded stack traces to a file. The folded
                 format can be used for further analysis or re-generating
                 flamegraphs. Default: False.
+            width: Width in pixels for generated flamegraph SVGs.
+                Default: 1200.
             merge: Merge multiple flamegraph files in multiprocess environments.
                 When True, child process data is combined into a single output.
                 When False, separate files are created for each process.
@@ -292,6 +295,9 @@ class TelePySamplerConfig:
         self.output = output
         self.folded_file = folded_file
         self.folded_save = folded_save
+        if width <= 0:
+            raise ValueError("width must be a positive integer")
+        self.width = width
 
         # Process handling
         self.merge = merge
@@ -336,6 +342,7 @@ class TelePySamplerConfig:
             output=getattr(args_namespace, "output", "result.svg"),
             folded_file=getattr(args_namespace, "folded_file", "result.folded"),
             folded_save=getattr(args_namespace, "folded_save", False),
+            width=getattr(args_namespace, "width", 1200),
             merge=getattr(args_namespace, "merge", True),
             mp=getattr(args_namespace, "mp", False),
             fork_server=getattr(args_namespace, "fork_server", False),
@@ -387,6 +394,9 @@ class TelePySamplerConfig:
         if self.folded_file:
             res.append("--folded-file")
             res.append(self.folded_file)
+        if self.width:
+            res.append("--width")
+            res.append(str(self.width))
         if self.mp:
             res.append("--mp")
         if self.fork_server:  # pragma: no cover
