@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 
 from .base import TestBase  # type: ignore
 
@@ -342,11 +343,37 @@ class TestCommand(CommandTemplate):
         )
 
     def test_fork_multiple_child_process(self):
-        self.run_filename(
-            "test_files/test_fork_multi_processes.py",
-            stdout_check_list=[],
-            options=["--folded-save", "--debug"],
-        )
+        svg_fd, svg_path = tempfile.mkstemp(suffix=".svg")
+        folded_fd, folded_path = tempfile.mkstemp(suffix=".folded")
+        os.close(svg_fd)
+        os.close(folded_fd)
+        try:
+            self.run_filename(
+                "test_files/test_fork_multi_processes.py",
+                stdout_check_list=[],
+                options=[
+                    "--folded-save",
+                    "--debug",
+                    "--folded-file",
+                    folded_path,
+                    "-o",
+                    svg_path,
+                ],
+            )
+
+            with open(folded_path, encoding="utf-8") as fp:
+                lines = [line.strip() for line in fp if line.strip()]
+
+            prefixes = {line.split(";", 1)[0] for line in lines}
+            has_root = any(prefix.startswith("Process(root, pid=") for prefix in prefixes)
+            self.assertTrue(has_root)
+            child_prefixes = [p for p in prefixes if p.startswith("Process(pid-")]
+            self.assertGreaterEqual(len(child_prefixes), 3)
+        finally:
+            if os.path.exists(folded_path):
+                os.unlink(folded_path)
+            if os.path.exists(svg_path):
+                os.unlink(svg_path)
 
     def test_fork_multiple_child_process_no_merge(self):
         self.run_filename(

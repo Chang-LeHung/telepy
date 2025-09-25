@@ -69,8 +69,7 @@ def patch_os_fork_in_parent():
     args = Environment.get_args()
     assert sampler is not None
     assert args is not None
-    if sampler.is_root:
-        sampler.child_cnt += 1
+    sampler.child_cnt += 1
 
 
 def patch_before_fork():
@@ -518,11 +517,7 @@ class FlameGraphSaver:
                         f" the folded file {self.args.folded_file}"
                     )
 
-    def _multi_process_child(self) -> None:  # pragma: no cover
-        """
-        This function can not be covered by coverage.
-        But it has been tested by the test suite.
-        """
+    def _multi_process_child(self) -> None:
         if self.args.merge:
             files = os.listdir(os.getcwd())
             foldeds = [file for file in files if file.endswith(f"{self.pid}.folded")]
@@ -565,6 +560,7 @@ class FlameGraphSaver:
                     )
 
     def save(self) -> None:
+        print(f"{self.sampler.child_cnt=}")
         if self.sampler.child_cnt > 0:
             self.wait_children()
             if self.sampler.is_root:
