@@ -124,6 +124,9 @@ class TelePyMagics(Magics):
                     "Invalid arguments for %%telepy. Check options or run with no args for defaults."  # noqa: E501
                 )
 
+        if args.width <= 0:
+            raise ValueError("Width must be a positive integer")
+
         sampler = TelepySysAsyncWorkerSampler(
             sampling_interval=args.interval,
             debug=args.debug,

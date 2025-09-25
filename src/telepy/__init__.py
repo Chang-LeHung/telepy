@@ -125,6 +125,7 @@ def profile(
     regex_patterns: list | None = None,
     verbose: bool = True,
     full_path: bool = False,
+    width: int = 1200,
     file: str | None = None,
 ):
     """
@@ -145,6 +146,7 @@ def profile(
         regex_patterns: List of regex patterns for filtering stack traces
         verbose: If True, print progress and completion messages when saving
         full_path: If True, display absolute file paths instead of relative paths
+      width: Width in pixels for generated flame graph SVGs.
         file: If provided, automatically save profiling results to this file after
               each function execution
 
@@ -185,6 +187,7 @@ def profile(
             regex_patterns=regex_patterns,
             verbose=verbose,
             full_path=full_path,
+            width=width,
             file=file,
         )
 
@@ -228,6 +231,7 @@ class _FunctionProfiler:
         file=None,
         *,
         inverted: bool = False,
+        width: int = 1200,
         **kwargs,
     ):
         """Initialize the FunctionProfiler with TelepySysAsyncWorkerSampler."""
@@ -238,6 +242,9 @@ class _FunctionProfiler:
         self._full_path = full_path
         self._file = file
         self._inverted = inverted
+        if width <= 0:
+            raise ValueError("width must be a positive integer")
+        self._width = width
 
     def __enter__(self):
         """Context manager entry."""
@@ -274,6 +281,7 @@ class _FunctionProfiler:
         truncate: bool = True,
         verbose: bool | None = None,
         full_path: bool | None = None,
+        width: int | None = None,
     ):
         """
         Save the profiling data as an SVG flame graph.
@@ -298,6 +306,9 @@ class _FunctionProfiler:
             verbose = self._verbose
         if full_path is None:
             full_path = self._full_path
+        width_value = width if width is not None else self._width
+        if width_value <= 0:
+            raise ValueError("width must be a positive integer")
 
         if verbose:
             print(f"Saving profiling data to {filename}...")
@@ -341,6 +352,7 @@ class _FunctionProfiler:
             package_path=os.path.dirname(site_path) if site.getsitepackages() else "",
             work_dir=work_dir,
             inverted=self._inverted,
+            width=width_value,
         )
 
         fg.parse_input()

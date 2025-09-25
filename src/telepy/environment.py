@@ -404,6 +404,7 @@ class FlameGraphSaver:
             package_path=os.path.dirname(self.site_path),
             work_dir=self.work_dir,
             inverted=self.args.inverted,
+            width=self.args.width,
         )
 
         fg.parse_input()
