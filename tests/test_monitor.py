@@ -219,6 +219,7 @@ class TestMonitor(TestBase):
             self.assertIn("-f FILENAME, --filename FILENAME", data["data"])
             self.assertIn("--save-folded", data["data"])
             self.assertIn("--folded-filename FOLDED_FILENAME", data["data"])
+            self.assertIn("--inverted", data["data"])
 
         req = request.Request(f"http://127.0.0.1:{port}/shutdown")
         with request.urlopen(req) as response:
@@ -330,3 +331,45 @@ class TestMonitor(TestBase):
             self.assertEqual(response.status, 200)
 
         monitor.close()
+
+    def test_profile_inverted_flamegraph(self):
+        """Test that the monitor correctly generates inverted flamegraphs."""
+        import json
+        import os
+        import time
+        from urllib import request
+
+        port = 4555
+        pid = os.fork()
+        if pid == 0:
+            self.launch_server(port, True)
+            os._exit(0)
+
+        time.sleep(1)
+        # Start profiling
+        args = ["start", "--interval", "500000"]
+        headers = {"args": " ".join(args)}
+        req = request.Request(f"http://127.0.0.1:{port}/profile", headers=headers)
+        with request.urlopen(req) as response:
+            self.assertEqual(response.status, 200)
+
+        # Stop profiling with inverted flag
+        stop_headers = {"args": "stop --inverted"}
+        req = request.Request(f"http://127.0.0.1:{port}/profile", headers=stop_headers)
+        with request.urlopen(req) as response:
+            self.assertEqual(response.status, 200)
+            data = json.loads(response.read().decode())
+            self.assertIn("stopped", data["data"])
+            filename = f"telepy-monitor-{pid}.svg"
+            self.assertIn(filename, data["data"])
+
+            # Verify the SVG contains inverted orientation metadata
+            with open(filename) as f:
+                content = f.read()
+                self.assertIn('data-orientation="inverted"', content)
+            os.unlink(filename)
+
+        # Shutdown server
+        req = request.Request(f"http://127.0.0.1:{port}/shutdown")
+        with request.urlopen(req) as response:
+            self.assertEqual(response.status, 200)

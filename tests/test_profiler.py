@@ -171,6 +171,30 @@ class TestProfileDecoratorAutoSave(TestBase):
         file_size = os.path.getsize(test_file)
         self.assertGreater(file_size, 100, "SVG file should have reasonable size")
 
+    def test_auto_save_respects_inverted_orientation(self):
+        """Profile decorator should propagate the inverted flag to the output."""
+        test_file = "test_auto_save_inverted.svg"
+        self.test_files.append(test_file)
+
+        if os.path.exists(test_file):
+            os.remove(test_file)
+
+        @profile(file=test_file, sampling_interval=10, verbose=False, inverted=True)
+        def test_function():
+            total = 0
+            for i in range(100):
+                total += i
+            return total
+
+        self.assertEqual(test_function(), sum(range(100)))
+
+        self.assertTrue(os.path.exists(test_file), "Auto-save file should be created")
+
+        with open(test_file) as f:
+            content = f.read()
+
+        self.assertIn('data-orientation="inverted"', content)
+
     def test_auto_save_error_handling(self):
         """Test that auto-save handles errors gracefully."""
         # Test with invalid directory

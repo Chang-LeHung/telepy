@@ -120,6 +120,7 @@ def profile(
     ignore_frozen: bool = False,
     ignore_self: bool = True,
     tree_mode: bool = False,
+    inverted: bool = False,
     focus_mode: bool = False,
     regex_patterns: list | None = None,
     verbose: bool = True,
@@ -139,6 +140,7 @@ def profile(
         ignore_frozen: Whether to ignore frozen threads
         ignore_self: Whether to ignore the current thread stack trace data
         tree_mode: Whether to use the tree mode
+        inverted: Render profiling results with root frames at the top
         focus_mode: Whether to focus on user code
         regex_patterns: List of regex patterns for filtering stack traces
         verbose: If True, print progress and completion messages when saving
@@ -178,6 +180,7 @@ def profile(
             ignore_frozen=ignore_frozen,
             ignore_self=ignore_self,
             tree_mode=tree_mode,
+            inverted=inverted,
             focus_mode=focus_mode,
             regex_patterns=regex_patterns,
             verbose=verbose,
@@ -218,14 +221,23 @@ class _FunctionProfiler:
     functionality for saving flame graphs with optional truncation.
     """
 
-    def __init__(self, verbose=True, full_path=False, file=None, **kwargs):
+    def __init__(
+        self,
+        verbose=True,
+        full_path=False,
+        file=None,
+        *,
+        inverted: bool = False,
+        **kwargs,
+    ):
         """Initialize the FunctionProfiler with TelepySysAsyncWorkerSampler."""
         self._sampler = TelepySysAsyncWorkerSampler(**kwargs)
-        self._function_name = None
+        self._function_name: str | None = None
         self._context_depth = 0
         self._verbose = verbose
         self._full_path = full_path
         self._file = file
+        self._inverted = inverted
 
     def __enter__(self):
         """Context manager entry."""
@@ -328,6 +340,7 @@ class _FunctionProfiler:
             command=" ".join([sys.executable, *sys.argv]),
             package_path=os.path.dirname(site_path) if site.getsitepackages() else "",
             work_dir=work_dir,
+            inverted=self._inverted,
         )
 
         fg.parse_input()

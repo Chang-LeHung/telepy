@@ -79,6 +79,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--minwidth", type=float, default=0.1)
     parser.add_argument("--countname", type=str, default="samples")
     parser.add_argument(
+        "--inverted",
+        action="store_true",
+        default=False,
+        help="Render flame graph with the root frame at the top (inverted orientation)",
+    )
+    parser.add_argument(
         "--var",
         type=str,
         default=None,
@@ -170,6 +176,7 @@ class TelePyMagics(Magics):
             )
             or "",
             work_dir=os.getcwd(),
+            inverted=args.inverted,
         )
         fg.parse_input()
         svg = fg.generate_svg()

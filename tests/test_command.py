@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import subprocess
 import sys
 
@@ -205,6 +206,7 @@ class TestCommand(CommandTemplate):
             "--no-merge",
             "--timeout TIMEOUT",
             "--tree-mode",
+            "--inverted",
             "--disable-traceback",
             "-c, --cmd CMD",
             "--module, -m MODULE",
@@ -332,6 +334,7 @@ class TestCommand(CommandTemplate):
                 "--no-merge",
                 "--timeout TIMEOUT",
                 "--tree-mode",
+                "--inverted",
                 "--disable-traceback",
                 "-c, --cmd CMD",
                 "--module, -m MODULE",
@@ -805,3 +808,45 @@ class TestFlameGraph(TestBase):
         self.assertIn('<?xml version="1.0"', svg1)
         self.assertIn("<svg", svg1)
         self.assertIn("</svg>", svg1)
+
+    def test_flamegraph_inverted_orientation(self):
+        from telepy.flamegraph import FlameGraph
+
+        test_lines = [
+            "main;worker;task 10",
+            "main;worker;helper 5",
+            "main;io 3",
+        ]
+
+        standard = FlameGraph(test_lines)
+        standard.parse_input()
+        standard_svg = standard.generate_svg()
+
+        inverted = FlameGraph(test_lines, inverted=True)
+        inverted.parse_input()
+        inverted_svg = inverted.generate_svg()
+
+        self.assertIn('data-orientation="standard"', standard_svg)
+        self.assertIn('data-orientation="inverted"', inverted_svg)
+
+        rect_pattern = re.compile(
+            r'<rect x="[^"]+" y="([^"]+)" width="([^"]+)" height="[^"]+" '
+            r'fill="[^"]+" rx="2" ry="2"'
+        )
+
+        def frame_rects(svg: str) -> list[tuple[str, str]]:
+            frames_section = svg.partition('<g id="frames"')[2]
+            frames_section = frames_section.partition(">")[2]
+            return rect_pattern.findall(frames_section)
+
+        standard_rects = frame_rects(standard_svg)
+        inverted_rects = frame_rects(inverted_svg)
+
+        self.assertGreater(len(standard_rects), 0)
+        self.assertGreater(len(inverted_rects), 0)
+
+        standard_root_y = float(standard_rects[0][0])
+        inverted_root_y = float(inverted_rects[0][0])
+
+        self.assertGreater(standard_root_y, inverted_root_y)
+        self.assertGreaterEqual(inverted_root_y, 120.0)

@@ -66,6 +66,7 @@ class FlameGraph:
         command: str = "",
         package_path: str = "",
         work_dir: str = "",
+        inverted: bool = False,
     ) -> None:
         """Initialize a FlameGraph instance with given parameters.
 
@@ -79,7 +80,9 @@ class FlameGraph:
             command (str): Command that generated the profile data.
             package_path (str): Path to the package being analyzed.
             work_dir (str): Working directory for the analysis.
-            output_file (str): Path to save the output flame graph.
+            inverted (bool): When True, render with the root frame at the top
+                (inverted flame graph). Defaults to False, which renders with
+                the root frame at the bottom.
         """  # noqa: E501
         self.lines = lines
         self.height = height
@@ -90,6 +93,7 @@ class FlameGraph:
         self.command = command
         self.work_dir = work_dir
         self.package_path = package_path
+        self.inverted = inverted
         self.stacks: dict[str, int] = defaultdict(int)
         self.total_samples = 0
         self.max_depth = 0
@@ -232,14 +236,18 @@ class FlameGraph:
 
         nodes_by_depth = self._collect_nodes_by_depth(root)
         max_depth = max(nodes_by_depth.keys()) if nodes_by_depth else 0
-        height = max_depth * self.height + 170
+        top_margin = 120
+        bottom_margin = 50
+        svg_height = max_depth * self.height + top_margin + bottom_margin
+        orientation = "inverted" if self.inverted else "standard"
 
         # SVG header
         svg = [
             '<?xml version="1.0" standalone="no"?>',
             '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">',
-            f'<svg version="1.1" width="{self.width}" height="{height}"',
-            f'onload="init(evt)" viewBox="0 0 {self.width} {height}"',
+            f'<svg version="1.1" width="{self.width}" height="{svg_height}" '
+            f'data-orientation="{orientation}"',
+            f'onload="init(evt)" viewBox="0 0 {self.width} {svg_height}"',
             'xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">',
             "<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->",  # noqa: E501
             "<!-- NOTES:  -->",
@@ -251,7 +259,7 @@ class FlameGraph:
             "</defs>",
             '<style type="text/css">',
             "text { font-family: Source Serif Pro, Palatino, gentium plus, Arial, sans-serif; font-size: 11px; fill: rgb(0, 0, 0);}",  # noqa: E501
-            "#search, #ignorecase { opacity: 0.1; cursor: pointer; }",
+            "#search, #ignorecase { opacity: 0.9; cursor: pointer; }",
             "#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity: 1; }",  # noqa: E501
             "#subtitle { text-anchor: middle; font-color: rgb(160, 160, 160);}",
             "#title { text-anchor: middle; font-size: 17px }",
@@ -264,34 +272,38 @@ class FlameGraph:
             '<script type="text/ecmascript">\n<![CDATA[',
             self._get_javascript(),
             "]]>\n</script>",
-            f'<rect x="0" y="0" width="{self.width}" height="{height}" fill="url(#background)" rx="2" ry="2" />',  # noqa: E501
+            f'<rect x="0" y="0" width="{self.width}" height="{svg_height}" fill="url(#background)" rx="2" ry="2" />',  # noqa: E501
             f'<text id="title" x="{self.width // 2}" y="24">{self.title}</text>',
             f'<text id="under_title" x="{self.width // 2}" y="44">Environment: {self.package_path}</text>',  # noqa: E501
             f'<text id="under_title" x="{self.width // 2}" y="64">Working Directory: {self.work_dir}</text>',  # noqa: E501
             f'<text id="under_title" x="{self.width // 2}" y="84">Command: {self.command}</text>',  # noqa: E501
-            f'<text id="details" x="10" y="{height - 10}"> </text>',
+            f'<text id="details" x="10" y="{svg_height - 10}"> </text>',
             '<text id="unzoom" x="10" y="24" class="hide">Reset Zoom</text>',
             f'<text id="search" x="{self.width - 110}" y="24">Search</text>',
             f'<text id="ignorecase" x="{self.width - 30}" y="24">ic</text>',
-            f'<text id="matched" x="{self.width - 110}" y="{height - 10}"> </text>',
-            '<g id="frames">',
+            f'<text id="matched" x="{self.width - 110}" y="{svg_height - 10}"> </text>',
+            f'<g id="frames" data-orientation="{orientation}">',
         ]
 
         for depth in sorted(nodes_by_depth.keys()):
             for node in nodes_by_depth[depth]:
-                y = 50 + depth * self.height
+                if self.inverted:
+                    rect_y = top_margin + (depth - 1) * self.height
+                else:
+                    rect_y = svg_height - bottom_margin - depth * self.height
                 width = node.width
                 if width < self.minwidth:  # pragma: no cover
                     continue
 
                 color = self._get_color(node.name)
                 text = self._trim_text(node.name, width)
+                text_y = rect_y + self.height - 4.5
 
                 frame_svg = [
                     "<g>",
                     f"<title>{html.escape(node.name)} ({node.total} {self.countname}, {node.total / self.total_samples * 100:.2f}%)</title>",  # noqa: E501
-                    f'<rect x="{node.x}" y="{height - y}" width="{width}" height="{self.height}" fill="{color}" rx="2" ry="2" />',  # noqa: E501
-                    f'<text x="{node.x + 5}" y="{height - (y - self.height + 4.5)}">{html.escape(text)}</text>',  # noqa: E501
+                    f'<rect x="{node.x}" y="{rect_y}" width="{width}" height="{self.height}" fill="{color}" rx="2" ry="2" />',  # noqa: E501
+                    (f'<text x="{node.x + 5}" y="{text_y}">{html.escape(text)}</text>'),
                     "</g>",
                 ]
                 svg.extend(frame_svg)
@@ -366,6 +378,11 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("--height", type=int, default=15, help="Frame height")
     parser.add_argument("--minwidth", type=float, default=0.1, help="Minimum frame width")
     parser.add_argument("--countname", default="samples", help="Count type label")
+    parser.add_argument(
+        "--inverted",
+        action="store_true",
+        help="Render flame graph with the root frame at the top",
+    )
     parser.add_argument("-o", "--output", help="Output file (default: result.svg)")
 
     args = parser.parse_args()
@@ -382,6 +399,7 @@ def main() -> None:  # pragma: no cover
         command=" ".join(["python", *sys.argv]),
         package_path="/".join(site.getsitepackages()[0].split("/")[:-1]),
         work_dir=os.getcwd(),
+        inverted=args.inverted,
     )
     flamegraph.parse_input()
     svg = flamegraph.generate_svg()

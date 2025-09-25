@@ -67,6 +67,8 @@ class TelePySystem:
         filename: str | None = None,
         save_folded: bool = False,
         folded_filename: str | None = None,
+        *,
+        inverted: bool = False,
     ) -> tuple[str, str]:
         """
         Finish profiling and save the flame graph to a file.
@@ -82,7 +84,10 @@ class TelePySystem:
         if filename is None:
             filename = f"telepy-monitor-{os.getpid()}.svg"
         abs_path, folded_filename = self.save(
-            filename, save_folded=save_folded, folded_filename=folded_filename
+            filename,
+            save_folded=save_folded,
+            folded_filename=folded_filename,
+            inverted=inverted,
         )
         self.profiler = None
         self.profiling = False
@@ -94,6 +99,8 @@ class TelePySystem:
         title: str = TITLE,
         save_folded: bool = False,
         folded_filename: str | None = None,
+        *,
+        inverted: bool = False,
     ) -> tuple[str, str]:
         """
         Save the flame graph to a file.
@@ -116,6 +123,7 @@ class TelePySystem:
             command=" ".join([sys.executable, *sys.argv]),
             package_path=os.path.dirname(site_path),
             work_dir=os.getcwd(),
+            inverted=inverted,
         )
         fg.parse_input()
         svg = fg.generate_svg()

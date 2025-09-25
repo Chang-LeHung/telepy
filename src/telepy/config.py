@@ -181,6 +181,7 @@ class TelePySamplerConfig:
         debug: bool = False,
         full_path: bool = False,
         tree_mode: bool = False,
+        inverted: bool = False,
         reverse: bool = False,
         # Filtering options
         ignore_frozen: bool = False,
@@ -222,6 +223,8 @@ class TelePySamplerConfig:
             tree_mode: Use call site line numbers instead of the first line of
                 function/method definitions. Provides more precise location
                 information. Default: False.
+            inverted: Render flamegraphs with the root frame at the top
+                (inverted orientation). Default: False.
             reverse: Generate reversed flamegraphs (currently not fully implemented).
                 Default: False.
             ignore_frozen: Ignore frozen modules (compiled modules) in the stack
@@ -276,6 +279,7 @@ class TelePySamplerConfig:
         self.debug = debug
         self.full_path = full_path
         self.tree_mode = tree_mode
+        self.inverted = inverted
         self.reverse = reverse
 
         # Filtering options
@@ -323,6 +327,7 @@ class TelePySamplerConfig:
             debug=getattr(args_namespace, "debug", False),
             full_path=getattr(args_namespace, "full_path", False),
             tree_mode=getattr(args_namespace, "tree_mode", False),
+            inverted=getattr(args_namespace, "inverted", False),
             reverse=getattr(args_namespace, "reverse", False),
             ignore_frozen=getattr(args_namespace, "ignore_frozen", False),
             include_telepy=getattr(args_namespace, "include_telepy", False),
@@ -372,6 +377,8 @@ class TelePySamplerConfig:
             res.append(str(self.timeout))
         if self.tree_mode:
             res.append("--tree-mode")
+        if self.inverted:
+            res.append("--inverted")
         if self.interval:
             res.append("--interval")
             res.append(str(self.interval))

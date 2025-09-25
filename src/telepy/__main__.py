@@ -103,7 +103,10 @@ class StackTraceHandler(ArgsHandler):
         return False
 
     def parse_stack_trace(self, args: argparse.Namespace) -> None:
-        flamegraph = FlameGraph([line for line in args.input[0] if line.strip() != ""])
+        flamegraph = FlameGraph(
+            [line for line in args.input[0] if line.strip() != ""],
+            inverted=getattr(args, "inverted", False),
+        )
         flamegraph.parse_input()
         svg = flamegraph.generate_svg()
 
@@ -410,6 +413,11 @@ def main():
         "--tree-mode",
         action="store_true",
         help="Using call site line number instead of the first line of function(method).",
+    )
+    parser.add_argument(
+        "--inverted",
+        action="store_true",
+        help="Render flame graphs with the root frame at the top (inverted orientation).",
     )
     parser.add_argument(
         "--disable-traceback",
