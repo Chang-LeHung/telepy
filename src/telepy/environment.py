@@ -560,7 +560,6 @@ class FlameGraphSaver:
                     )
 
     def save(self) -> None:
-        print(f"{self.sampler.child_cnt=}")
         if self.sampler.child_cnt > 0:
             self.wait_children()
             if self.sampler.is_root:
