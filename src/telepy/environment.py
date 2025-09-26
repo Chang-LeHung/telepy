@@ -95,7 +95,7 @@ def patch_multiprocesssing():
     assert args is not None
 
     parser_args = args
-    _spawnv_passfds = util.spawnv_passfds
+    _spawnv_passfds = Environment._spawnv_passfds
 
     @functools.wraps(_spawnv_passfds)
     def spawnv_passfds(path, args, passfds):
@@ -150,6 +150,7 @@ class Environment:
     code_mode = CodeMode.PyFile
     _sys_exit = sys.exit
     _os_exit = os._exit
+    _spawnv_passfds = util.spawnv_passfds
 
     # Class attributes to store singleton instances
     _sampler: None | TelepySysAsyncWorkerSampler = None
@@ -337,6 +338,7 @@ class Environment:
                 return
             sys.exit = cls._sys_exit
             os._exit = cls._os_exit
+            util.spawnv_passfds = cls._spawnv_passfds
             if cls.code_mode in (CodeMode.PyFile, CodeMode.PyString):
                 sys.modules[MODULE_MAIN] = sys.modules[MODULE_TELEPY_MAIN]
                 del sys.modules[MODULE_TELEPY_MAIN]
