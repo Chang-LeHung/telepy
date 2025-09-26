@@ -541,10 +541,10 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self._call_middleware_before_start()
 
         try:
+            self.sampling_tid = threading.get_ident()  # required for base class
             signal.signal(signal.SIGPROF, self._async_routine)
             interval_sec = self.sampling_interval * 1e-6
             signal.setitimer(signal.ITIMER_PROF, interval_sec, interval_sec)
-            self.sampling_tid = threading.get_ident()  # required for base class
             super().start()
 
             # Call middleware after successful star
