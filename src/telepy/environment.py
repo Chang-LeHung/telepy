@@ -353,20 +353,22 @@ class Environment:
 @contextlib.contextmanager
 def telepy_env(config: TelePySamplerConfig, code_mode: CodeMode = CodeMode.PyFile):
     """
-    Context manager for initializing and cleaning up the Telepy environment.
+    Context manager that prepares the TelePy environment for sampling and restores it afterwards.
 
     Args:
-        config (TelePySamplerConfig): The configuration for the telepy environment.
-        code_mode (CodeMode, optional): The mode in which the code is executed. Defaults to CodeMode.PyFile.
+        config (TelePySamplerConfig): The configuration object used to bootstrap TelePy.
+        code_mode (CodeMode, optional): Execution mode for the profiled code. Defaults to ``CodeMode.PyFile``.
 
     Yields:
-        Tuple[dict, Any]: A tuple containing the global environment dictionary and the current sampler.
+        Tuple[dict, Any]: The prepared globals dictionary and the active sampler instance.
 
     Raises:
-        Any exceptions raised during environment initialization are propagated.
+        Any exception that occurs while initializing the environment.
 
-    Ensures:
-        The Telepy environment is properly destroyed after use, even if an exception occurs.
+    Notes:
+        After the context exits, the process-wide hooks are reverted but the singleton sampler state
+        remains. Explicitly call `Environment.clear_instances` (or the helper `clear_resources`)
+        when you no longer need the sampler to fully release TelePy resources.
     """  # noqa: E501
     try:
         global_dict = Environment.init_telepy_environment(config, code_mode)
