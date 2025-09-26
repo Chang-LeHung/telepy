@@ -2,3 +2,5 @@
 cover_pylib = True
 source = telepy
 concurrency = multiprocessing
+omit =
+	*/telepy/jupyter.py
