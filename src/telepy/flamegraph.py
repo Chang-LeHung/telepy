@@ -14,7 +14,6 @@ Input format:
     func_a;func_d 50
 """  # noqa: E501
 
-import argparse
 import collections
 import hashlib
 import html
@@ -357,64 +356,3 @@ def process_stack_trace(lines: list[str], site_path: str, work_dir: str) -> list
             t.append(item)
         res.append(";".join(t))
     return res
-
-
-def main() -> None:  # pragma: no cover
-    import os
-    import site
-
-    parser = argparse.ArgumentParser(
-        description="Generate flame graph SVG from stack traces"
-    )
-    parser.add_argument(
-        "input",
-        nargs="?",
-        type=argparse.FileType("r"),
-        default=sys.stdin,
-        help="Input file (default: stdin)",
-    )
-    parser.add_argument("--title", default="TelePy Flame Graph", help="Title text")
-    parser.add_argument("--width", type=int, default=1200, help="SVG width")
-    parser.add_argument("--height", type=int, default=15, help="Frame height")
-    parser.add_argument("--minwidth", type=float, default=0.1, help="Minimum frame width")
-    parser.add_argument("--countname", default="samples", help="Count type label")
-    parser.add_argument(
-        "--inverted",
-        action="store_true",
-        help="Render flame graph with the root frame at the top",
-    )
-    parser.add_argument("-o", "--output", help="Output file (default: result.svg)")
-
-    args = parser.parse_args()
-
-    flamegraph = FlameGraph(
-        process_stack_trace(
-            args.input.readlines(), site.getsitepackages()[0], os.getcwd()
-        ),
-        height=args.height,
-        width=args.width,
-        minwidth=args.minwidth,
-        title=args.title,
-        countname=args.countname,
-        command=" ".join(["python", *sys.argv]),
-        package_path="/".join(site.getsitepackages()[0].split("/")[:-1]),
-        work_dir=os.getcwd(),
-        inverted=args.inverted,
-    )
-    flamegraph.parse_input()
-    svg = flamegraph.generate_svg()
-
-    if args.output is None:
-        print(
-            "\033[91m"
-            + "output file is not specified, using result.svg as default"
-            + "\033[0m",
-            file=sys.stderr,
-        )
-        args.output = "result.svg"
-    with open(args.output, "w") as f:
-        f.write(svg)
-
-
-if __name__ == "__main__":
-    main()  # pragma: no cover
