@@ -146,7 +146,7 @@ def profile(
         regex_patterns: List of regex patterns for filtering stack traces
         verbose: If True, print progress and completion messages when saving
         full_path: If True, display absolute file paths instead of relative paths
-      width: Width in pixels for generated flame graph SVGs.
+        width: Width in pixels for generated flame graph SVGs.
         file: If provided, automatically save profiling results to this file after
               each function execution
 
