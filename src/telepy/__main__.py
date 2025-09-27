@@ -315,9 +315,10 @@ def main():
         "-v", "--version", action="store_true", help="Show version information and exit."
     )
     parser.add_argument(
-        "--no-verbose",
-        action="store_true",
-        help="Disable verbose mode (default: False).",
+        "--verbose",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable verbose mode (default: True).",
     )
     parser.add_argument(
         "input",

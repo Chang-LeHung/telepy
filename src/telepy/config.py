@@ -198,7 +198,7 @@ class TelePySamplerConfig:
         mp: bool = False,
         fork_server: bool = False,
         # Interface options
-        no_verbose: bool = False,
+        verbose: bool = True,
         disable_traceback: bool = False,
         create_config: bool = False,
         # Input options
@@ -258,7 +258,7 @@ class TelePySamplerConfig:
                 Used internally by the profiler. Default: False.
             fork_server: Internal flag indicating this is running in forkserver
                 mode. Used internally by the profiler. Default: False.
-            no_verbose: Disable verbose output messages during profiling.
+            verbose: Enable verbose output messages during profiling.
                 When True, suppresses most status and progress messages.
                 Default: False.
             disable_traceback: Disable the rich (colorful) traceback display
@@ -305,7 +305,7 @@ class TelePySamplerConfig:
         self.fork_server = fork_server
 
         # Interface options
-        self.no_verbose = no_verbose
+        self.verbose = verbose
         self.disable_traceback = disable_traceback
         self.create_config = create_config
 
@@ -346,7 +346,7 @@ class TelePySamplerConfig:
             merge=getattr(args_namespace, "merge", True),
             mp=getattr(args_namespace, "mp", False),
             fork_server=getattr(args_namespace, "fork_server", False),
-            no_verbose=getattr(args_namespace, "no_verbose", False),
+            verbose=getattr(args_namespace, "verbose", True),
             disable_traceback=getattr(args_namespace, "disable_traceback", False),
             create_config=getattr(args_namespace, "create_config", False),
             input=getattr(args_namespace, "input", None),

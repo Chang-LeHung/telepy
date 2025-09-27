@@ -113,7 +113,7 @@ def patch_multiprocesssing():
                     + get_child_process_args()
                     + args[idx : idx + 2]
                 )
-                if not parser_args.no_verbose:
+                if parser_args.verbose:
                     logger.log_warning_panel(MESSAGE_FORKSERVER_NO_MERGE)
                 rest = args[idx + 2 :]
                 if rest:  # pragma: no cover
@@ -193,7 +193,7 @@ class Environment:
         sampler = cls.get_sampler()
         args = cls.get_args()
         if sampler is not None and sampler.started:
-            if not args.no_verbose:
+            if args.verbose:
                 logger.log_success_panel(
                     f"Process {os.getpid()} exited early via sys.exit(), "
                     "telepy saved profiling data and terminated. "
@@ -214,7 +214,7 @@ class Environment:
         sampler = cls.get_sampler()
         args = cls.get_args()
         if sampler is not None and sampler.started:
-            if not args.no_verbose:
+            if args.verbose:
                 logger.log_success_panel(
                     f"Process {os.getpid()} exited early via os._exit(), "
                     "telepy saved profiling data and terminated."
@@ -437,13 +437,13 @@ class FlameGraphSaver:
 
     def _single_process_root(self) -> None:
         self._save_svg(self.args.output)
-        if not self.args.no_verbose:
+        if self.args.verbose:
             logger.log_success_panel(
                 f"Process {self.pid} saved the profiling data to the svg file {self.args.output}"  # noqa: E501
             )
         if self.args.folded_save:
             self._save_folded(self.args.folded_file)
-            if not self.args.no_verbose:
+            if self.args.verbose:
                 logger.log_success_panel(
                     f"Process {self.pid} saved the profiling data to the folded file {self.args.folded_file}"  # noqa: E501
                 )
@@ -495,28 +495,28 @@ class FlameGraphSaver:
 
             load_chidren_file()
             self._save_svg(self.args.output)
-            if not self.args.no_verbose:
+            if self.args.verbose:
                 logger.log_success_panel(
                     f"Root process {self.pid} collected the profiling data to svg "
                     f"file {self.args.output}"
                 )
             if self.args.folded_save:
                 self._save_folded(self.args.folded_file)
-                if not self.args.no_verbose:
+                if self.args.verbose:
                     logger.log_success_panel(
                         f"Root process {self.pid} collected the profiling data "
                         f"{foldeds} to the folded file {self.args.folded_file}"
                     )
         else:
             self._save_svg(self.args.output)
-            if not self.args.no_verbose:
+            if self.args.verbose:
                 logger.log_success_panel(
                     f"Root process {self.pid} saved the profiling data to"
                     f" the svg file {self.args.output}"
                 )
             if self.args.folded_save:
                 self._save_folded(self.args.folded_file)
-                if not self.args.no_verbose:
+                if self.args.verbose:
                     logger.log_success_panel(
                         f"Root process {self.pid} saved the profiling data to"
                         f" the folded file {self.args.folded_file}"

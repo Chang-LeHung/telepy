@@ -323,7 +323,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertTrue(config.merge)
         self.assertFalse(config.mp)
         self.assertFalse(config.fork_server)
-        self.assertFalse(config.no_verbose)
+        self.assertTrue(config.verbose)
         self.assertIsNone(config.input)
         self.assertFalse(config.parse)
         self.assertIsNone(config.cmd)
@@ -355,7 +355,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         args.merge = False
         args.mp = False
         args.fork_server = False
-        args.no_verbose = True
+        args.verbose = False
         args.input = None
         args.parse = False
         args.cmd = "print('test')"
@@ -379,7 +379,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertFalse(config.merge)
         self.assertFalse(config.mp)
         self.assertFalse(config.fork_server)
-        self.assertTrue(config.no_verbose)
+        self.assertFalse(config.verbose)
         self.assertIsNone(config.input)
         self.assertFalse(config.parse)
         self.assertEqual(config.cmd, "print('test')")
@@ -464,7 +464,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
             mp=True,
             fork_server=False,
             # Interface options
-            no_verbose=False,
+            verbose=True,
             disable_traceback=True,
             create_config=False,
             # Input options
@@ -489,7 +489,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertTrue(config.merge)
         self.assertTrue(config.mp)
         self.assertFalse(config.fork_server)
-        self.assertFalse(config.no_verbose)
+        self.assertTrue(config.verbose)
         self.assertTrue(config.disable_traceback)
         self.assertFalse(config.create_config)
         self.assertTrue(config.parse)
@@ -530,7 +530,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
                 self.merge = True
                 self.mp = False
                 self.fork_server = False
-                self.no_verbose = False
+                self.verbose = True
                 self.disable_traceback = True  # Test new parameter
                 self.create_config = True  # Test new parameter
                 self.input = None
