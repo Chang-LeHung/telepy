@@ -877,3 +877,47 @@ class TestFlameGraph(TestBase):
 
         self.assertGreater(standard_root_y, inverted_root_y)
         self.assertGreaterEqual(inverted_root_y, 120.0)
+
+
+class TestMultiFileParse(CommandTemplate):
+    def test_parse_stack_trace_multiple_files(self):
+        """Test parsing multiple stack trace files into a single flame graph."""
+
+        primary_content = """MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:main:961;tests/test_files/test_multi.py:fib:4 3
+MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:main:961;tests/test_files/test_multi.py:fib:4;tests/test_files/test_multi.py:fib:4 9
+"""  # noqa: E501
+        extra_content = (
+            "WorkerThread;custom.module:custom_function:1;custom.module:inner:2 5\n"
+        )
+
+        primary_file = tempfile.NamedTemporaryFile(delete=False, mode="w+")
+        extra_file = tempfile.NamedTemporaryFile(delete=False, mode="w+")
+
+        result_svg = "result.svg"
+
+        try:
+            primary_file.write(primary_content)
+            primary_file.flush()
+            primary_file.close()
+
+            extra_file.write(extra_content)
+            extra_file.flush()
+            extra_file.close()
+
+            self.run_command(
+                options=[
+                    f"{primary_file.name}",
+                    f"{extra_file.name}",
+                    "--parse",
+                    "--debug",
+                ],
+            )
+
+            with open(result_svg, encoding="utf-8") as svg_file:
+                svg_content = svg_file.read()
+
+            self.assertIn("custom.module:inner", svg_content)
+        finally:
+            for path in (primary_file.name, extra_file.name, result_svg):
+                if os.path.exists(path):
+                    os.unlink(path)

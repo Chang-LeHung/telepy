@@ -110,26 +110,31 @@ class StackTraceHandler(ArgsHandler):
         return False
 
     def parse_stack_trace(self, args: argparse.Namespace) -> None:
+        input_files = getattr(args, "input", []) or []
+        folded_lines: list[str] = []
+        input_names: list[str] = []
+
+        for file_obj in input_files:
+            input_names.append(getattr(file_obj, "name", "<unknown>"))
+            folded_lines.extend(line for line in file_obj if line.strip() != "")
+
         flamegraph = FlameGraph(
-            [line for line in args.input[0] if line.strip() != ""],
+            folded_lines,
             inverted=getattr(args, "inverted", False),
             width=getattr(args, "width", 1200),
         )
         flamegraph.parse_input()
         svg = flamegraph.generate_svg()
 
-        if args.output is None:  # pragma: no cover
-            print(
-                "[red]output file is not specified, using result.svg as default[/red]",
-                file=sys.stderr,
-            )
-            args.output = "result.svg"
-        args.input[0].close()
+        for file_obj in input_files:
+            file_obj.close()
         with open(args.output, "w") as f:
             f.write(svg)
+
+        input_display = ", ".join(input_names) if input_names else "<unknown>"
         logger.log_success_panel(
             f"Generated a flamegraph svg file `{args.output}` from the stack "
-            f"trace file `{args.input[0].name}`, "
+            f"trace file(s) `{input_display}`, "
             f"please check it out via `open {args.output}`"
         )
 
@@ -331,7 +336,8 @@ def main():
         "--parse",
         action="store_true",
         help="Parse stack trace data to generate a flamegraph svg file, "
-        "such as `telepy -p result.folded`.",
+        "such as `telepy -p result.folded`. Multiple input files are supported, "
+        "TelePy will merge them into a single SVG file.",
     )
     parser.add_argument(
         "-i",

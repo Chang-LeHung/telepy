@@ -61,7 +61,7 @@ class FlameGraph:
         height: int = 15,
         width: int = 1200,
         minwidth: float = 0.1,
-        title: str = "Flame Graph",
+        title: str = "TelePy Flame Graph",
         countname: str = "samples",
         command: str = "",
         package_path: str = "",
