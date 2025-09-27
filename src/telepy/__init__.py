@@ -115,7 +115,7 @@ class Profiler(TelepySysAsyncWorkerSampler):
 def profile(
     func=None,
     *,
-    sampling_interval: int = 10_000,
+    sampling_interval: int = 10,
     debug: bool = False,
     ignore_frozen: bool = False,
     ignore_self: bool = True,
