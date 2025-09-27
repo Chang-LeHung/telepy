@@ -58,6 +58,18 @@ class SamplerMiddleware(ABC):
         Returns:
             str: A processed dump string to use instead of the original.
             None: Use the original dump string unchanged.
+
+        Example:
+            A folded stack dump produced by the sampler might look like::
+
+                "my_app/main.py;Worker.run;handle_task 42\n"
+                "scheduler.py;poll 1"
+
+            This represents two call stacks—``my_app/main.py -> Worker.run ->``
+            ``handle_task`` sampled 42 times, and ``scheduler.py -> poll``
+            sampled once. Note that the final line intentionally lacks a trailing
+            newline. Middleware can return a modified string (for example, stripping
+            paths or redacting frames) or ``None`` to keep the original text.
         """
         return None
 
