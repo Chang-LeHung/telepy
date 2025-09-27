@@ -108,10 +108,6 @@ def install_monitor(
     return monitor
 
 
-class Profiler(TelepySysAsyncWorkerSampler):
-    pass
-
-
 def profile(
     func=None,
     *,
@@ -176,7 +172,7 @@ def profile(
         import functools
 
         # Create the sampler instance
-        sampler = _FunctionProfiler(
+        sampler = Profiler(
             sampling_interval=sampling_interval,
             debug=debug,
             ignore_frozen=ignore_frozen,
@@ -192,7 +188,7 @@ def profile(
         )
 
         # Set function name for truncation
-        sampler.function_name = f.__name__
+        sampler.target_name = f.__name__
 
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
@@ -216,7 +212,7 @@ def profile(
         return decorator(func)
 
 
-class _FunctionProfiler:
+class Profiler:
     """
     A sampler wrapper specifically designed for the profile decorator.
 
@@ -226,17 +222,67 @@ class _FunctionProfiler:
 
     def __init__(
         self,
-        verbose=True,
-        full_path=False,
-        file=None,
         *,
+        verbose: bool = True,
+        full_path: bool = False,
+        file: str | None = None,
         inverted: bool = False,
         width: int = 1200,
+        # TelepySysAsyncWorkerSampler parameters
+        sampling_interval: int = 50,
+        debug: bool = False,
+        ignore_frozen: bool = False,
+        ignore_self: bool = True,
+        tree_mode: bool = False,
+        focus_mode: bool = False,
+        regex_patterns: list | None = None,
+        is_root: bool = True,
+        from_fork: bool = False,
+        from_mp: bool = False,
+        forkserver: bool = False,
         **kwargs,
     ):
-        """Initialize the FunctionProfiler with TelepySysAsyncWorkerSampler."""
-        self._sampler = TelepySysAsyncWorkerSampler(**kwargs)
-        self._function_name: str | None = None
+        """Initialize the FunctionProfiler with TelepySysAsyncWorkerSampler.
+
+        Args:
+            verbose (bool): Enable verbose output messages during profiling.
+            full_path (bool): Display absolute file path in the flamegraph.
+            file (str | None): Auto-save file path for flame graph.
+            inverted (bool): Render flame graphs with the root frame at the top.
+            width (int): SVG width in pixels for generated flamegraphs.
+            sampling_interval (int): The interval at which the sampler will sample the
+                current stack trace.
+            debug (bool): Whether to print debug messages.
+            ignore_frozen (bool): Whether to ignore frozen threads.
+            ignore_self (bool): Whether to ignore the current thread stack trace data.
+            tree_mode (bool): Whether to use the tree mode.
+            focus_mode (bool): Whether to focus on user code by ignoring standard
+                library and third-party packages.
+            regex_patterns (list | None): List of regex pattern strings for filtering
+                stack traces.
+            is_root (bool): Whether the sampler is running in the root process.
+            from_fork (bool): Whether the sampler is running in the child process with
+                the fork syscall.
+            from_mp (bool): Whether the sampler is running in the child process with
+                the multiprocessing.
+            forkserver (bool): Whether the current process is the forkserver.
+            **kwargs: Additional keyword arguments passed to TelepySysAsyncWorkerSampler.
+        """
+        self._sampler = TelepySysAsyncWorkerSampler(
+            sampling_interval=sampling_interval,
+            debug=debug,
+            ignore_frozen=ignore_frozen,
+            ignore_self=ignore_self,
+            tree_mode=tree_mode,
+            focus_mode=focus_mode,
+            regex_patterns=regex_patterns,
+            is_root=is_root,
+            from_fork=from_fork,
+            from_mp=from_mp,
+            forkserver=forkserver,
+            **kwargs,
+        )
+        self._target_name: str | None = None
         self._context_depth = 0
         self._verbose = verbose
         self._full_path = full_path
@@ -317,18 +363,18 @@ class _FunctionProfiler:
         content = self._sampler.dumps()
         lines = content.splitlines()  # No more last empty line
 
-        if truncate and self.function_name:
+        if truncate and self.target_name:
             # Filter lines to only include stacks that contain the target function
             filtered_lines = []
             for line in lines:
                 if line.strip():
                     stack_part = line.rsplit(" ", 1)[0]  # Get stack without count
-                    if self.function_name in stack_part:
+                    if self.target_name in stack_part:
                         # Truncate the stack to start from the target function
                         frames = stack_part.split(";")
                         # Find the first occurrence of our function
                         for i, frame in enumerate(frames):
-                            if self.function_name in frame:
+                            if self.target_name in frame:
                                 # Create new stack starting from this function
                                 new_stack = ";".join(frames[i:])
                                 count = line.rsplit(" ", 1)[1]
@@ -347,7 +393,7 @@ class _FunctionProfiler:
         # Generate flame graph
         fg = FlameGraph(
             lines,
-            title=f"TelePy Profiler {self.function_name}",
+            title=f"TelePy Profiler {self.target_name}",
             command=" ".join([sys.executable, *sys.argv]),
             package_path=os.path.dirname(site_path) if site.getsitepackages() else "",
             work_dir=work_dir,
@@ -366,11 +412,11 @@ class _FunctionProfiler:
             print(f"Profiling data saved to {filename}")
 
     @property
-    def function_name(self):
-        """Get the function name for truncation purposes."""
-        return self._function_name
+    def target_name(self):
+        """Get the target name for truncation purposes."""
+        return self._target_name
 
-    @function_name.setter
-    def function_name(self, name: str):
-        """Set the function name for truncation purposes."""
-        self._function_name = name
+    @target_name.setter
+    def target_name(self, name: str):
+        """Set the target name for truncation purposes."""
+        self._target_name = name

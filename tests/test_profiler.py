@@ -785,7 +785,7 @@ class TestProfileDecorator(TestBase):
         self.assertEqual(result, 42)
 
         # Check that the function name is set correctly in the sampler
-        self.assertEqual(named_function.sampler._function_name, "named_function")
+        self.assertEqual(named_function.sampler.target_name, "named_function")
 
     def test_profile_decorator_multiple_calls(self):
         """Test that the profile decorator works correctly with multiple calls."""
