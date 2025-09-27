@@ -95,7 +95,7 @@ def patch_multiprocesssing():
     assert args is not None
 
     parser_args = args
-    _spawnv_passfds = util.spawnv_passfds
+    _spawnv_passfds = Environment._spawnv_passfds
 
     @functools.wraps(_spawnv_passfds)
     def spawnv_passfds(path, args, passfds):
@@ -150,6 +150,7 @@ class Environment:
     code_mode = CodeMode.PyFile
     _sys_exit = sys.exit
     _os_exit = os._exit
+    _spawnv_passfds = util.spawnv_passfds
 
     # Class attributes to store singleton instances
     _sampler: None | TelepySysAsyncWorkerSampler = None
@@ -337,6 +338,7 @@ class Environment:
                 return
             sys.exit = cls._sys_exit
             os._exit = cls._os_exit
+            util.spawnv_passfds = cls._spawnv_passfds
             if cls.code_mode in (CodeMode.PyFile, CodeMode.PyString):
                 sys.modules[MODULE_MAIN] = sys.modules[MODULE_TELEPY_MAIN]
                 del sys.modules[MODULE_TELEPY_MAIN]
@@ -353,20 +355,22 @@ class Environment:
 @contextlib.contextmanager
 def telepy_env(config: TelePySamplerConfig, code_mode: CodeMode = CodeMode.PyFile):
     """
-    Context manager for initializing and cleaning up the Telepy environment.
+    Context manager that prepares the TelePy environment for sampling and restores it afterwards.
 
     Args:
-        config (TelePySamplerConfig): The configuration for the telepy environment.
-        code_mode (CodeMode, optional): The mode in which the code is executed. Defaults to CodeMode.PyFile.
+        config (TelePySamplerConfig): The configuration object used to bootstrap TelePy.
+        code_mode (CodeMode, optional): Execution mode for the profiled code. Defaults to ``CodeMode.PyFile``.
 
     Yields:
-        Tuple[dict, Any]: A tuple containing the global environment dictionary and the current sampler.
+        Tuple[dict, Any]: The prepared globals dictionary and the active sampler instance.
 
     Raises:
-        Any exceptions raised during environment initialization are propagated.
+        Any exception that occurs while initializing the environment.
 
-    Ensures:
-        The Telepy environment is properly destroyed after use, even if an exception occurs.
+    Notes:
+        After the context exits, the process-wide hooks are reverted but the singleton sampler state
+        remains. Explicitly call `Environment.clear_instances` (or the helper `clear_resources`)
+        when you no longer need the sampler to fully release TelePy resources.
     """  # noqa: E501
     try:
         global_dict = Environment.init_telepy_environment(config, code_mode)

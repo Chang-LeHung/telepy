@@ -529,19 +529,22 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
             )  # pragma: no cover
 
         current = signal.getsignal(signal.SIGPROF)
-        if current not in (signal.SIG_DFL, signal.SIG_IGN):
-            raise RuntimeError(
-                "signal.SIGPROF is already in use by another handler"
-            )  # pragma: no cover
+        if current not in (signal.SIG_DFL, signal.SIG_IGN):  # pragma: no cover
+            print(
+                "signal.SIGPROF is already in use by another handler, reset it now.",
+                file=sys.stderr,
+            )
+            signal.setitimer(signal.ITIMER_PROF, 0, 0)
+            signal.signal(signal.SIGPROF, signal.SIG_IGN)
 
         # Call middleware before starting
         self._call_middleware_before_start()
 
         try:
+            self.sampling_tid = threading.get_ident()  # required for base class
             signal.signal(signal.SIGPROF, self._async_routine)
             interval_sec = self.sampling_interval * 1e-6
             signal.setitimer(signal.ITIMER_PROF, interval_sec, interval_sec)
-            self.sampling_tid = threading.get_ident()  # required for base class
             super().start()
 
             # Call middleware after successful star

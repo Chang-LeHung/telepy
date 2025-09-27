@@ -1,89 +1,94 @@
 """
-Jupyter/IPython integration for TelePy.
+Jupyter/IPython integration for TelePy using the same sampling pipeline as the CLI.
 
 Usage:
-  1) In a notebook, load the extension once:
-       %load_ext telepy.jupyter
+    1) In a notebook, load the extension once:
+             %load_ext telepy.jupyter
 
-  2) Profile a cell with options and render SVG inline:
-       %%telepy --interval 8000 --ignore-frozen --focus-mode \
-                --title "My Cell Profile" --width 1200 --height 15
-       # your python code here
+    2) Profile a cell with CLI-like options and render SVG inline:
+             %%telepy --interval 8000 --ignore-frozen --focus-mode --width 1200
+             # your python code here
 
-  3) Optionally store SVG text into a variable (without printing text):
-       %%telepy --var svg_text
-       # your code
-     Then access the SVG content via that variable in the notebook without printing raw text.
+    3) Optionally store SVG text into a variable (without printing text):
+             %%telepy --var svg_text
+             # your code
+         Then access the SVG content via that variable in the notebook.
 
-Supported options (subset of TelePy CLI):
-  --interval INT         Sampling interval in microseconds (default: 8000)
-  --debug                Enable debug mode
-  --ignore-frozen        Ignore frozen modules
-  --include-telepy       Include TelePy frames in results
-  --tree-mode            Use call site line numbers
-  --focus-mode           Focus on user code only
-  --regex-patterns P     Regex pattern to filter stacks (repeatable)
-  --full-path            Do not trim site-packages/workdir prefixes
+Supported options (mirroring ``telepy`` CLI flags that affect sampling):
+    --interval INT         Sampling interval in microseconds (default: 8000)
+    --timeout FLOAT        Wait time for child processes (default: 10)
+    --no-verbose           Suppress verbose panels
+    --ignore-frozen        Ignore frozen modules
+    --include-telepy       Include TelePy frames in results
+    --focus-mode           Focus on user code only
+    --regex-patterns P     Regex pattern to filter stacks (repeatable)
+    --tree-mode            Use call site line numbers
+    --inverted             Render inverted flame graphs
+    --width INT            SVG width (default: 1200)
 
-FlameGraph layout options:
-  --title TEXT           SVG title (default: "TelePy Flame Graph")
-  --width INT            SVG width (default: 1200)
-  --height INT           Frame height (default: 15)
-  --minwidth FLOAT       Minimum frame width in px percent (default: 0.1)
-  --countname TEXT       Count label (default: "samples")
+Jupyter-specific options:
+    --var NAME             Store the generated SVG string into ``NAME``.
 
 Notes:
-  - The sampler runs with SIGPROF and must start from the main thread (Jupyter
-    kernels typically execute code on the main thread).
-  - If the cell raises, the sampler is stopped and the exception propagates.
-"""  # noqa: E501
+    - The sampler runs with SIGPROF and must start from the main thread (Jupyter
+        kernels typically execute code on the main thread).
+    - If the cell raises, the sampler is finalised and the exception propagates.
+    - Generated SVG and folded data are stored in temporary files, read back into
+        the notebook, and then removed.
+"""
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import shlex
-import site
+from pathlib import Path
 
 from IPython.core.interactiveshell import InteractiveShell
 from IPython.core.magic import Magics, cell_magic, magics_class
 from IPython.display import SVG, display
 
-from .flamegraph import FlameGraph, process_stack_trace
-from .sampler import TelepySysAsyncWorkerSampler
+from .config import TelePySamplerConfig
+from .environment import CodeMode, clear_resources, telepy_env, telepy_finalize
+
+_RESERVED_GLOBAL_KEYS = {
+    "__name__",
+    "__file__",
+    "__builtins__",
+    "__package__",
+    "__loader__",
+    "__spec__",
+    "__annotations__",
+}
+
+
+def _positive_int(value: str) -> int:
+    ivalue = int(value)
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError("value must be a positive integer")
+    return ivalue
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
-    # Sampler options
-    parser.add_argument("-i", "--interval", type=int, default=8000)
-    parser.add_argument("--debug", action="store_true", default=False)
+    # Sampler and environment options (aligned with CLI behaviour)
+    parser.add_argument("-i", "--interval", type=_positive_int, default=8000)
+    parser.add_argument("--timeout", type=float, default=10)
+    parser.add_argument("--no-verbose", action="store_true", default=None)
     parser.add_argument("--ignore-frozen", action="store_true", default=False)
     parser.add_argument("--include-telepy", action="store_true", default=False)
-    parser.add_argument("--tree-mode", action="store_true", default=False)
     parser.add_argument("--focus-mode", action="store_true", default=False)
+    parser.add_argument("--tree-mode", action="store_true", default=False)
+    parser.add_argument("--inverted", action="store_true", default=False)
     parser.add_argument(
-        "--regex-patterns", action="append", default=None, help="Repeatable regex pattern"
+        "--regex-patterns",
+        action="append",
+        default=None,
+        help="Repeatable regex pattern (matches CLI --regex-patterns)",
     )
-    parser.add_argument(
-        "--full-path",
-        action="store_true",
-        default=False,
-        help="Do not trim site-packages/workdir prefixes",
-    )
-
-    # FlameGraph layout options
-    parser.add_argument("--title", type=str, default="TelePy Flame Graph")
-    parser.add_argument("--width", type=int, default=1200)
-    parser.add_argument("--height", type=int, default=15)
-    parser.add_argument("--minwidth", type=float, default=0.1)
-    parser.add_argument("--countname", type=str, default="samples")
-    parser.add_argument(
-        "--inverted",
-        action="store_true",
-        default=False,
-        help="Render flame graph with the root frame at the top (inverted orientation)",
-    )
+    parser.add_argument("--width", type=_positive_int, default=1200)
+    # Jupyter-specific convenience
     parser.add_argument(
         "--var",
         type=str,
@@ -107,6 +112,7 @@ class TelePyMagics(Magics):
         Displays SVG inline only. If --var is given, also stores the SVG string
         into the specified user variable. Does not print or return text.
         """
+        root = os.getpid()
         try:
             args = (
                 self._parser.parse_args(shlex.split(line))
@@ -118,82 +124,75 @@ class TelePyMagics(Magics):
             if isinstance(e, ValueError):
                 # shlex parsing error (e.g., unmatched quotes)
                 raise ValueError(f"Invalid quote syntax in arguments: {e}")
-            else:
-                # argparse error
-                raise ValueError(
-                    "Invalid arguments for %%telepy. Check options or run with no args for defaults."  # noqa: E501
+            raise ValueError(
+                "Invalid arguments for %%telepy. Check options or run with "
+                "no args for defaults."
+            )
+
+        defaults = TelePySamplerConfig()
+        if getattr(args, "no_verbose", None) is None:
+            args.no_verbose = defaults.no_verbose
+        if getattr(args, "merge", None) is None:
+            args.merge = defaults.merge
+
+        config = TelePySamplerConfig.from_namespace(args)
+        config.no_verbose = getattr(args, "no_verbose", False)
+
+        config.folded_save = False
+        config.input = None
+        config.cmd = None
+        config.module = None
+        config.no_verbose = True
+
+        finalize_exc: Exception | None = None
+        finalize_needed = False
+        try:
+            with telepy_env(config, CodeMode.PyString) as (global_dict, sampler):
+                finalize_needed = True
+                assert sampler is not None
+                assert global_dict is not None
+
+                # Make existing notebook variables available during execution
+                user_ns = self.shell.user_ns  # type: ignore[attr-defined]
+                preserved = {key: global_dict.get(key) for key in _RESERVED_GLOBAL_KEYS}
+                global_dict.update(user_ns)
+                global_dict.update(
+                    {key: value for key, value in preserved.items() if value is not None}
                 )
 
-        if args.width <= 0:
-            raise ValueError("Width must be a positive integer")
+                pyc = compile(cell, "<telepy-cell>", "exec")
+                if not config.fork_server:
+                    sampler.start()
+                exec(pyc, global_dict, global_dict)
 
-        sampler = TelepySysAsyncWorkerSampler(
-            sampling_interval=args.interval,
-            debug=args.debug,
-            ignore_frozen=args.ignore_frozen,
-            ignore_self=not args.include_telepy,
-            tree_mode=args.tree_mode,
-            focus_mode=args.focus_mode,
-            regex_patterns=args.regex_patterns,
-            is_root=True,
-        )
-
-        # Ensure switch interval is adjusted conservatively
-        sampler.adjust()
-
-        started = False
-        try:
-            sampler.start()
-            started = True
-
-            # Execute the cell in the user namespace
-            exec(
-                compile(cell, "<telepy-cell>", "exec"),
-                self.shell.user_ns,  # type: ignore[attr-defined]
-                self.shell.user_ns,  # type: ignore[attr-defined]
-            )  # type: ignore[attr-defined]
+                # Propagate definitions back to the notebook namespace
+                for name, value in global_dict.items():
+                    if name in _RESERVED_GLOBAL_KEYS:
+                        continue
+                    user_ns[name] = value
         finally:
-            if started and sampler.started:
-                sampler.stop()
+            try:
+                if finalize_needed:
+                    telepy_finalize()
+            except Exception as exc:  # pragma: no cover - defensive safeguard
+                finalize_exc = exc
+            finally:
+                clear_resources()
 
-        # Build flamegraph from raw lines
-        content = sampler.dumps()
-        lines = [ln for ln in content.splitlines() if ln.strip()]
+        if finalize_exc:
+            raise finalize_exc
 
-        # Optionally trim site/workdir prefixes
-        if not args.full_path:
-            site_paths = site.getsitepackages()
-            site_path = site_paths[0] if site_paths else ""
-            lines = process_stack_trace(lines, site_path, os.getcwd())
-
-        fg = FlameGraph(
-            lines,
-            height=args.height,
-            width=args.width,
-            minwidth=args.minwidth,
-            title=args.title,
-            countname=args.countname,
-            command="IPython %%telepy cell",
-            package_path=(
-                site.getsitepackages() and os.path.dirname(site.getsitepackages()[0])
-            )
-            or "",
-            work_dir=os.getcwd(),
-            inverted=args.inverted,
-        )
-        fg.parse_input()
-        svg = fg.generate_svg()
-
-        # Render inline only (no text output)
-        try:
-            display(SVG(svg))
-        except Exception:
-            # Fallback to raw HTML if SVG wrapper fails
-            display(SVG(svg))
-        if getattr(args, "var", None):
-            # Save SVG string to a notebook variable, without printing
-            self.shell.user_ns[args.var] = svg  # type: ignore[attr-defined]
-        return None
+        if os.getpid() == root:
+            svg_path = Path("result.svg")
+            svg_text = svg_path.read_text(encoding="utf-8")
+            for path in (svg_path,):
+                with contextlib.suppress(FileNotFoundError):
+                    if path.exists():
+                        path.unlink()
+            display(SVG(svg_text))
+            if getattr(args, "var", None):
+                # Save SVG string to a notebook variable, without printing
+                self.shell.user_ns[args.var] = svg_text  # type: ignore[attr-defined]
 
 
 def load_ipython_extension(ipython: InteractiveShell) -> None:

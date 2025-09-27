@@ -398,17 +398,11 @@ def main():
     )
     parser.add_argument(
         "--merge",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Merge multiple flamegraph files in multiprocess environment (default: "
         "True). If not merge them, the child flamegraphs and foldeds will be named in "
         "the format `pid-ppid.svg` and `pid-ppid.folded` respectively. ",
-    )
-    parser.add_argument(
-        "--no-merge",
-        dest="merge",
-        action="store_false",
-        help="Disable --merge",
     )
     parser.add_argument(
         "--mp", action="store_true", help=argparse.SUPPRESS
