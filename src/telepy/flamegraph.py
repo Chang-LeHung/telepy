@@ -19,6 +19,7 @@ import hashlib
 import html
 import os
 import sys
+import textwrap
 from collections import defaultdict
 
 
@@ -235,7 +236,32 @@ class FlameGraph:
 
         nodes_by_depth = self._collect_nodes_by_depth(root)
         max_depth = max(nodes_by_depth.keys()) if nodes_by_depth else 0
-        top_margin = 120
+
+        header_sections = [
+            ("Environment", self.package_path),
+            ("Working Directory", self.work_dir),
+            ("Command", self.command),
+        ]
+        header_line_height = 18
+        header_texts: list[str] = []
+        current_y = 44
+        header_line_count = 0
+        for label, value in header_sections:
+            content = f"{label}: {value}" if value else f"{label}:"
+            wrapped_lines = self._wrap_text_to_width(content, self.width - 40)
+            if not wrapped_lines:
+                wrapped_lines = [content]
+            for line in wrapped_lines:
+                header_texts.append(
+                    f'<text id="under_title" x="{self.width // 2}" '
+                    f'y="{current_y}">{html.escape(line)}</text>'
+                )
+                current_y += header_line_height
+                header_line_count += 1
+
+        base_top_margin = 120
+        extra_lines = max(0, header_line_count - 3)
+        top_margin = base_top_margin + extra_lines * header_line_height
         bottom_margin = 50
         svg_height = max_depth * self.height + top_margin + bottom_margin
         orientation = "inverted" if self.inverted else "standard"
@@ -272,17 +298,22 @@ class FlameGraph:
             self._get_javascript(),
             "]]>\n</script>",
             f'<rect x="0" y="0" width="{self.width}" height="{svg_height}" fill="url(#background)" rx="2" ry="2" />',  # noqa: E501
-            f'<text id="title" x="{self.width // 2}" y="24">{self.title}</text>',
-            f'<text id="under_title" x="{self.width // 2}" y="44">Environment: {self.package_path}</text>',  # noqa: E501
-            f'<text id="under_title" x="{self.width // 2}" y="64">Working Directory: {self.work_dir}</text>',  # noqa: E501
-            f'<text id="under_title" x="{self.width // 2}" y="84">Command: {self.command}</text>',  # noqa: E501
-            f'<text id="details" x="10" y="{svg_height - 10}"> </text>',
-            '<text id="unzoom" x="10" y="24" class="hide">Reset Zoom</text>',
-            f'<text id="search" x="{self.width - 110}" y="24">Search</text>',
-            f'<text id="ignorecase" x="{self.width - 30}" y="24">ic</text>',
-            f'<text id="matched" x="{self.width - 110}" y="{svg_height - 10}"> </text>',
-            f'<g id="frames" data-orientation="{orientation}">',
+            (
+                f'<text id="title" x="{self.width // 2}" y="24">'
+                f"{html.escape(self.title)}</text>"
+            ),
         ]
+        svg.extend(header_texts)
+        svg.extend(
+            [
+                f'<text id="details" x="10" y="{svg_height - 10}"> </text>',
+                '<text id="unzoom" x="10" y="24" class="hide">Reset Zoom</text>',
+                f'<text id="search" x="{self.width - 110}" y="24">Search</text>',
+                f'<text id="ignorecase" x="{self.width - 30}" y="24">ic</text>',
+                f'<text id="matched" x="{self.width - 110}" y="{svg_height - 10}"> </text>',  # noqa E501
+                f'<g id="frames" data-orientation="{orientation}">',
+            ]
+        )
 
         for depth in sorted(nodes_by_depth.keys()):
             for node in nodes_by_depth[depth]:
@@ -329,6 +360,19 @@ class FlameGraph:
             return text
         max_chars = int(width / 6.5) - 2
         return text[:max_chars] + ".."
+
+    def _wrap_text_to_width(self, text: str, max_width: float) -> list[str]:
+        """Wrap text to fit within the given pixel width."""
+        if max_width <= 0:
+            return [text]
+        max_chars = max(int(max_width / 6.5), 1)
+        wrapped = textwrap.wrap(
+            text,
+            width=max_chars,
+            break_long_words=True,
+            break_on_hyphens=True,
+        )
+        return wrapped or [text]
 
     def _get_javascript(self):
         """Return the JavaScript code for interactive features"""
