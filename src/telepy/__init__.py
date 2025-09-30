@@ -112,6 +112,7 @@ def profile(
     func=None,
     *,
     sampling_interval: int = 10,
+    time: str = "cpu",
     debug: bool = False,
     ignore_frozen: bool = False,
     ignore_self: bool = True,
@@ -137,6 +138,8 @@ def profile(
         ignore_frozen: Whether to ignore frozen threads
         ignore_self: Whether to ignore the current thread stack trace data
         tree_mode: Whether to use the tree mode
+        time: Select sampling timer source. "cpu" uses SIGPROF/ITIMER_PROF,
+            "wall" uses SIGALRM/ITIMER_REAL. Default: "cpu".
         inverted: Render profiling results with root frames at the top
         focus_mode: Whether to focus on user code
         regex_patterns: List of regex patterns for filtering stack traces
@@ -178,6 +181,7 @@ def profile(
             ignore_frozen=ignore_frozen,
             ignore_self=ignore_self,
             tree_mode=tree_mode,
+            time=time,
             inverted=inverted,
             focus_mode=focus_mode,
             regex_patterns=regex_patterns,
@@ -230,6 +234,7 @@ class Profiler:
         width: int = 1200,
         # TelepySysAsyncWorkerSampler parameters
         sampling_interval: int = 50,
+        time: str = "cpu",
         debug: bool = False,
         ignore_frozen: bool = False,
         ignore_self: bool = True,
@@ -252,6 +257,8 @@ class Profiler:
             width (int): SVG width in pixels for generated flamegraphs.
             sampling_interval (int): The interval at which the sampler will sample the
                 current stack trace.
+            time (str): Timer source selection. "cpu" uses SIGPROF/ITIMER_PROF;
+                "wall" uses SIGALRM/ITIMER_REAL.
             debug (bool): Whether to print debug messages.
             ignore_frozen (bool): Whether to ignore frozen threads.
             ignore_self (bool): Whether to ignore the current thread stack trace data.
@@ -280,6 +287,7 @@ class Profiler:
             from_fork=from_fork,
             from_mp=from_mp,
             forkserver=forkserver,
+            time_mode=time,
             **kwargs,
         )
         self._target_name: str | None = None

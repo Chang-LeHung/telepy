@@ -355,6 +355,13 @@ def main():
         help="Enable debug mode (default: False). Print some debug information.",
     )
     parser.add_argument(
+        "--time",
+        choices=("cpu", "wall"),
+        default="cpu",
+        help="Select the timer source for sampling: 'cpu' uses SIGPROF/ITIMER_PROF,"
+        " while 'wall' uses SIGALRM/ITIMER_REAL (default: cpu).",
+    )
+    parser.add_argument(
         "--full-path",
         action="store_true",
         help="Display absolute file path in the flamegraph (default: False).",

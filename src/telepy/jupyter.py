@@ -21,6 +21,7 @@ Supported options (mirroring ``telepy`` CLI flags that affect sampling):
     --ignore-frozen        Ignore frozen modules
     --include-telepy       Include TelePy frames in results
     --focus-mode           Focus on user code only
+    --time {cpu,wall}      Select sampling timer: cpu (SIGPROF) or wall (SIGALRM)
     --regex-patterns P     Regex pattern to filter stacks (repeatable)
     --tree-mode            Use call site line numbers
     --inverted             Render inverted flame graphs
@@ -81,6 +82,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--focus-mode", action="store_true", default=False)
     parser.add_argument("--tree-mode", action="store_true", default=False)
     parser.add_argument("--inverted", action="store_true", default=False)
+    parser.add_argument(
+        "--time",
+        choices=("cpu", "wall"),
+        default="cpu",
+        help="Select sampling timer: cpu (SIGPROF) or wall (SIGALRM).",
+    )
     parser.add_argument(
         "--regex-patterns",
         action="append",

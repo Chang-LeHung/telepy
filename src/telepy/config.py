@@ -183,6 +183,7 @@ class TelePySamplerConfig:
         tree_mode: bool = False,
         inverted: bool = False,
         reverse: bool = False,
+        time: str = "cpu",
         # Filtering options
         ignore_frozen: bool = False,
         include_telepy: bool = False,
@@ -228,6 +229,9 @@ class TelePySamplerConfig:
                 (inverted orientation). Default: False.
             reverse: Generate reversed flamegraphs (currently not fully implemented).
                 Default: False.
+            time: Select the timer source for asynchronous sampling. "cpu" uses
+                CPU time via SIGPROF/ITIMER_PROF; "wall" uses real time via
+                SIGALRM/ITIMER_REAL. Default: "cpu".
             ignore_frozen: Ignore frozen modules (compiled modules) in the stack
                 trace. Helps focus on user code by excluding standard library
                 internals. Default: False.
@@ -284,6 +288,10 @@ class TelePySamplerConfig:
         self.tree_mode = tree_mode
         self.inverted = inverted
         self.reverse = reverse
+        time_mode = time.lower()
+        if time_mode not in {"cpu", "wall"}:
+            raise ValueError("time must be either 'cpu' or 'wall'")
+        self.time = time_mode
 
         # Filtering options
         self.ignore_frozen = ignore_frozen
@@ -335,6 +343,7 @@ class TelePySamplerConfig:
             tree_mode=getattr(args_namespace, "tree_mode", False),
             inverted=getattr(args_namespace, "inverted", False),
             reverse=getattr(args_namespace, "reverse", False),
+            time=getattr(args_namespace, "time", "cpu"),
             ignore_frozen=getattr(args_namespace, "ignore_frozen", False),
             include_telepy=getattr(args_namespace, "include_telepy", False),
             focus_mode=getattr(args_namespace, "focus_mode", False),
@@ -389,6 +398,9 @@ class TelePySamplerConfig:
         if self.interval:
             res.append("--interval")
             res.append(str(self.interval))
+        if self.time != "cpu":
+            res.append("--time")
+            res.append(self.time)
         if self.folded_save:
             res.append("--folded-save")
         if self.folded_file:

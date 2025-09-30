@@ -257,6 +257,7 @@ class Environment:
                 is_root=not (config.fork_server or config.mp),
                 forkserver=config.fork_server,
                 from_mp=config.mp,
+                time_mode=config.time,
             )
             sampler.adjust()
             cls.set_sampler(sampler)

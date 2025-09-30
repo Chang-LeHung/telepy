@@ -3,7 +3,7 @@ import signal
 import sys
 import threading
 from abc import ABC, abstractmethod
-from typing import override
+from typing import Literal, cast, override
 
 from . import _telepysys
 from .thread import in_main_thread
@@ -279,6 +279,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         from_fork: bool = False,
         from_mp: bool = False,
         forkserver: bool = False,
+        time_mode: str = "cpu",
     ) -> None:
         """
         Args:
@@ -322,6 +323,16 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         self.from_fork = from_fork
         self.from_mp = from_mp
         self.forkserver = forkserver
+        normalized_time_mode = time_mode.lower()
+        if normalized_time_mode not in {"cpu", "wall"}:
+            raise ValueError("time_mode must be either 'cpu' or 'wall'")
+        self.time_mode = cast(Literal["cpu", "wall"], normalized_time_mode)
+        if self.time_mode == "cpu":
+            self._timer_signal = signal.SIGPROF
+            self._timer_type = signal.ITIMER_PROF
+        else:
+            self._timer_signal = signal.SIGALRM  # type: ignore[assignment]
+            self._timer_type = signal.ITIMER_REAL
 
     def adjust_interval(self) -> bool:
         """
@@ -440,6 +451,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         from_fork: bool = False,
         from_mp: bool = False,
         forkserver: bool = False,
+        time_mode: str = "cpu",
     ) -> None:
         """
         Args:
@@ -466,6 +478,8 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
                 Whether the sampler is running in the child process with the multiprocessing.
             forkserver (bool):
                 Whether the current process is the forkserver.
+            time_mode (str):
+                Timer source for sampling. "cpu" uses SIGPROF/ITIMER_PROF, "wall" uses SIGALRM/ITIMER_REAL.
         """  # noqa: E501
         _telepysys.AsyncSampler.__init__(self)
         SamplerMixin.__init__(self)
@@ -485,6 +499,16 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self.from_fork = from_fork
         self.from_mp = from_mp
         self.forkserver = forkserver
+        normalized_time_mode = time_mode.lower()
+        if normalized_time_mode not in {"cpu", "wall"}:
+            raise ValueError("time_mode must be either 'cpu' or 'wall'")
+        self.time_mode = cast(Literal["cpu", "wall"], normalized_time_mode)
+        if self.time_mode == "cpu":
+            self._timer_signal = signal.SIGPROF
+            self._timer_type = signal.ITIMER_PROF
+        else:
+            self._timer_signal = signal.SIGALRM  # type: ignore[assignment]
+            self._timer_type = signal.ITIMER_REAL
 
     @override
     def save(self, filename: str) -> None:
@@ -540,23 +564,24 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
                 "TelepySysAsyncSampler must be started from the main thread"
             )  # pragma: no cover
 
-        current = signal.getsignal(signal.SIGPROF)
+        current = signal.getsignal(self._timer_signal)
         if current not in (signal.SIG_DFL, signal.SIG_IGN):  # pragma: no cover
-            print(
-                "signal.SIGPROF is already in use by another handler, reset it now.",
-                file=sys.stderr,
+            message = (
+                f"signal {self._timer_signal!s} is already in use by another handler, "
+                "reset it now."
             )
-            signal.setitimer(signal.ITIMER_PROF, 0, 0)
-            signal.signal(signal.SIGPROF, signal.SIG_IGN)
+            print(message, file=sys.stderr)
+            signal.setitimer(self._timer_type, 0, 0)
+            signal.signal(self._timer_signal, signal.SIG_IGN)
 
         # Call middleware before starting
         self._call_middleware_before_start()
 
         try:
             self.sampling_tid = threading.get_ident()  # required for base class
-            signal.signal(signal.SIGPROF, self._async_routine)
+            signal.signal(self._timer_signal, self._async_routine)
             interval_sec = self.sampling_interval * 1e-6
-            signal.setitimer(signal.ITIMER_PROF, interval_sec, interval_sec)
+            signal.setitimer(self._timer_type, interval_sec, interval_sec)
             super().start()
 
             # Call middleware after successful star
@@ -574,8 +599,8 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self._call_middleware_before_stop()
 
         try:
-            signal.setitimer(signal.ITIMER_PROF, 0, 0)
-            signal.signal(signal.SIGPROF, signal.SIG_IGN)
+            signal.setitimer(self._timer_type, 0, 0)
+            signal.signal(self._timer_signal, signal.SIG_IGN)
             super().stop()
 
             # Call middleware after successful stop
@@ -606,6 +631,36 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
     """
     TelepyAsyncWorkerSampler is a TelepySysAsyncSampler that runs in the non-main threads.
     """
+
+    def __init__(
+        self,
+        sampling_interval: int = 10_000,
+        debug: bool = False,
+        ignore_frozen: bool = False,
+        ignore_self: bool = True,
+        tree_mode: bool = False,
+        focus_mode: bool = False,
+        regex_patterns: list | None = None,
+        is_root: bool = True,
+        from_fork: bool = False,
+        from_mp: bool = False,
+        forkserver: bool = False,
+        time_mode: str = "cpu",
+    ) -> None:
+        super().__init__(
+            sampling_interval=sampling_interval,
+            debug=debug,
+            ignore_frozen=ignore_frozen,
+            ignore_self=ignore_self,
+            tree_mode=tree_mode,
+            focus_mode=focus_mode,
+            regex_patterns=regex_patterns,
+            is_root=is_root,
+            from_fork=from_fork,
+            from_mp=from_mp,
+            forkserver=forkserver,
+            time_mode=time_mode,
+        )
 
     @override
     @in_main_thread
