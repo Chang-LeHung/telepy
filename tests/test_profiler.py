@@ -873,3 +873,112 @@ class TestProfileDecorator(TestBase):
                 before_cycle_lines,
                 f"Cycle {cycle + 1} should collect traces",
             )
+
+
+class TestProfileDecoratorTimeMode(TestBase):
+    """Test time mode functionality of the profile decorator."""
+
+    def setUp(self):
+        """Set up each test."""
+        super().setUp()
+        self.test_files = []
+
+    def tearDown(self):
+        """Clean up after each test."""
+        # Remove any test files created
+        for filename in self.test_files:
+            if os.path.exists(filename):
+                try:
+                    os.remove(filename)
+                except OSError:
+                    pass  # Ignore removal errors
+        super().tearDown()
+
+    def test_profile_decorator_time_cpu(self):
+        """Test profile decorator with time='cpu' parameter."""
+        test_file = "test_profile_time_cpu.svg"
+        self.test_files.append(test_file)
+
+        if os.path.exists(test_file):
+            os.remove(test_file)
+
+        @profile(time="cpu", file=test_file, sampling_interval=100, verbose=False)
+        def cpu_intensive_task():
+            return sum(i**2 for i in range(10000))
+
+        result = cpu_intensive_task()
+        self.assertIsNotNone(result)
+        self.assertTrue(os.path.exists(test_file))
+
+    def test_profile_decorator_time_wall(self):
+        """Test profile decorator with time='wall' parameter."""
+        import time
+
+        test_file = "test_profile_time_wall.svg"
+        self.test_files.append(test_file)
+
+        if os.path.exists(test_file):
+            os.remove(test_file)
+
+        @profile(time="wall", file=test_file, sampling_interval=1000, verbose=False)
+        def mixed_task():
+            sum(i**2 for i in range(1000))  # CPU work
+            time.sleep(0.01)  # Wall time
+            return "done"
+
+        result = mixed_task()
+        self.assertEqual(result, "done")
+        self.assertTrue(os.path.exists(test_file))
+
+    def test_profile_decorator_time_invalid(self):
+        """Test that profile decorator raises error for invalid time parameter."""
+        with self.assertRaises(ValueError) as context:
+
+            @profile(time="invalid")
+            def dummy_function():
+                pass
+
+        self.assertIn("must be either 'cpu' or 'wall'", str(context.exception))
+
+    def test_profile_decorator_time_case_insensitive(self):
+        """Test that profile decorator handles case-insensitive time parameter."""
+        test_file = "test_profile_time_case.svg"
+        self.test_files.append(test_file)
+
+        if os.path.exists(test_file):
+            os.remove(test_file)
+
+        @profile(time="CPU", file=test_file, sampling_interval=100, verbose=False)
+        def test_function():
+            return sum(i for i in range(1000))
+
+        result = test_function()
+        self.assertIsNotNone(result)
+        self.assertTrue(os.path.exists(test_file))
+
+    def test_profile_decorator_time_default(self):
+        """Test that profile decorator defaults to cpu time mode."""
+        test_file1 = "test_profile_default.svg"
+        test_file2 = "test_profile_explicit_cpu.svg"
+        self.test_files.extend([test_file1, test_file2])
+
+        for f in self.test_files:
+            if os.path.exists(f):
+                os.remove(f)
+
+        @profile(file=test_file1, sampling_interval=100, verbose=False)
+        def default_function():
+            return sum(i for i in range(1000))
+
+        @profile(time="cpu", file=test_file2, sampling_interval=100, verbose=False)
+        def explicit_cpu_function():
+            return sum(i for i in range(1000))
+
+        # Both should work identically
+        result1 = default_function()
+        result2 = explicit_cpu_function()
+
+        self.assertIsNotNone(result1)
+        self.assertIsNotNone(result2)
+        self.assertTrue(os.path.exists(test_file1))
+        self.assertTrue(os.path.exists(test_file2))

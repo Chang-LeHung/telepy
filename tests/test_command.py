@@ -921,3 +921,111 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
             for path in (primary_file.name, extra_file.name, result_svg):
                 if os.path.exists(path):
                     os.unlink(path)
+
+    def test_time_cpu_flag(self):
+        """Test --time cpu command line option."""
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            svg_file = f.name
+
+        try:
+            self.run_command(
+                [
+                    "--time",
+                    "cpu",
+                    "-c",
+                    "sum(i**2 for i in range(10000)); print('CPU test done')",
+                    "-o",
+                    svg_file,
+                ],
+                stdout_check_list=[
+                    "CPU test done",
+                    "saved the profiling data to the svg file",
+                ],
+            )
+        finally:
+            if os.path.exists(svg_file):
+                os.unlink(svg_file)
+
+    def test_time_wall_flag(self):
+        """Test --time wall command line option."""
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            svg_file = f.name
+
+        try:
+            self.run_command(
+                [
+                    "--time",
+                    "wall",
+                    "-c",
+                    (
+                        "import time; sum(i**2 for i in range(5000)); "
+                        "time.sleep(0.01); print('Wall test done')"
+                    ),
+                    "-o",
+                    svg_file,
+                ],
+                stdout_check_list=[
+                    "Wall test done",
+                    "saved the profiling data to the svg file",
+                ],
+            )
+        finally:
+            if os.path.exists(svg_file):
+                os.unlink(svg_file)
+
+    def test_time_invalid_flag(self):
+        """Test --time with invalid value should show error."""
+        output = self.run_command(
+            ["--time", "invalid", "-c", "print('test')"], exit_code=2
+        )
+        stderr = output.stderr.decode("utf-8")
+        self.assertIn("invalid choice: 'invalid'", stderr)
+        self.assertIn("choose from cpu, wall", stderr)
+
+    def test_time_default_behavior(self):
+        """Test that default behavior is equivalent to --time cpu."""
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f1:
+            svg_file1 = f1.name
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f2:
+            svg_file2 = f2.name
+
+        try:
+            # Run without --time flag (should default to cpu)
+            output1 = self.run_command(
+                [
+                    "-c",
+                    "sum(i**2 for i in range(1000)); print('Default test')",
+                    "-o",
+                    svg_file1,
+                ],
+                stdout_check_list=["Default test"],
+            )
+
+            # Run with explicit --time cpu
+            output2 = self.run_command(
+                [
+                    "--time",
+                    "cpu",
+                    "-c",
+                    "sum(i**2 for i in range(1000)); print('CPU test')",
+                    "-o",
+                    svg_file2,
+                ],
+                stdout_check_list=["CPU test"],
+            )
+
+            # Both should succeed with similar behavior
+            self.assertEqual(output1.returncode, output2.returncode)
+        finally:
+            for svg_file in [svg_file1, svg_file2]:
+                if os.path.exists(svg_file):
+                    os.unlink(svg_file)
