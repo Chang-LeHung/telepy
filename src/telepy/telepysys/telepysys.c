@@ -5,6 +5,7 @@
 #include "tree.h"
 #include "tupleobject.h"
 #include <Python.h>
+#include <assert.h>
 #include <sched.h>
 #include <stdlib.h>
 #include <string.h>
@@ -118,24 +119,68 @@ PyUnicode_start_with(PyObject* filename, const char* str) {
 }
 
 static inline int
-is_stdlib_or_third_party(PyObject* filename) {
+is_stdlib_or_third_party(SamplerObject* sampler, PyObject* filename) {
+    // Assert that std_path is initialized
+    assert(sampler->std_path != NULL);
+
     // Check if the file is in standard library or third-party packages
     const char* filepath = PyUnicode_AsUTF8(filename);
     if (!filepath) {
         return 0;
     }
 
-    // Common patterns for standard library and third-party packages
-    if (strstr(filepath, "site-packages/") != NULL ||
-        strstr(filepath, "/lib/python") != NULL ||
-        strstr(filepath, "/usr/lib/python") != NULL ||
-        strstr(filepath, "/usr/local/lib/python") != NULL ||
-        strstr(filepath, "lib64/python") != NULL ||
-        PyUnicode_start_with(filename, "<frozen")) {
+    // Check for site-packages pattern (third-party packages)
+    if (strstr(filepath, "site-packages/") != NULL) {
+        return 1;
+    }
+
+    // Check if the file is in standard library using std_path
+    if (strstr(filepath, sampler->std_path) != NULL) {
         return 1;
     }
 
     return 0;
+}
+
+static char*
+init_std_path(void) {
+    // Get sysconfig.get_path("stdlib") and convert to char*
+    char* std_path = NULL;
+    PyObject* sysconfig_module = PyImport_ImportModule("sysconfig");
+    if (sysconfig_module) {
+        PyObject* get_path =
+            PyObject_GetAttrString(sysconfig_module, "get_path");
+        if (get_path && PyCallable_Check(get_path)) {
+            PyObject* args = PyTuple_New(1);
+            PyObject* stdlib_str = PyUnicode_FromString("stdlib");
+            if (args && stdlib_str) {
+                PyTuple_SetItem(
+                    args,
+                    0,
+                    stdlib_str);  // This steals reference to stdlib_str
+                PyObject* stdlib_path = PyObject_CallObject(get_path, args);
+                if (stdlib_path && PyUnicode_Check(stdlib_path)) {
+                    const char* stdlib_path_str =
+                        PyUnicode_AsUTF8(stdlib_path);
+                    if (stdlib_path_str) {
+                        size_t len = strlen(stdlib_path_str);
+                        std_path = (char*)malloc(len + 1);
+                        if (std_path) {
+                            strcpy(std_path, stdlib_path_str);
+                        }
+                    }
+                    Py_DECREF(stdlib_path);
+                }
+                Py_DECREF(args);  // This will also free stdlib_str
+            } else {
+                Py_XDECREF(args);
+                Py_XDECREF(stdlib_str);
+            }
+            Py_DECREF(get_path);
+        }
+        Py_DECREF(sysconfig_module);
+    }
+    return std_path;
 }
 
 static inline int
@@ -232,7 +277,8 @@ call_stack(SamplerObject* self,
         name = code->co_qualname;
 #endif
         // Apply focus_mode filtering
-        if (FOCUS_MODE_ENABLED(self) && is_stdlib_or_third_party(filename)) {
+        if (FOCUS_MODE_ENABLED(self) &&
+            is_stdlib_or_third_party(self, filename)) {
             Py_DECREF(code);
             continue;
         }
@@ -844,6 +890,10 @@ Sampler_dealloc(SamplerObject* self) {
     Py_CLEAR(self->sampling_thread);
     Py_CLEAR(self->sampling_interval);
     Py_CLEAR(self->regex_patterns);
+    if (self->std_path) {
+        free(self->std_path);
+        self->std_path = NULL;
+    }
     if (self->tree) {
         FreeTree(self->tree);
     }
@@ -856,6 +906,10 @@ Sampler_clear(SamplerObject* self) {
     Py_CLEAR(self->sampling_thread);
     Py_CLEAR(self->sampling_interval);
     Py_CLEAR(self->regex_patterns);
+    if (self->std_path) {
+        free(self->std_path);
+        self->std_path = NULL;
+    }
     if (self->tree) {
         FreeTree(self->tree);
         self->tree = NULL;
@@ -875,6 +929,7 @@ Sampler_new(PyTypeObject* type,
     if (self != NULL) {
         self->sampling_thread = NULL;
         self->regex_patterns = NULL;
+        self->std_path = NULL;
         self->sampling_interval = PyLong_FromLong(10000);  // 10ms
         if (!self->sampling_interval) {
             Py_DECREF(self);
@@ -888,6 +943,16 @@ Sampler_new(PyTypeObject* type,
             PyErr_SetString(PyExc_RuntimeError, "Failed to create StackTree");
             return NULL;
         }
+
+        // Initialize std_path
+        self->std_path = init_std_path();
+        if (!self->std_path) {
+            Py_DECREF(self);
+            PyErr_SetString(PyExc_RuntimeError,
+                            "Failed to initialize std_path");
+            return NULL;
+        }
+
         return (PyObject*)self;
     }
     return NULL;
@@ -1311,6 +1376,10 @@ AsyncSampler_clear(AsyncSamplerObject* self) {
     Py_CLEAR(self->base.sampling_interval);
     Py_CLEAR(self->base.regex_patterns);
     Py_CLEAR(self->threading);
+    if (self->base.std_path) {
+        free(self->base.std_path);
+        self->base.std_path = NULL;
+    }
     if (self->base.tree) {
         FreeTree(self->base.tree);
         self->base.tree = NULL;
@@ -1338,6 +1407,7 @@ AsyncSampler_new(PyTypeObject* type,
     if (self != NULL) {
         self->base.sampling_tid = 0;
         self->base.regex_patterns = NULL;
+        self->base.std_path = NULL;
         self->base.sampling_interval = PyLong_FromLong(10000);  // 10ms
         if (!self->base.sampling_interval) {
             Py_DECREF(self);
@@ -1351,6 +1421,16 @@ AsyncSampler_new(PyTypeObject* type,
             PyErr_SetString(PyExc_RuntimeError, "Failed to create StackTree");
             return NULL;
         }
+
+        // Initialize std_path
+        self->base.std_path = init_std_path();
+        if (!self->base.std_path) {
+            Py_DECREF(self);
+            PyErr_SetString(PyExc_RuntimeError,
+                            "Failed to initialize std_path");
+            return NULL;
+        }
+
         self->buf_size = BUF_SIZE;
         self->buf = malloc(self->buf_size);
         self->threading = PyImport_ImportModule("threading");

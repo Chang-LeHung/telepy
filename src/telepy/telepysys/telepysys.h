@@ -86,6 +86,7 @@ typedef struct SamplerObject {
 
     // filtering options
     PyObject* regex_patterns;  // list of compiled regex patterns
+    char* std_path;            // path to Python executable from sys.executable
 
     uint32_t flags;
 } SamplerObject;
