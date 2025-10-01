@@ -399,7 +399,7 @@ def main():
         type=str,
         default="result.folded",
         help="Save folded stack traces into a file (default: result.folded). "
-        "You should enable --folded-file if using this option.",
+        "You should enable --folded-save if using this option.",
     )
     parser.add_argument(
         "-o", "--output", default="result.svg", help="Output file (default: result.svg)."
