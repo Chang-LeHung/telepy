@@ -614,7 +614,7 @@ def clear_resources():
     Environment.clear_instances()
 
 
-def telepy_finalize() -> None:
+def telepy_finalize(save: bool = True) -> None:
     """Stop and clean up the global sampler resource.
 
     This function should be called to properly finalize the telepy environment
@@ -631,7 +631,8 @@ def telepy_finalize() -> None:
     # forserver mode will not start the sampler.
     if current_sampler.started:
         current_sampler.stop()
-        _do_save()
+        if save:
+            _do_save()
     Environment.clear_instances()
 
 

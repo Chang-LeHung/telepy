@@ -1,5 +1,6 @@
 """."""
 
+import os as _os
 import threading
 from types import FrameType
 
@@ -11,6 +12,7 @@ from .shell import TelePyShell
 from .thread import in_main_thread
 
 __all__: list[str] = [
+    "Profiler",
     "TelePyMonitor",
     "TelePyShell",
     "TelepySysAsyncSampler",
@@ -188,20 +190,14 @@ def profile(
             verbose=verbose,
             full_path=full_path,
             width=width,
-            file=file,
+            output=file,
         )
-
-        # Set function name for truncation
-        sampler.target_name = f.__name__
 
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
             with sampler:
                 result = f(*args, **kwargs)
 
-            if sampler._context_depth == 0:
-                if sampler._file:
-                    sampler.save(sampler._file, truncate=True, verbose=sampler._verbose)
             return result
 
         # Add sampler attribute to the wrapper for external access
@@ -229,30 +225,27 @@ class Profiler:
         *,
         verbose: bool = True,
         full_path: bool = False,
-        file: str | None = None,
         inverted: bool = False,
         width: int = 1200,
-        # TelepySysAsyncWorkerSampler parameters
         sampling_interval: int = 50,
         time: str = "cpu",
         debug: bool = False,
         ignore_frozen: bool = False,
-        ignore_self: bool = True,
         tree_mode: bool = False,
         focus_mode: bool = False,
+        timeout: int = 10,
+        output: str = "result.svg",
+        folded_saved: bool = False,
+        folded_filename: str = "result.folded",
+        merge: bool = False,
+        ignore_self: bool = True,
         regex_patterns: list | None = None,
-        is_root: bool = True,
-        from_fork: bool = False,
-        from_mp: bool = False,
-        forkserver: bool = False,
-        **kwargs,
     ):
         """Initialize the FunctionProfiler with TelepySysAsyncWorkerSampler.
 
         Args:
             verbose (bool): Enable verbose output messages during profiling.
             full_path (bool): Display absolute file path in the flamegraph.
-            file (str | None): Auto-save file path for flame graph.
             inverted (bool): Render flame graphs with the root frame at the top.
             width (int): SVG width in pixels for generated flamegraphs.
             sampling_interval (int): The interval at which the sampler will sample the
@@ -261,47 +254,66 @@ class Profiler:
                 "wall" uses SIGALRM/ITIMER_REAL.
             debug (bool): Whether to print debug messages.
             ignore_frozen (bool): Whether to ignore frozen threads.
-            ignore_self (bool): Whether to ignore the current thread stack trace data.
             tree_mode (bool): Whether to use the tree mode.
             focus_mode (bool): Whether to focus on user code by ignoring standard
                 library and third-party packages.
-            regex_patterns (list | None): List of regex pattern strings for filtering
-                stack traces.
-            is_root (bool): Whether the sampler is running in the root process.
-            from_fork (bool): Whether the sampler is running in the child process with
-                the fork syscall.
-            from_mp (bool): Whether the sampler is running in the child process with
-                the multiprocessing.
-            forkserver (bool): Whether the current process is the forkserver.
-            **kwargs: Additional keyword arguments passed to TelepySysAsyncWorkerSampler.
-        """
-        self._sampler = TelepySysAsyncWorkerSampler(
-            sampling_interval=sampling_interval,
+            timeout (int): Timeout in seconds for waiting for the subprocess.
+            output (str): Output filename for the flame graph.
+            folded_saved (bool): Whether to save the folded stack file.
+            folded_filename (str): Filename for the folded stack file if saved.
+            merge (bool): Whether to merge samples with the same stack trace.
+            ignore_self (bool): Whether to ignore telepy stack trace data.
+            regex_patterns (list | None): List of regex patterns for filtering stack traces.
+        """  # noqa: E501
+        if width <= 0:
+            raise ValueError("width must be a positive integer")
+        from .config import TelePySamplerConfig
+        from .environment import CodeMode, telepy_env
+
+        config = TelePySamplerConfig(
+            interval=sampling_interval,
+            timeout=timeout,
             debug=debug,
-            ignore_frozen=ignore_frozen,
-            ignore_self=ignore_self,
+            full_path=full_path,
             tree_mode=tree_mode,
+            inverted=inverted,
+            time=time,
+            ignore_frozen=ignore_frozen,
+            include_telepy=not ignore_self,
             focus_mode=focus_mode,
+            output=output,
+            folded_save=folded_saved,
+            folded_file=folded_filename,
+            merge=merge,
+            width=width,
             regex_patterns=regex_patterns,
-            is_root=is_root,
-            from_fork=from_fork,
-            from_mp=from_mp,
-            forkserver=forkserver,
-            time_mode=time,
-            **kwargs,
         )
-        self._target_name: str | None = None
+
         self._context_depth = 0
         self._verbose = verbose
         self._full_path = full_path
-        self._file = file
+        self._output = output
         self._inverted = inverted
-        if width <= 0:
-            raise ValueError("width must be a positive integer")
         self._width = width
+        self._folded_saved = folded_saved
+        self._folded_filename = folded_filename
+        self._sampling_interval = sampling_interval
+        self._time = time
+        self._debug = debug
+        self._ignore_frozen = ignore_frozen
+        self._tree_mode = tree_mode
+        self._focus_mode = focus_mode
+        self._timeout = timeout
+        self._merge = merge
+        self._ignore_self = ignore_self
+        self._regex_patterns = regex_patterns
+        self._ctx = telepy_env(config, CodeMode.PyString)
+        self._sampler: TelepySysAsyncWorkerSampler | None = None
 
     def __enter__(self):
         """Context manager entry."""
+        if self._sampler is None:
+            _, self._sampler = self._ctx.__enter__()
         self._context_depth += 1
         if self._context_depth == 1:
             # Only start the sampler on the first entry and if not already started
@@ -316,115 +328,44 @@ class Profiler:
             # Only stop the sampler when all contexts have exited and if started
             if self._sampler.started:
                 self._sampler.stop()
+                self._ctx.__exit__(exc_type, exc_val, exc_tb)
+                self._finalize()
             # Auto-save if file parameter is provided
-            if self._file:
-                self.save(self._file, truncate=True)
+            if self._output:
+                self.save(self._output, truncate=True)
         return False
 
     def start(self):
         """Start the profiler."""
+        if self._sampler is not None or self._sampler.started:
+            raise RuntimeError(
+                "Inconsistent state: sampler is already started or not initialized"
+            )
+        _, self._sampler = self._ctx.__enter__()
         self._sampler.start()
 
     def stop(self):
         """Stop the profiler."""
+        if self._sampler is None or not self._sampler.started:
+            raise RuntimeError(
+                "Inconsistent state: sampler is not running or not initialized"
+            )
+
         self._sampler.stop()
+        self._ctx.__exit__(None, None, None)
+        self._finalize()
 
-    def save(
-        self,
-        filename: str,
-        truncate: bool = True,
-        verbose: bool | None = None,
-        full_path: bool | None = None,
-        width: int | None = None,
-    ):
+    def _finalize(self):
+        """Finalize the profiler, stopping the sampler and cleaning up."""
+        from .environment import telepy_finalize
+
+        telepy_finalize()
+        self._sampler = None
+
+    def clean(self):
         """
-        Save the profiling data as an SVG flame graph.
-
-        Args:
-            filename: The output filename for the SVG file
-            truncate: If True, only show the function as root node in the flame graph
-            verbose: If True, print progress and completion messages.
-                    If None, use the decorator's verbose setting
-            full_path: If True, display absolute file paths in the flamegraph instead of
-                      relative paths and hide site-packages details.
-                      If None, use the decorator's full_path setting
+        Clean up temporary files created during profiling.
         """
-        import os
-        import site
-        import sys
-
-        from .flamegraph import FlameGraph, process_stack_trace
-
-        # Use decorator defaults if not specified
-        if verbose is None:
-            verbose = self._verbose
-        if full_path is None:
-            full_path = self._full_path
-        width_value = width if width is not None else self._width
-        if width_value <= 0:
-            raise ValueError("width must be a positive integer")
-
-        if verbose:
-            print(f"Saving profiling data to {filename}...")
-
-        # Get the raw profiling data
-        content = self._sampler.dumps()
-        lines = content.splitlines()  # No more last empty line
-
-        if truncate and self.target_name:
-            # Filter lines to only include stacks that contain the target function
-            filtered_lines = []
-            for line in lines:
-                if line.strip():
-                    stack_part = line.rsplit(" ", 1)[0]  # Get stack without count
-                    if self.target_name in stack_part:
-                        # Truncate the stack to start from the target function
-                        frames = stack_part.split(";")
-                        # Find the first occurrence of our function
-                        for i, frame in enumerate(frames):
-                            if self.target_name in frame:
-                                # Create new stack starting from this function
-                                new_stack = ";".join(frames[i:])
-                                count = line.rsplit(" ", 1)[1]
-                                filtered_lines.append(f"{new_stack} {count}")
-                                break
-            lines = filtered_lines
-
-        # Get site package path for flame graph configuration
-        site_path = site.getsitepackages()[0] if site.getsitepackages() else ""
-        work_dir = os.getcwd()
-
-        # Process stack traces (remove site packages info etc.) only if full_path is False
-        if not full_path:
-            lines = process_stack_trace(lines, site_path, work_dir)
-
-        # Generate flame graph
-        fg = FlameGraph(
-            lines,
-            title=f"TelePy Profiler {self.target_name}",
-            command=" ".join([sys.executable, *sys.argv]),
-            package_path=os.path.dirname(site_path) if site.getsitepackages() else "",
-            work_dir=work_dir,
-            inverted=self._inverted,
-            width=width_value,
-        )
-
-        fg.parse_input()
-        svg_content = fg.generate_svg()
-
-        # Save to file
-        with open(filename, "w") as f:
-            f.write(svg_content)
-
-        if verbose:
-            print(f"Profiling data saved to {filename}")
-
-    @property
-    def target_name(self):
-        """Get the target name for truncation purposes."""
-        return self._target_name
-
-    @target_name.setter
-    def target_name(self, name: str):
-        """Set the target name for truncation purposes."""
-        self._target_name = name
+        _os.unlink(self._output)
+        if self._folded_saved:
+            _os.unlink(self._folded_filename)
