@@ -450,13 +450,13 @@ def main():
         "-c",
         "--cmd",
         type=str,
-        help="Command to run (default: None).",
+        help="program passed in as string (terminates option list)",
     )
     parser.add_argument(
         "--module",
         "-m",
         type=str,
-        help="Module to run (default: None).",
+        help="run library module as a script (terminates option list)",
     )
     parser.add_argument(
         "--create-config",
