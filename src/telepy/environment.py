@@ -41,8 +41,6 @@ TITLE_SAMPLER_METRICS: Final = "TelePySampler Metrics"
 
 INTERNAL_ARGV: Final = "telepy_argv"
 
-_lock = threading.RLock()
-
 
 def patch_os_fork_in_child():
     sampler = Environment.get_sampler()
@@ -148,6 +146,7 @@ class Environment:
     initialized = False
     sampler_created = False
     code_mode = CodeMode.PyFile
+    _lock = threading.RLock()
     _sys_exit = sys.exit
     _os_exit = os._exit
     _spawnv_passfds = util.spawnv_passfds
@@ -181,8 +180,9 @@ class Environment:
     @classmethod
     def clear_instances(cls) -> None:
         """Clear the singleton instances."""
-        cls._sampler = None
-        cls._args = None
+        with cls._lock:
+            cls._sampler = None
+            cls._args = None
 
     @classmethod
     def patch_sys_exit(cls, *_args, **kwargs):  # pragma: no cover
@@ -238,7 +238,7 @@ class Environment:
             mode (CodeMode): The code execution mode.
         """
         cls.code_mode = mode
-        with _lock:
+        with cls._lock:
             if cls.initialized:
                 raise RuntimeError(ERROR_ENV_INITIALIZED)
 
@@ -334,7 +334,7 @@ class Environment:
         Returns:
             None
         """  # noqa: E501
-        with _lock:
+        with cls._lock:
             if not cls.initialized:
                 return
             sys.exit = cls._sys_exit
