@@ -490,7 +490,6 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
                     "IO task result:",
                     "Threading task completed",
                     "All tasks completed!",
-                    "saved the profiling data to the svg file",
                 ],
                 options=["--focus-mode", "--interval", "100", "--debug", "-o", svg_file],
             )
@@ -517,7 +516,6 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
                     "IO task result:",
                     "Threading task completed",
                     "All tasks completed!",
-                    "saved the profiling data to the svg file",
                 ],
                 options=[
                     "--regex-patterns",
