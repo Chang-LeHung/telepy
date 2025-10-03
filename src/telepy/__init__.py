@@ -169,9 +169,6 @@ def profile(
         def my_function():
             # function code here
             pass
-
-        # Access the sampler to save SVG
-        my_function.sampler.save("output.svg", truncate=True)
     """
 
     def decorator(f):
