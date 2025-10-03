@@ -263,7 +263,7 @@ class Profiler:
         full_path: bool = False,
         inverted: bool = False,
         width: int = 1200,
-        sampling_interval: int = 50,
+        sampling_interval: int = 8_000,
         time: str = "cpu",
         debug: bool = False,
         ignore_frozen: bool = False,
