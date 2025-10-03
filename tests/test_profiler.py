@@ -282,6 +282,248 @@ class TestProfileDecorator(TestBase):
         if os.path.exists("test_decorator_custom.svg"):
             os.unlink("test_decorator_custom.svg")
 
+    def test_profile_decorator_with_exception(self):
+        """Test profile decorator when function raises exception."""
+
+        @profile(verbose=False, file="test_decorator_exception.svg")
+        def failing_function():
+            raise ValueError("Intentional error for testing")
+
+        # Function should raise exception
+        with self.assertRaises(ValueError) as cm:
+            failing_function()
+        self.assertIn("Intentional error", str(cm.exception))
+
+        # Profiler should still be in valid state
+        self.assertEqual(failing_function.sampler.state, ProfilerState.FINISHED)
+
+        # Clean up
+        if os.path.exists("test_decorator_exception.svg"):
+            os.unlink("test_decorator_exception.svg")
+
+    def test_profile_decorator_with_return_value(self):
+        """Test that decorator preserves function return values."""
+
+        @profile(verbose=False, file="test_decorator_return.svg")
+        def return_dict():
+            return {"key": "value", "number": 42}
+
+        result = return_dict()
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["key"], "value")
+        self.assertEqual(result["number"], 42)
+
+        # Clean up
+        if os.path.exists("test_decorator_return.svg"):
+            os.unlink("test_decorator_return.svg")
+
+    def test_profile_decorator_preserves_function_metadata(self):
+        """Test that decorator preserves function name and docstring."""
+
+        @profile(verbose=False, file="test_decorator_metadata.svg")
+        def documented_function():
+            """This is a test function with documentation."""
+            return "success"
+
+        # Check function metadata is preserved
+        self.assertEqual(documented_function.__name__, "documented_function")
+        self.assertIn("test function with documentation", documented_function.__doc__)
+
+        # Function should still work
+        result = documented_function()
+        self.assertEqual(result, "success")
+
+        # Clean up
+        if os.path.exists("test_decorator_metadata.svg"):
+            os.unlink("test_decorator_metadata.svg")
+
+    def test_profile_decorator_with_class_method(self):
+        """Test profile decorator on class methods."""
+
+        class Calculator:
+            @profile(verbose=False, file="test_decorator_method.svg")
+            def multiply(self, a, b):
+                return a * b
+
+        calc = Calculator()
+        result = calc.multiply(6, 7)
+        self.assertEqual(result, 42)
+
+        # Check sampler exists on the method
+        self.assertTrue(hasattr(Calculator.multiply, "sampler"))
+
+        # Clean up
+        if os.path.exists("test_decorator_method.svg"):
+            os.unlink("test_decorator_method.svg")
+
+    def test_profile_decorator_all_timer_modes(self):
+        """Test profile decorator with different timer modes."""
+
+        @profile(verbose=False, file="test_timer_cpu.svg", time="cpu")
+        def cpu_intensive():
+            return sum(i * i for i in range(1000))
+
+        @profile(verbose=False, file="test_timer_wall.svg", time="wall")
+        def wall_time():
+            time.sleep(0.05)
+            return "done"
+
+        result1 = cpu_intensive()
+        self.assertEqual(result1, 332833500)
+        self.assertEqual(cpu_intensive.sampler._time, "cpu")
+
+        result2 = wall_time()
+        self.assertEqual(result2, "done")
+        self.assertEqual(wall_time.sampler._time, "wall")
+
+        # Clean up
+        for f in ["test_timer_cpu.svg", "test_timer_wall.svg"]:
+            if os.path.exists(f):
+                os.unlink(f)
+
+    def test_profile_decorator_with_focus_mode(self):
+        """Test profile decorator with focus_mode enabled."""
+
+        @profile(
+            verbose=False,
+            file="test_focus_enabled.svg",
+            focus_mode=True,
+        )
+        def with_focus():
+            return [x**2 for x in range(50)]
+
+        result = with_focus()
+        self.assertEqual(len(result), 50)
+        self.assertTrue(with_focus.sampler._focus_mode)
+
+        # Clean up
+        if os.path.exists("test_focus_enabled.svg"):
+            os.unlink("test_focus_enabled.svg")
+
+    def test_profile_decorator_with_tree_mode(self):
+        """Test profile decorator with tree_mode enabled."""
+
+        @profile(
+            verbose=False,
+            file="test_tree_mode.svg",
+            tree_mode=True,
+        )
+        def tree_function():
+            def helper():
+                return sum(range(100))
+
+            return helper()
+
+        result = tree_function()
+        self.assertEqual(result, 4950)
+        self.assertTrue(tree_function.sampler._tree_mode)
+
+        # Clean up
+        if os.path.exists("test_tree_mode.svg"):
+            os.unlink("test_tree_mode.svg")
+
+    def test_profile_decorator_with_full_path(self):
+        """Test profile decorator with full_path option."""
+
+        @profile(
+            verbose=False,
+            file="test_full_path.svg",
+            full_path=True,
+        )
+        def full_path_function():
+            return "paths"
+
+        result = full_path_function()
+        self.assertEqual(result, "paths")
+        self.assertTrue(full_path_function.sampler._full_path)
+
+        # Clean up
+        if os.path.exists("test_full_path.svg"):
+            os.unlink("test_full_path.svg")
+
+    def test_profile_decorator_with_debug_mode(self):
+        """Test profile decorator with debug mode."""
+
+        @profile(
+            verbose=False,
+            file="test_debug.svg",
+            debug=True,
+        )
+        def debug_function():
+            return sum(range(50))
+
+        result = debug_function()
+        self.assertEqual(result, 1225)
+        self.assertTrue(debug_function.sampler._debug)
+
+        # Clean up
+        if os.path.exists("test_debug.svg"):
+            os.unlink("test_debug.svg")
+
+    def test_profile_decorator_with_ignore_frozen(self):
+        """Test profile decorator with ignore_frozen option."""
+
+        @profile(
+            verbose=False,
+            file="test_ignore_frozen.svg",
+            ignore_frozen=True,
+        )
+        def ignore_frozen_function():
+            return list(range(100))
+
+        result = ignore_frozen_function()
+        self.assertEqual(len(result), 100)
+        self.assertTrue(ignore_frozen_function.sampler._ignore_frozen)
+
+        # Clean up
+        if os.path.exists("test_ignore_frozen.svg"):
+            os.unlink("test_ignore_frozen.svg")
+
+    def test_profile_decorator_recursive_function(self):
+        """Test profile decorator on recursive functions."""
+
+        @profile(verbose=False, file="test_recursive.svg")
+        def factorial(n):
+            if n <= 1:
+                return 1
+            return n * factorial(n - 1)
+
+        result = factorial(5)
+        self.assertEqual(result, 120)
+
+        # Clean up
+        if os.path.exists("test_recursive.svg"):
+            os.unlink("test_recursive.svg")
+
+    def test_profile_decorator_generator_function(self):
+        """Test profile decorator on generator functions."""
+
+        @profile(verbose=False, file="test_generator.svg")
+        def generate_numbers():
+            for i in range(10):
+                yield i * 2
+
+        result = list(generate_numbers())
+        self.assertEqual(result, [0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
+
+        # Clean up
+        if os.path.exists("test_generator.svg"):
+            os.unlink("test_generator.svg")
+
+    def test_profile_decorator_with_lambda(self):
+        """Test that profile decorator works with named lambda."""
+
+        # Note: Direct lambda decoration is unusual but should work
+        profiled_lambda = profile(verbose=False, file="test_lambda.svg")(lambda x: x * x)
+
+        result = profiled_lambda(7)
+        self.assertEqual(result, 49)
+        self.assertTrue(hasattr(profiled_lambda, "sampler"))
+
+        # Clean up
+        if os.path.exists("test_lambda.svg"):
+            os.unlink("test_lambda.svg")
+
 
 class TestProfilerAdvanced(TestBase):
     """Test advanced profiler features."""
@@ -418,6 +660,20 @@ class TestProfilerAdvanced(TestBase):
             "test_decorator_args.svg",
             "test_decorator_multi.svg",
             "test_decorator_custom.svg",
+            "test_decorator_exception.svg",
+            "test_decorator_return.svg",
+            "test_decorator_metadata.svg",
+            "test_decorator_method.svg",
+            "test_timer_cpu.svg",
+            "test_timer_wall.svg",
+            "test_focus_enabled.svg",
+            "test_tree_mode.svg",
+            "test_full_path.svg",
+            "test_debug.svg",
+            "test_ignore_frozen.svg",
+            "test_recursive.svg",
+            "test_generator.svg",
+            "test_lambda.svg",
             "test_pause_resume_func.svg",
             "test_nested_context.svg",
             "test_cpu_timer.svg",
