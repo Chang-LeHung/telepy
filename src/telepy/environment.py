@@ -183,6 +183,7 @@ class Environment:
         with cls._lock:
             cls._sampler = None
             cls._args = None
+            cls.initialized = False
 
     @classmethod
     def patch_sys_exit(cls, *_args, **kwargs):  # pragma: no cover
