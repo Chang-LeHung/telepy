@@ -115,7 +115,7 @@ def install_monitor(
 def profile(
     func=None,
     *,
-    sampling_interval: int = 10,
+    sampling_interval: int = 2_000,
     time: str = "cpu",
     debug: bool = False,
     ignore_frozen: bool = False,
