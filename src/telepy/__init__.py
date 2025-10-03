@@ -127,7 +127,7 @@ def profile(
     verbose: bool = True,
     full_path: bool = False,
     width: int = 1200,
-    file: str | None = None,
+    file: str = "result.svg",
 ):
     """
     A decorator for profiling functions.
@@ -150,8 +150,7 @@ def profile(
         verbose: If True, print progress and completion messages when saving
         full_path: If True, display absolute file paths instead of relative paths
         width: Width in pixels for generated flame graph SVGs.
-        file: If provided, automatically save profiling results to this file after
-              each function execution
+        file: Output filename for the flame graph. Default is "result.svg".
 
     Usage:
         @profile
@@ -179,6 +178,7 @@ def profile(
         import functools
 
         # Create the sampler instance
+        # Use default "result.svg" if file is not specified
         sampler = Profiler(
             sampling_interval=sampling_interval,
             debug=debug,
@@ -476,11 +476,12 @@ class Profiler:
         self._transition_to(ProfilerState.FINISHED)
 
         if self._sampler is not None:
-            self._sampler.stop()
+            # Don't stop sampler here - let telepy_finalize handle it
+            # This ensures sampler.started is still True when _do_save() runs
+            self._finalize()
             if self._ctx is not None:
                 self._ctx.__exit__(None, None, None)
-            self._ctx = None
-            self._finalize()
+                self._ctx = None
 
     def pause(self):
         """Pause the profiler.
