@@ -360,7 +360,7 @@ class Profiler:
         from .environment import telepy_finalize
 
         telepy_finalize()
-        self._sampler = None
+        self._sampler = None  # release the memory
 
     def clean(self):
         """
