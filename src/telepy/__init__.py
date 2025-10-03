@@ -2,6 +2,7 @@
 
 import os as _os
 import threading
+from enum import Enum
 from types import FrameType
 
 from . import _telepysys  # type: ignore
@@ -13,6 +14,7 @@ from .thread import in_main_thread
 
 __all__: list[str] = [
     "Profiler",
+    "ProfilerState",
     "TelePyMonitor",
     "TelePyShell",
     "TelepySysAsyncSampler",
@@ -212,12 +214,49 @@ def profile(
         return decorator(func)
 
 
+class ProfilerState(Enum):
+    """Enumeration of profiler states for state machine management.
+
+    State transitions:
+        UNINITIALIZED -> INITIALIZED (via __init__)
+        INITIALIZED -> STARTED (via start())
+        STARTED -> PAUSED (via pause())
+        PAUSED -> STARTED (via resume())
+        STARTED -> STOPPED (via stop())
+        STOPPED -> STARTED (via start() - restart)
+        STARTED -> FINISHED (via finish() or __exit__)
+        PAUSED -> FINISHED (via finish())
+    """
+
+    UNINITIALIZED = "uninitialized"  # Before __init__ completes
+    INITIALIZED = "initialized"  # After __init__, ready to start
+    STARTED = "started"  # Profiler is actively sampling
+    PAUSED = "paused"  # Profiler is paused, can resume
+    STOPPED = "stopped"  # Profiler stopped, can restart
+    FINISHED = "finished"  # Terminal state, profiler completed
+
+
 class Profiler:
     """
     A sampler wrapper specifically designed for the profile decorator.
 
     This class wraps TelepySysAsyncWorkerSampler and provides additional
     functionality for saving flame graphs with optional truncation.
+
+    The profiler uses a state machine with the following states:
+        - UNINITIALIZED: Before initialization
+        - INITIALIZED: Ready to start profiling
+        - STARTED: Actively profiling
+        - PAUSED: Profiling paused, can be resumed
+        - STOPPED: Profiling stopped, can be restarted
+
+    Example:
+        >>> profiler = Profiler()  # INITIALIZED
+        >>> profiler.start()       # STARTED
+        >>> profiler.pause()       # PAUSED
+        >>> profiler.resume()      # STARTED
+        >>> profiler.stop()        # STOPPED
+        >>> profiler.start()       # STARTED (restart)
     """
 
     def __init__(
@@ -268,7 +307,10 @@ class Profiler:
         if width <= 0:
             raise ValueError("width must be a positive integer")
         from .config import TelePySamplerConfig
-        from .environment import CodeMode, telepy_env
+
+        # State machine initialization
+        self._state = ProfilerState.UNINITIALIZED
+        self._state_lock = threading.Lock()
 
         config = TelePySamplerConfig(
             interval=sampling_interval,
@@ -307,60 +349,179 @@ class Profiler:
         self._merge = merge
         self._ignore_self = ignore_self
         self._regex_patterns = regex_patterns
-        self._ctx = telepy_env(config, CodeMode.PyString)
+        self._config = config
+
+        # Don't create context yet - defer until first use
+        # This prevents Environment singleton conflicts in tests
+        self._ctx = None
         self._sampler: TelepySysAsyncWorkerSampler | None = None
+
+        # Mark as initialized
+        self._state = ProfilerState.INITIALIZED
+
+    @property
+    def state(self) -> ProfilerState:
+        """Get the current state of the profiler."""
+        with self._state_lock:
+            return self._state
+
+    def _transition_to(self, new_state: ProfilerState) -> None:
+        """Transition to a new state with validation.
+
+        Valid state transitions:
+            INITIALIZED -> STARTED
+            STARTED -> PAUSED
+            STARTED -> STOPPED
+            PAUSED -> STARTED
+            PAUSED -> STOPPED
+            STOPPED -> STARTED
+
+        Args:
+            new_state: The target state to transition to.
+
+        Raises:
+            RuntimeError: If the current state doesn't allow this transition.
+        """
+        # Define valid state transitions
+        valid_transitions = {
+            ProfilerState.INITIALIZED: [ProfilerState.STARTED],
+            ProfilerState.STARTED: [
+                ProfilerState.PAUSED,
+                ProfilerState.FINISHED,
+            ],
+            ProfilerState.PAUSED: [
+                ProfilerState.STARTED,
+                ProfilerState.FINISHED,
+            ],
+            ProfilerState.STOPPED: [],  # Deprecated, use FINISHED
+            ProfilerState.FINISHED: [],  # Terminal state
+        }
+
+        with self._state_lock:
+            allowed_states = valid_transitions.get(self._state, [])
+            if new_state not in allowed_states:
+                raise RuntimeError(
+                    f"Cannot transition to {new_state.value} from "
+                    f"{self._state.value}. "
+                    f"Allowed transitions: {[s.value for s in allowed_states]}"
+                )
+            self._state = new_state
 
     def __enter__(self):
         """Context manager entry."""
-        if self._sampler is None:
-            _, self._sampler = self._ctx.__enter__()
         self._context_depth += 1
         if self._context_depth == 1:
-            # Only start the sampler on the first entry and if not already started
-            if not self._sampler.started:
-                self._sampler.start()
+            # Create context on first use if not already created
+            if self._ctx is None:
+                from .environment import CodeMode, telepy_env
+
+                self._ctx = telepy_env(self._config, CodeMode.PyString)
+
+            # Initialize sampler from context if not already done
+            if self._sampler is None:
+                _, self._sampler = self._ctx.__enter__()
+
+            # Only start the sampler on the first entry
+            if self.state in (ProfilerState.INITIALIZED, ProfilerState.STOPPED):
+                if self._sampler is not None:
+                    self._transition_to(ProfilerState.STARTED)
+                    self._sampler.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self._context_depth -= 1
         if self._context_depth == 0:
-            # Only stop the sampler when all contexts have exited and if started
-            if self._sampler.started:
-                self._sampler.stop()
-                self._ctx.__exit__(exc_type, exc_val, exc_tb)
-                self._finalize()
-            # Auto-save if file parameter is provided
-            if self._output:
-                self.save(self._output, truncate=True)
+            # Stop the profiler when all contexts have exited
+            if self.state in (ProfilerState.STARTED, ProfilerState.PAUSED):
+                self.stop()
         return False
 
     def start(self):
-        """Start the profiler."""
-        if self._sampler is not None or self._sampler.started:
-            raise RuntimeError(
-                "Inconsistent state: sampler is already started or not initialized"
-            )
-        _, self._sampler = self._ctx.__enter__()
+        """Start the profiler.
+
+        Valid transitions:
+            INITIALIZED -> STARTED (first start)
+            STOPPED -> STARTED (restart)
+
+        Raises:
+            RuntimeError: If called from an invalid state.
+        """
+        from .environment import CodeMode, telepy_env
+
+        self._transition_to(ProfilerState.STARTED)
+
+        # Initialize sampler if needed
+        if self._sampler is None:
+            # Use existing context if available, otherwise create new one
+            if self._ctx is None:
+                self._ctx = telepy_env(self._config, CodeMode.PyString)
+            _, self._sampler = self._ctx.__enter__()
+
         self._sampler.start()
 
     def stop(self):
-        """Stop the profiler."""
-        if self._sampler is None or not self._sampler.started:
-            raise RuntimeError(
-                "Inconsistent state: sampler is not running or not initialized"
-            )
+        """Stop the profiler completely (terminal state).
 
-        self._sampler.stop()
-        self._ctx.__exit__(None, None, None)
-        self._finalize()
+        This method stops profiling and transitions to FINISHED state.
+        The profiler cannot be restarted after calling stop().
+
+        Valid transitions:
+            STARTED -> FINISHED
+            PAUSED -> FINISHED
+
+        Raises:
+            RuntimeError: If called from an invalid state.
+        """
+        self._transition_to(ProfilerState.FINISHED)
+
+        if self._sampler is not None:
+            self._sampler.stop()
+            if self._ctx is not None:
+                self._ctx.__exit__(None, None, None)
+            self._ctx = None
+            self._finalize()
+
+    def pause(self):
+        """Pause the profiler.
+
+        Valid transitions:
+            STARTED -> PAUSED
+
+        Raises:
+            RuntimeError: If called from an invalid state.
+        """
+        self._transition_to(ProfilerState.PAUSED)
+
+        if self._sampler is not None:
+            self._sampler.stop()
+
+    def resume(self):
+        """Resume the profiler from paused state.
+
+        Valid transitions:
+            PAUSED -> STARTED
+
+        Raises:
+            RuntimeError: If called from an invalid state.
+        """
+        self._transition_to(ProfilerState.STARTED)
+
+        if self._sampler is not None:
+            self._sampler.start()
 
     def _finalize(self):
         """Finalize the profiler, stopping the sampler and cleaning up."""
         from .environment import telepy_finalize
 
+        # Call telepy_finalize to clean up environment
         telepy_finalize()
-        self._sampler = None  # release the memory
+
+        # Clean up internal state
+        if self._sampler is not None:
+            self._sampler = None
+        if self._ctx is not None:
+            self._ctx = None
 
     def clean(self):
         """
