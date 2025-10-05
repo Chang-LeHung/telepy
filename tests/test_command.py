@@ -628,8 +628,6 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
                     "IO task result:",
                     "Threading task completed",
                     "All tasks completed!",
-                    r"Process \d+ saved the profiling data to the svg file",
-                    r"Process \d+ saved the profiling data to the folded file",
                 ],
                 options=[
                     "--focus-mode",
