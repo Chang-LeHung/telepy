@@ -388,15 +388,36 @@ _MIN_SAMPLE_COUNT = 50
 
 class FlameGraphSaver:
     def __init__(
-        self, args: TelePySamplerConfig, sampler: TelepySysAsyncWorkerSampler
+        self,
+        sampler: TelepySysAsyncWorkerSampler,
+        *,
+        full_path: bool = False,
+        inverted: bool = False,
+        width: int = 1200,
+        output: str = "result.svg",
+        verbose: bool = False,
+        folded_save: bool = False,
+        folded_file: str = "result.folded",
+        merge: bool = True,
+        debug: bool = False,
+        timeout: float = 10,
     ) -> None:
-        self.args = args
         self.sampler = sampler
+        self.full_path = full_path
+        self.inverted = inverted
+        self.width = width
+        self.output = output
+        self.verbose = verbose
+        self.folded_save = folded_save
+        self.folded_file = folded_file
+        self.merge = merge
+        self.debug = debug
+        self.timeout_limit = timeout
         self.site_path = site.getsitepackages()[0]
         self.work_dir = os.getcwd()
         self.title = TITLE
         self.lines = sampler.dumps().splitlines()  # no more last empty line
-        if not self.args.full_path:  # type : ignore
+        if not self.full_path:
             self.lines = process_stack_trace(self.lines, self.site_path, self.work_dir)
 
         self.timeout = False
@@ -409,8 +430,8 @@ class FlameGraphSaver:
             command=" ".join([sys.executable, *sys.argv]),
             package_path=os.path.dirname(self.site_path),
             work_dir=self.work_dir,
-            inverted=self.args.inverted,
-            width=self.args.width,
+            inverted=self.inverted,
+            width=self.width,
         )
 
         fg.parse_input()
@@ -438,31 +459,31 @@ class FlameGraphSaver:
         return [f"Process({pid});" + line for line in lines]
 
     def _single_process_root(self) -> None:
-        self._save_svg(self.args.output)
-        if self.args.verbose:
+        self._save_svg(self.output)
+        if self.verbose:
             logger.log_success_panel(
-                f"Process {self.pid} saved the profiling data to the svg file {self.args.output}"  # noqa: E501
+                f"Process {self.pid} saved the profiling data to the svg file {self.output}"  # noqa: E501
             )
-        if self.args.folded_save:
-            self._save_folded(self.args.folded_file)
-            if self.args.verbose:
+        if self.folded_save:
+            self._save_folded(self.folded_file)
+            if self.verbose:
                 logger.log_success_panel(
-                    f"Process {self.pid} saved the profiling data to the folded file {self.args.folded_file}"  # noqa: E501
+                    f"Process {self.pid} saved the profiling data to the folded file {self.folded_file}"  # noqa: E501
                 )
 
     def _single_process_child(self) -> None:
         # filename: pid-ppid.svg pid-ppid.folded
-        if not self.args.merge:
+        if not self.merge:
             filename = f"{self.pid}-{os.getppid()}.svg"
             self._save_svg(filename)
-            if self.args.debug:
+            if self.debug:
                 logger.log_success_panel(
                     f"Process {self.pid} saved the profiling data to the svg file {filename}"  # noqa: E501
                 )
-            if self.args.folded_save:
+            if self.folded_save:
                 filename = f"{self.pid}-{os.getppid()}.folded"
                 self._save_folded(filename)
-                if self.args.debug:
+                if self.debug:
                     logger.log_success_panel(
                         f"Process {self.pid} saved the profiling data to the folded file {filename}"  # noqa: E501
                     )
@@ -472,13 +493,13 @@ class FlameGraphSaver:
                 self.lines, f"pid-{self.pid}, ppid-{os.getppid()}"
             )
             self._save_folded(filename)
-            if self.args.debug:
+            if self.debug:
                 logger.log_success_panel(
                     f"Process {self.pid} saved the profiling data to the folded file {filename}"  # noqa: E501
                 )
 
     def _multi_process_root(self) -> None:
-        if self.args.merge:
+        if self.merge:
             files = os.listdir(os.getcwd())
             foldeds = [file for file in files if file.endswith(f"{self.pid}.folded")]
 
@@ -489,43 +510,43 @@ class FlameGraphSaver:
                     with open(file, "r+") as fp:
                         lines = fp.readlines()
                     os.unlink(file)
-                    if self.args.debug:
+                    if self.debug:
                         logger.log_success_panel(
                             f"Root process {self.pid} read and removed file {file}"
                         )
                     self.lines.extend([line.strip() for line in lines])
 
             load_chidren_file()
-            self._save_svg(self.args.output)
-            if self.args.verbose:
+            self._save_svg(self.output)
+            if self.verbose:
                 logger.log_success_panel(
                     f"Root process {self.pid} collected the profiling data to svg "
-                    f"file {self.args.output}"
+                    f"file {self.output}"
                 )
-            if self.args.folded_save:
-                self._save_folded(self.args.folded_file)
-                if self.args.verbose:
+            if self.folded_save:
+                self._save_folded(self.folded_file)
+                if self.verbose:
                     logger.log_success_panel(
                         f"Root process {self.pid} collected the profiling data "
-                        f"{foldeds} to the folded file {self.args.folded_file}"
+                        f"{foldeds} to the folded file {self.folded_file}"
                     )
         else:
-            self._save_svg(self.args.output)
-            if self.args.verbose:
+            self._save_svg(self.output)
+            if self.verbose:
                 logger.log_success_panel(
                     f"Root process {self.pid} saved the profiling data to"
-                    f" the svg file {self.args.output}"
+                    f" the svg file {self.output}"
                 )
-            if self.args.folded_save:
-                self._save_folded(self.args.folded_file)
-                if self.args.verbose:
+            if self.folded_save:
+                self._save_folded(self.folded_file)
+                if self.verbose:
                     logger.log_success_panel(
                         f"Root process {self.pid} saved the profiling data to"
-                        f" the folded file {self.args.folded_file}"
+                        f" the folded file {self.folded_file}"
                     )
 
     def _multi_process_child(self) -> None:
-        if self.args.merge:
+        if self.merge:
             files = os.listdir(os.getcwd())
             foldeds = [file for file in files if file.endswith(f"{self.pid}.folded")]
             self.lines = self.add_pid_prefix(
@@ -537,7 +558,7 @@ class FlameGraphSaver:
                     with open(file, "r+") as fp:
                         lines = fp.readlines()
                     os.unlink(file)
-                    if self.args.debug:
+                    if self.debug:
                         logger.log_success_panel(
                             f"Process {self.pid} read and removed file {file}"
                         )
@@ -546,7 +567,7 @@ class FlameGraphSaver:
             load_chidren_file()
             filename = f"{self.pid}-{os.getppid()}.folded"
             self._save_folded(filename)
-            if self.args.debug:
+            if self.debug:
                 logger.log_success_panel(
                     f"Process {self.pid} collected the profiling data {foldeds}"
                     f" to the folded file {filename}"
@@ -554,14 +575,14 @@ class FlameGraphSaver:
         else:
             filename = f"{self.pid}-{os.getppid()}.svg"
             self._save_svg(filename)
-            if self.args.debug:
+            if self.debug:
                 logger.log_success_panel(
                     f"Process {self.pid} saved the profiling data to the svg file {filename}"  # noqa: E501
                 )
-            if self.args.folded_save:
+            if self.folded_save:
                 filename = f"{self.pid}-{os.getppid()}.folded"
                 self._save_folded(filename)
-                if self.args.debug:
+                if self.debug:
                     logger.log_success_panel(
                         f"Process {self.pid} saved the profiling data to the folded file {filename}"  # noqa: E501
                     )
@@ -581,11 +602,11 @@ class FlameGraphSaver:
 
     def wait_children(self) -> None:
         """Wait for all child processes to exit."""
-        if not self.args.merge:
+        if not self.merge:
             return
         res: list[str] = []
         begin = time.time()
-        if self.args.debug:
+        if self.debug:
             logger.log_success_panel(
                 f"Process {self.pid} are waiting for {self.sampler.child_cnt} "
                 "child processes to complete"
@@ -594,7 +615,7 @@ class FlameGraphSaver:
             sched_yield()
             files = os.listdir(os.getcwd())
             res = [file for file in files if file.endswith(f"{self.pid}.folded")]
-            if time.time() - begin > self.args.timeout:  # pragma: no cover
+            if time.time() - begin > self.timeout_limit:  # pragma: no cover
                 self.timeout = True
                 break
         if self.timeout:  # pragma: no cover
@@ -642,7 +663,19 @@ def _do_save():
     current_sampler = Environment.get_sampler()
     assert current_args is not None
     assert current_sampler is not None
-    saver = FlameGraphSaver(current_args, current_sampler)
+    saver = FlameGraphSaver(
+        current_sampler,
+        full_path=current_args.full_path,
+        inverted=current_args.inverted,
+        width=current_args.width,
+        output=current_args.output,
+        verbose=current_args.verbose,
+        folded_save=current_args.folded_save,
+        folded_file=current_args.folded_file,
+        merge=current_args.merge,
+        debug=current_args.debug,
+        timeout=current_args.timeout,
+    )
     saver.save()
     if current_args.debug:
         from .logger import console
