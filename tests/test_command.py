@@ -789,6 +789,16 @@ class TestEnvironment(TestBase):
         else:
             self.fail("RuntimeError not raised")
 
+    def test_environment_cannot_be_instantiated(self):
+        """Test that Environment class cannot be instantiated."""
+        from telepy.environment import Environment
+
+        with self.assertRaises(TypeError) as context:
+            Environment()
+
+        self.assertIn("Environment class cannot be instantiated", str(context.exception))
+        self.assertIn("Use its class methods directly", str(context.exception))
+
 
 class TestFlameGraph(TestBase):
     def test_flamegraph(self):
