@@ -3,7 +3,7 @@ import signal
 import sys
 import threading
 from abc import ABC, abstractmethod
-from typing import override
+from typing import Literal, cast, override
 
 from . import _telepysys
 from .thread import in_main_thread
@@ -58,6 +58,18 @@ class SamplerMiddleware(ABC):
         Returns:
             str: A processed dump string to use instead of the original.
             None: Use the original dump string unchanged.
+
+        Example:
+            A folded stack dump produced by the sampler might look like::
+
+                "my_app/main.py;Worker.run;handle_task 42\n"
+                "scheduler.py;poll 1"
+
+            This represents two call stacks—``my_app/main.py -> Worker.run ->``
+            ``handle_task`` sampled 42 times, and ``scheduler.py -> poll``
+            sampled once. Note that the final line intentionally lacks a trailing
+            newline. Middleware can return a modified string (for example, stripping
+            paths or redacting frames) or ``None`` to keep the original text.
         """
         return None
 
@@ -267,6 +279,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         from_fork: bool = False,
         from_mp: bool = False,
         forkserver: bool = False,
+        time_mode: str = "cpu",
     ) -> None:
         """
         Args:
@@ -310,6 +323,16 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         self.from_fork = from_fork
         self.from_mp = from_mp
         self.forkserver = forkserver
+        normalized_time_mode = time_mode.lower()
+        if normalized_time_mode not in {"cpu", "wall"}:
+            raise ValueError("time_mode must be either 'cpu' or 'wall'")
+        self.time_mode = cast(Literal["cpu", "wall"], normalized_time_mode)
+        if self.time_mode == "cpu":
+            self._timer_signal = signal.SIGPROF
+            self._timer_type = signal.ITIMER_PROF
+        else:
+            self._timer_signal = signal.SIGALRM  # type: ignore[assignment]
+            self._timer_type = signal.ITIMER_REAL
 
     def adjust_interval(self) -> bool:
         """
@@ -428,6 +451,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         from_fork: bool = False,
         from_mp: bool = False,
         forkserver: bool = False,
+        time_mode: str = "cpu",
     ) -> None:
         """
         Args:
@@ -454,6 +478,8 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
                 Whether the sampler is running in the child process with the multiprocessing.
             forkserver (bool):
                 Whether the current process is the forkserver.
+            time_mode (str):
+                Timer source for sampling. "cpu" uses SIGPROF/ITIMER_PROF, "wall" uses SIGALRM/ITIMER_REAL.
         """  # noqa: E501
         _telepysys.AsyncSampler.__init__(self)
         SamplerMixin.__init__(self)
@@ -473,6 +499,16 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self.from_fork = from_fork
         self.from_mp = from_mp
         self.forkserver = forkserver
+        normalized_time_mode = time_mode.lower()
+        if normalized_time_mode not in {"cpu", "wall"}:
+            raise ValueError("time_mode must be either 'cpu' or 'wall'")
+        self.time_mode = cast(Literal["cpu", "wall"], normalized_time_mode)
+        if self.time_mode == "cpu":
+            self._timer_signal = signal.SIGPROF
+            self._timer_type = signal.ITIMER_PROF
+        else:
+            self._timer_signal = signal.SIGALRM  # type: ignore[assignment]
+            self._timer_type = signal.ITIMER_REAL
 
     @override
     def save(self, filename: str) -> None:
@@ -528,23 +564,24 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
                 "TelepySysAsyncSampler must be started from the main thread"
             )  # pragma: no cover
 
-        current = signal.getsignal(signal.SIGPROF)
+        current = signal.getsignal(self._timer_signal)
         if current not in (signal.SIG_DFL, signal.SIG_IGN):  # pragma: no cover
-            print(
-                "signal.SIGPROF is already in use by another handler, reset it now.",
-                file=sys.stderr,
+            message = (
+                f"signal {self._timer_signal!s} is already in use by another handler, "
+                "reset it now."
             )
-            signal.setitimer(signal.ITIMER_PROF, 0, 0)
-            signal.signal(signal.SIGPROF, signal.SIG_IGN)
+            print(message, file=sys.stderr)
+            signal.setitimer(self._timer_type, 0, 0)
+            signal.signal(self._timer_signal, signal.SIG_IGN)
 
         # Call middleware before starting
         self._call_middleware_before_start()
 
         try:
             self.sampling_tid = threading.get_ident()  # required for base class
-            signal.signal(signal.SIGPROF, self._async_routine)
+            signal.signal(self._timer_signal, self._async_routine)
             interval_sec = self.sampling_interval * 1e-6
-            signal.setitimer(signal.ITIMER_PROF, interval_sec, interval_sec)
+            signal.setitimer(self._timer_type, interval_sec, interval_sec)
             super().start()
 
             # Call middleware after successful star
@@ -562,8 +599,8 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self._call_middleware_before_stop()
 
         try:
-            signal.setitimer(signal.ITIMER_PROF, 0, 0)
-            signal.signal(signal.SIGPROF, signal.SIG_IGN)
+            signal.setitimer(self._timer_type, 0, 0)
+            signal.signal(self._timer_signal, signal.SIG_IGN)
             super().stop()
 
             # Call middleware after successful stop
@@ -594,6 +631,36 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
     """
     TelepyAsyncWorkerSampler is a TelepySysAsyncSampler that runs in the non-main threads.
     """
+
+    def __init__(
+        self,
+        sampling_interval: int = 10_000,
+        debug: bool = False,
+        ignore_frozen: bool = False,
+        ignore_self: bool = True,
+        tree_mode: bool = False,
+        focus_mode: bool = False,
+        regex_patterns: list | None = None,
+        is_root: bool = True,
+        from_fork: bool = False,
+        from_mp: bool = False,
+        forkserver: bool = False,
+        time_mode: str = "cpu",
+    ) -> None:
+        super().__init__(
+            sampling_interval=sampling_interval,
+            debug=debug,
+            ignore_frozen=ignore_frozen,
+            ignore_self=ignore_self,
+            tree_mode=tree_mode,
+            focus_mode=focus_mode,
+            regex_patterns=regex_patterns,
+            is_root=is_root,
+            from_fork=from_fork,
+            from_mp=from_mp,
+            forkserver=forkserver,
+            time_mode=time_mode,
+        )
 
     @override
     @in_main_thread
@@ -626,6 +693,16 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
     exports the profiling results when the sampler stops.
     """
 
+    def _log(self, message: str, file=None) -> None:
+        """Print message with middleware prefix.
+
+        Args:
+            message: The message to print.
+            file: Optional file to print to (default: stdout).
+        """
+        if self.verbose:
+            print(f"[PyTorchProfilerMiddleware] {message}", file=file)
+
     def __init__(
         self,
         output_dir: str = "./pytorch_profiles",
@@ -634,12 +711,8 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
         profile_memory: bool = True,
         with_stack: bool = True,
         export_chrome_trace: bool = True,
-        export_tensorboard: bool = False,
-        group_by_stack_n: int = 5,
-        schedule_wait: int = 1,
-        schedule_warmup: int = 1,
-        schedule_active: int = 3,
-        schedule_repeat: int = 1,
+        sort_by: str = "cpu_time_total",
+        verbose: bool = False,
     ):
         """Initialize PyTorch profiler middleware.
 
@@ -651,49 +724,43 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
             profile_memory: Whether to profile memory usage.
             with_stack: Whether to record call stack.
             export_chrome_trace: Whether to export Chrome trace format.
-            export_tensorboard: Whether to export TensorBoard format.
-            group_by_stack_n: Group operators by top N stack frames.
             schedule_wait: Number of steps to skip before profiling.
             schedule_warmup: Number of warmup steps.
             schedule_active: Number of active profiling steps.
             schedule_repeat: Number of cycles to repeat.
+            sort_by: Sort key for profiler statistics (default: 'cpu_time_total').
+            verbose: Whether to print profiler messages (default: False).
         """
         # Check if PyTorch is available
+        self.verbose = verbose
         try:
             import torch  # noqa: F401
             from torch.profiler import profile
 
             self.torch_available = True
-            print("[PyTorchProfilerMiddleware] PyTorch detected")
+            self._log("PyTorch detected")
         except ImportError:
-            print("[PyTorchProfilerMiddleware] Warning: PyTorch not available")
+            self._log("Warning: PyTorch not available")
+            raise
         self.output_dir = output_dir
         self.activities = activities or ["cpu"]
         self.record_shapes = record_shapes
         self.profile_memory = profile_memory
         self.with_stack = with_stack
         self.export_chrome_trace = export_chrome_trace
-        self.export_tensorboard = export_tensorboard
-        self.group_by_stack_n = group_by_stack_n
-        self.schedule_wait = schedule_wait
-        self.schedule_warmup = schedule_warmup
-        self.schedule_active = schedule_active
-        self.schedule_repeat = schedule_repeat
+        self.sort_by = sort_by
 
         self.profiler: profile | None = None
-        self.torch_available = False
 
-    def on_before_start(
-        self, sampler: "TelepySysAsyncSampler | TelepySysSampler"
-    ) -> None:
-        """Called before the sampler starts - prepare PyTorch profiler."""
-        if not self.torch_available:
-            print("[PyTorchProfilerMiddleware] Skipping: PyTorch not available")
-            return
+    def _get_timestamp(self) -> str:
+        """Generate timestamp string with millisecond precision.
 
-        print("[PyTorchProfilerMiddleware] Preparing to start PyTorch profiler...")
-        print(f"  - Output directory: {self.output_dir}")
-        print(f"  - Activities: {self.activities}")
+        Returns:
+            Timestamp string in format: YYYY-MM-DD_HH-MM-SS-mmm
+        """
+        from datetime import datetime
+
+        return datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")[:-3]
 
     def on_after_start(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
         """Called after the sampler starts - start PyTorch profiler."""
@@ -714,19 +781,12 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
                 activities.append(torch.profiler.ProfilerActivity.CPU)
             if "cuda" in self.activities and torch.cuda.is_available():
                 activities.append(torch.profiler.ProfilerActivity.CUDA)
-
-            # Create schedule
-            schedule = torch.profiler.schedule(
-                wait=self.schedule_wait,
-                warmup=self.schedule_warmup,
-                active=self.schedule_active,
-                repeat=self.schedule_repeat,
-            )
+            if "xpu" in self.activities and torch.xpu.is_available():
+                activities.append(torch.profiler.ProfilerActivity.XPU)
 
             # Initialize profiler
             self.profiler = torch.profiler.profile(
                 activities=activities,
-                schedule=schedule,
                 record_shapes=self.record_shapes,
                 profile_memory=self.profile_memory,
                 with_stack=self.with_stack,
@@ -734,22 +794,16 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
             )
 
             self.profiler.start()
-            print("[PyTorchProfilerMiddleware] Started PyTorch profiler")
-            print(f"  - Record shapes: {self.record_shapes}")
-            print(f"  - Profile memory: {self.profile_memory}")
+            self._log("Started PyTorch profiler")
+            if self.verbose:
+                print(f"  - Record shapes: {self.record_shapes}")
+                print(f"  - Profile memory: {self.profile_memory}")
 
         except Exception as e:
-            print(f"[PyTorchProfilerMiddleware] Error starting profiler: {e}")
+            self._log(f"Error starting profiler: {e}")
             self.profiler = None
 
     def on_before_stop(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
-        """Called before the sampler stops - prepare to stop profiler."""
-        if not self.torch_available or self.profiler is None:
-            return
-
-        print("[PyTorchProfilerMiddleware] Preparing to stop PyTorch profiler...")
-
-    def on_after_stop(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
         """Called after the sampler stops - stop profiler and export results."""
         if not self.torch_available or self.profiler is None:
             return
@@ -757,48 +811,44 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
         try:
             import os
 
+            # some of the following operations are slow, so we log them
+            self._log("Stopping PyTorch profiler...")
             self.profiler.stop()
-            print("[PyTorchProfilerMiddleware] Stopped PyTorch profiler")
+            self._log("Stopped PyTorch profiler")
 
             # Export additional formats if requested
             if self.export_chrome_trace:
+                self._log("Exporting Chrome trace...")
                 trace_path = os.path.join(self.output_dir, "chrome_trace.json")
                 self.profiler.export_chrome_trace(trace_path)
-                print(f"[PyTorchProfilerMiddleware] Exported Chrome trace: {trace_path}")
+                self._log(f"Exported Chrome trace: {trace_path}")
 
-            # Print profiler summary
-            print("\n" + "=" * 60)
-            print("PyTorch Profiler Summary")
-            print("=" * 60)
-            print(
-                self.profiler.key_averages(group_by_stack_n=self.group_by_stack_n).table(
-                    sort_by="cpu_time_total", row_limit=10
-                )
-            )
-            print("=" * 60 + "\n")
+            # Get profiler statistics
+            self._log("Generating profiler statistics...")
+            key_averages = self.profiler.key_averages()
+            stats_table = key_averages.table(sort_by=self.sort_by, row_limit=-1)
+            self._log("Generated profiler statistics")
+
+            # Save statistics to file
+            timestamp = self._get_timestamp()
+            stats_path = os.path.join(self.output_dir, f"profiler_stats_{timestamp}.txt")
+            with open(stats_path, "w") as f:
+                f.write(stats_table)
+            self._log(f"Saved profiler statistics: {stats_path}")
 
         except Exception as e:
-            print(f"[PyTorchProfilerMiddleware] Error stopping profiler: {e}")
+            self._log(f"Error stopping profiler: {e}", file=sys.stderr)
         finally:
             self.profiler = None
 
     def _trace_handler(self, prof):
-        """Handle trace export during profiling."""
-        try:
-            import os
-            import time
+        """Handle trace export during profiling.
 
-            timestamp = int(time.time())
-            trace_path = os.path.join(self.output_dir, f"pytorch_trace_{timestamp}.json")
-
-            prof.export_chrome_trace(trace_path)
-
-            if self.export_tensorboard:
-                tb_path = os.path.join(self.output_dir, "tensorboard")
-                prof.export_stacks(tb_path, "profiler_stacks.txt")
-
-        except Exception as e:
-            print(f"[PyTorchProfilerMiddleware] Error in trace handler: {e}")
+        Note: This handler is called during profiling steps. We keep it simple
+        to avoid conflicts with the final export in on_before_stop.
+        """
+        # Trace handler is kept minimal - all exports happen in on_before_stop
+        pass
 
     def __repr__(self) -> str:
         return f"PyTorchProfilerMiddleware(output_dir='{self.output_dir}')"

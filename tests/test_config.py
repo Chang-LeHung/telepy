@@ -323,7 +323,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertTrue(config.merge)
         self.assertFalse(config.mp)
         self.assertFalse(config.fork_server)
-        self.assertFalse(config.no_verbose)
+        self.assertTrue(config.verbose)
         self.assertIsNone(config.input)
         self.assertFalse(config.parse)
         self.assertIsNone(config.cmd)
@@ -355,7 +355,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         args.merge = False
         args.mp = False
         args.fork_server = False
-        args.no_verbose = True
+        args.verbose = False
         args.input = None
         args.parse = False
         args.cmd = "print('test')"
@@ -379,7 +379,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertFalse(config.merge)
         self.assertFalse(config.mp)
         self.assertFalse(config.fork_server)
-        self.assertTrue(config.no_verbose)
+        self.assertFalse(config.verbose)
         self.assertIsNone(config.input)
         self.assertFalse(config.parse)
         self.assertEqual(config.cmd, "print('test')")
@@ -464,7 +464,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
             mp=True,
             fork_server=False,
             # Interface options
-            no_verbose=False,
+            verbose=True,
             disable_traceback=True,
             create_config=False,
             # Input options
@@ -489,7 +489,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertTrue(config.merge)
         self.assertTrue(config.mp)
         self.assertFalse(config.fork_server)
-        self.assertFalse(config.no_verbose)
+        self.assertTrue(config.verbose)
         self.assertTrue(config.disable_traceback)
         self.assertFalse(config.create_config)
         self.assertTrue(config.parse)
@@ -530,7 +530,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
                 self.merge = True
                 self.mp = False
                 self.fork_server = False
-                self.no_verbose = False
+                self.verbose = True
                 self.disable_traceback = True  # Test new parameter
                 self.create_config = True  # Test new parameter
                 self.input = None
@@ -544,6 +544,58 @@ class TestTelePySamplerConfig(unittest.TestCase):
         # Verify new parameters are correctly set
         self.assertTrue(config.disable_traceback)
         self.assertTrue(config.create_config)
+
+    def test_time_parameter_validation(self):
+        """Test that time parameter validates correctly."""
+        # Test valid values
+        config_cpu = TelePySamplerConfig(time="cpu")
+        self.assertEqual(config_cpu.time, "cpu")
+
+        config_wall = TelePySamplerConfig(time="wall")
+        self.assertEqual(config_wall.time, "wall")
+
+        # Test invalid value raises ValueError
+        with self.assertRaises(ValueError) as context:
+            TelePySamplerConfig(time="invalid")
+        self.assertIn("must be either 'cpu' or 'wall'", str(context.exception))
+
+        # Test case insensitive handling
+        config_cpu_upper = TelePySamplerConfig(time="CPU")
+        self.assertEqual(config_cpu_upper.time, "cpu")
+
+        config_wall_mixed = TelePySamplerConfig(time="Wall")
+        self.assertEqual(config_wall_mixed.time, "wall")
+
+    def test_from_namespace_time_parameter(self):
+        """Test that from_namespace correctly handles time parameter."""
+        # Create a mock namespace with time parameter
+        namespace = argparse.Namespace()
+        namespace.time = "wall"
+        namespace.interval = 5000
+        namespace.debug = True
+
+        config = TelePySamplerConfig.from_namespace(namespace)
+        self.assertEqual(config.time, "wall")
+        self.assertEqual(config.interval, 5000)
+        self.assertEqual(config.debug, True)
+
+        # Test default time value when not provided
+        namespace_no_time = argparse.Namespace()
+        config_default = TelePySamplerConfig.from_namespace(namespace_no_time)
+        self.assertEqual(config_default.time, "cpu")
+
+    def test_to_cli_args_time_parameter(self):
+        """Test that to_cli_args includes time parameter."""
+        config = TelePySamplerConfig(time="wall", interval=1000)
+        args = config.to_cli_args()
+
+        self.assertIn("--time", args)
+        time_index = args.index("--time")
+        self.assertEqual(args[time_index + 1], "wall")
+
+        self.assertIn("--interval", args)
+        interval_index = args.index("--interval")
+        self.assertEqual(args[interval_index + 1], "1000")
 
 
 if __name__ == "__main__":

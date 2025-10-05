@@ -267,3 +267,38 @@ class TestSamplerContextManager(TestBase):
                 raise RuntimeError("Async test exception")
 
         self.assertFalse(sampler.started)
+
+    def test_time_mode_cpu(self):
+        """Test CPU time mode sampler initialization and signal selection."""
+        sampler = telepy.TelepySysAsyncSampler(time_mode="cpu")
+        self.assertEqual(sampler.time_mode, "cpu")
+        # In CPU mode, it should use SIGPROF
+        import signal
+
+        self.assertEqual(sampler._timer_signal, signal.SIGPROF)
+        self.assertEqual(sampler._timer_type, signal.ITIMER_PROF)
+
+    def test_time_mode_wall(self):
+        """Test wall time mode sampler initialization and signal selection."""
+        sampler = telepy.TelepySysAsyncSampler(time_mode="wall")
+        self.assertEqual(sampler.time_mode, "wall")
+        # In wall mode, it should use SIGALRM
+        import signal
+
+        self.assertEqual(sampler._timer_signal, signal.SIGALRM)
+        self.assertEqual(sampler._timer_type, signal.ITIMER_REAL)
+
+    def test_time_mode_invalid(self):
+        """Test that invalid time mode raises ValueError."""
+        with self.assertRaises(ValueError) as context:
+            telepy.TelepySysAsyncSampler(time_mode="invalid")
+        self.assertIn("time_mode must be either 'cpu' or 'wall'", str(context.exception))
+
+    def test_worker_sampler_time_mode(self):
+        """Test that worker sampler also supports time mode parameter."""
+        worker_sampler = telepy.TelepySysAsyncWorkerSampler(time_mode="wall")
+        self.assertEqual(worker_sampler.time_mode, "wall")
+        import signal
+
+        self.assertEqual(worker_sampler._timer_signal, signal.SIGALRM)
+        self.assertEqual(worker_sampler._timer_type, signal.ITIMER_REAL)

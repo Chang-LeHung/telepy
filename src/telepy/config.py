@@ -20,7 +20,11 @@ def _is_testing() -> bool:
 
 
 def _safe_print(message: str) -> None:
-    """Print message only if not in testing environment."""
+    """Print m        if not self.torch_export_chrome_trace:
+        args.append("--no-torch-export-chrome-trace")
+    if self.torch_sort_by != "cpu_time_total":      if not self.torch_export_chrome_trace:
+        args.append("--no-torch-export-chrome-trace")
+    if self.torch_sort_by != "cpu_time_total":nly if not in testing environment."""
     if not _is_testing():
         logger.console.print(message)
 
@@ -183,6 +187,7 @@ class TelePySamplerConfig:
         tree_mode: bool = False,
         inverted: bool = False,
         reverse: bool = False,
+        time: str = "cpu",
         # Filtering options
         ignore_frozen: bool = False,
         include_telepy: bool = False,
@@ -198,7 +203,7 @@ class TelePySamplerConfig:
         mp: bool = False,
         fork_server: bool = False,
         # Interface options
-        no_verbose: bool = False,
+        verbose: bool = True,
         disable_traceback: bool = False,
         create_config: bool = False,
         # Input options
@@ -206,7 +211,16 @@ class TelePySamplerConfig:
         parse: bool = False,
         cmd: str | None = None,
         module: str | None = None,
-    ):
+        # PyTorch profiler options
+        torch_profile: bool = False,
+        torch_output_dir: str = "./pytorch_profiles",
+        torch_activities: list[str] | None = None,
+        torch_record_shapes: bool = True,
+        torch_profile_memory: bool = True,
+        torch_with_stack: bool = True,
+        torch_export_chrome_trace: bool = True,
+        torch_sort_by: str = "cpu_time_total",
+    ) -> None:
         """Initialize TelePySamplerConfig with keyword-only arguments.
 
         Args:
@@ -228,6 +242,9 @@ class TelePySamplerConfig:
                 (inverted orientation). Default: False.
             reverse: Generate reversed flamegraphs (currently not fully implemented).
                 Default: False.
+            time: Select the timer source for asynchronous sampling. "cpu" uses
+                CPU time via SIGPROF/ITIMER_PROF; "wall" uses real time via
+                SIGALRM/ITIMER_REAL. Default: "cpu".
             ignore_frozen: Ignore frozen modules (compiled modules) in the stack
                 trace. Helps focus on user code by excluding standard library
                 internals. Default: False.
@@ -258,7 +275,7 @@ class TelePySamplerConfig:
                 Used internally by the profiler. Default: False.
             fork_server: Internal flag indicating this is running in forkserver
                 mode. Used internally by the profiler. Default: False.
-            no_verbose: Disable verbose output messages during profiling.
+            verbose: Enable verbose output messages during profiling.
                 When True, suppresses most status and progress messages.
                 Default: False.
             disable_traceback: Disable the rich (colorful) traceback display
@@ -275,6 +292,24 @@ class TelePySamplerConfig:
                 Default: None.
             module: Module name to profile when using -m option.
                 Default: None.
+            torch_profile: Enable PyTorch profiler integration. When True,
+                PyTorch profiler will run alongside TelePy profiler.
+                Default: False.
+            torch_output_dir: Directory to save PyTorch profiler outputs.
+                Default: "./pytorch_profiles".
+            torch_activities: List of PyTorch profiler activities to profile.
+                Valid values: ["cpu", "cuda", "xpu"]. If None, defaults to ["cpu"].
+                Default: None.
+            torch_record_shapes: Whether to record tensor shapes in PyTorch profiler.
+                Default: True.
+            torch_profile_memory: Whether to profile memory usage in PyTorch profiler.
+                Default: True.
+            torch_with_stack: Whether to record call stack in PyTorch profiler.
+                Default: True.
+            torch_export_chrome_trace: Whether to export Chrome trace format.
+                Default: True.
+            torch_sort_by: Sort key for PyTorch profiler statistics.
+                Default: "cpu_time_total".
         """
         # Sampler configuration
         self.interval = interval
@@ -284,6 +319,10 @@ class TelePySamplerConfig:
         self.tree_mode = tree_mode
         self.inverted = inverted
         self.reverse = reverse
+        time_mode = time.lower()
+        if time_mode not in {"cpu", "wall"}:
+            raise ValueError("time must be either 'cpu' or 'wall'")
+        self.time = time_mode
 
         # Filtering options
         self.ignore_frozen = ignore_frozen
@@ -305,7 +344,7 @@ class TelePySamplerConfig:
         self.fork_server = fork_server
 
         # Interface options
-        self.no_verbose = no_verbose
+        self.verbose = verbose
         self.disable_traceback = disable_traceback
         self.create_config = create_config
 
@@ -314,6 +353,16 @@ class TelePySamplerConfig:
         self.parse = parse
         self.cmd = cmd
         self.module = module
+
+        # PyTorch profiler options
+        self.torch_profile = torch_profile
+        self.torch_output_dir = torch_output_dir
+        self.torch_activities = torch_activities or ["cpu"]
+        self.torch_record_shapes = torch_record_shapes
+        self.torch_profile_memory = torch_profile_memory
+        self.torch_with_stack = torch_with_stack
+        self.torch_export_chrome_trace = torch_export_chrome_trace
+        self.torch_sort_by = torch_sort_by
 
     @classmethod
     def from_namespace(cls, args_namespace) -> "TelePySamplerConfig":
@@ -335,6 +384,7 @@ class TelePySamplerConfig:
             tree_mode=getattr(args_namespace, "tree_mode", False),
             inverted=getattr(args_namespace, "inverted", False),
             reverse=getattr(args_namespace, "reverse", False),
+            time=getattr(args_namespace, "time", "cpu"),
             ignore_frozen=getattr(args_namespace, "ignore_frozen", False),
             include_telepy=getattr(args_namespace, "include_telepy", False),
             focus_mode=getattr(args_namespace, "focus_mode", False),
@@ -346,13 +396,25 @@ class TelePySamplerConfig:
             merge=getattr(args_namespace, "merge", True),
             mp=getattr(args_namespace, "mp", False),
             fork_server=getattr(args_namespace, "fork_server", False),
-            no_verbose=getattr(args_namespace, "no_verbose", False),
+            verbose=getattr(args_namespace, "verbose", True),
             disable_traceback=getattr(args_namespace, "disable_traceback", False),
             create_config=getattr(args_namespace, "create_config", False),
             input=getattr(args_namespace, "input", None),
             parse=getattr(args_namespace, "parse", False),
             cmd=getattr(args_namespace, "cmd", None),
             module=getattr(args_namespace, "module", None),
+            torch_profile=getattr(args_namespace, "torch_profile", False),
+            torch_output_dir=getattr(
+                args_namespace, "torch_output_dir", "./pytorch_profiles"
+            ),
+            torch_activities=getattr(args_namespace, "torch_activities", None),
+            torch_record_shapes=getattr(args_namespace, "torch_record_shapes", True),
+            torch_profile_memory=getattr(args_namespace, "torch_profile_memory", True),
+            torch_with_stack=getattr(args_namespace, "torch_with_stack", True),
+            torch_export_chrome_trace=getattr(
+                args_namespace, "torch_export_chrome_trace", True
+            ),
+            torch_sort_by=getattr(args_namespace, "torch_sort_by", "cpu_time_total"),
         )
 
     def to_cli_args(self) -> list[str]:
@@ -389,6 +451,9 @@ class TelePySamplerConfig:
         if self.interval:
             res.append("--interval")
             res.append(str(self.interval))
+        if self.time != "cpu":
+            res.append("--time")
+            res.append(self.time)
         if self.folded_save:
             res.append("--folded-save")
         if self.folded_file:
@@ -402,6 +467,26 @@ class TelePySamplerConfig:
         if self.fork_server:  # pragma: no cover
             # nobody writes code to use it.
             res.append("--fork-server")
+        if self.torch_profile:
+            res.append("--torch-profile")
+        if self.torch_output_dir:
+            res.append("--torch-output-dir")
+            res.append(self.torch_output_dir)
+        if self.torch_activities:
+            for activity in self.torch_activities:
+                res.append("--torch-activities")
+                res.append(activity)
+        if not self.torch_record_shapes:
+            res.append("--no-torch-record-shapes")
+        if not self.torch_profile_memory:
+            res.append("--no-torch-profile-memory")
+        if not self.torch_with_stack:
+            res.append("--no-torch-with-stack")
+        if not self.torch_export_chrome_trace:
+            res.append("--no-torch-export-chrome-trace")
+        if self.torch_sort_by != "cpu_time_total":
+            res.append("--torch-sort-by")
+            res.append(self.torch_sort_by)
         return res
 
 

@@ -1,6 +1,7 @@
 """."""
 
 import threading
+from enum import Enum
 from types import FrameType
 
 from . import _telepysys  # type: ignore
@@ -11,6 +12,8 @@ from .shell import TelePyShell
 from .thread import in_main_thread
 
 __all__: list[str] = [
+    "Profiler",
+    "ProfilerState",
     "TelePyMonitor",
     "TelePyShell",
     "TelepySysAsyncSampler",
@@ -108,14 +111,11 @@ def install_monitor(
     return monitor
 
 
-class Profiler(TelepySysAsyncWorkerSampler):
-    pass
-
-
 def profile(
     func=None,
     *,
-    sampling_interval: int = 10_000,
+    sampling_interval: int = 2_000,
+    time: str = "cpu",
     debug: bool = False,
     ignore_frozen: bool = False,
     ignore_self: bool = True,
@@ -126,7 +126,7 @@ def profile(
     verbose: bool = True,
     full_path: bool = False,
     width: int = 1200,
-    file: str | None = None,
+    file: str = "result.svg",
 ):
     """
     A decorator for profiling functions.
@@ -141,14 +141,15 @@ def profile(
         ignore_frozen: Whether to ignore frozen threads
         ignore_self: Whether to ignore the current thread stack trace data
         tree_mode: Whether to use the tree mode
+        time: Select sampling timer source. "cpu" uses SIGPROF/ITIMER_PROF,
+            "wall" uses SIGALRM/ITIMER_REAL. Default: "cpu".
         inverted: Render profiling results with root frames at the top
         focus_mode: Whether to focus on user code
         regex_patterns: List of regex patterns for filtering stack traces
         verbose: If True, print progress and completion messages when saving
         full_path: If True, display absolute file paths instead of relative paths
-      width: Width in pixels for generated flame graph SVGs.
-        file: If provided, automatically save profiling results to this file after
-              each function execution
+        width: Width in pixels for generated flame graph SVGs.
+        file: Output filename for the flame graph. Default is "result.svg".
 
     Usage:
         @profile
@@ -167,41 +168,34 @@ def profile(
         def my_function():
             # function code here
             pass
-
-        # Access the sampler to save SVG
-        my_function.sampler.save("output.svg", truncate=True)
     """
 
     def decorator(f):
         import functools
 
         # Create the sampler instance
-        sampler = _FunctionProfiler(
+        # Use default "result.svg" if file is not specified
+        sampler = Profiler(
             sampling_interval=sampling_interval,
             debug=debug,
             ignore_frozen=ignore_frozen,
             ignore_self=ignore_self,
             tree_mode=tree_mode,
+            time=time,
             inverted=inverted,
             focus_mode=focus_mode,
             regex_patterns=regex_patterns,
             verbose=verbose,
             full_path=full_path,
             width=width,
-            file=file,
+            output=file,
         )
-
-        # Set function name for truncation
-        sampler.function_name = f.__name__
 
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
             with sampler:
                 result = f(*args, **kwargs)
 
-            if sampler._context_depth == 0:
-                if sampler._file:
-                    sampler.save(sampler._file, truncate=True, verbose=sampler._verbose)
             return result
 
         # Add sampler attribute to the wrapper for external access
@@ -216,161 +210,312 @@ def profile(
         return decorator(func)
 
 
-class _FunctionProfiler:
+class ProfilerState(Enum):
+    """Enumeration of profiler states for state machine management.
+
+    State transitions:
+        UNINITIALIZED -> INITIALIZED (via __init__)
+        INITIALIZED -> STARTED (via start())
+        STARTED -> PAUSED (via pause())
+        PAUSED -> STARTED (via resume())
+        STARTED -> STOPPED (via stop())
+        STOPPED -> STARTED (via start() - restart)
+        STARTED -> FINISHED (via finish() or __exit__)
+        PAUSED -> FINISHED (via finish())
+    """
+
+    UNINITIALIZED = "uninitialized"  # Before __init__ completes
+    INITIALIZED = "initialized"  # After __init__, ready to start
+    STARTED = "started"  # Profiler is actively sampling
+    PAUSED = "paused"  # Profiler is paused, can resume
+    STOPPED = "stopped"  # Profiler stopped, can restart
+    FINISHED = "finished"  # Terminal state, profiler completed
+
+
+class Profiler:
     """
     A sampler wrapper specifically designed for the profile decorator.
 
     This class wraps TelepySysAsyncWorkerSampler and provides additional
     functionality for saving flame graphs with optional truncation.
+
+    The profiler uses a state machine with the following states:
+        - UNINITIALIZED: Before initialization
+        - INITIALIZED: Ready to start profiling
+        - STARTED: Actively profiling
+        - PAUSED: Profiling paused, can be resumed
+        - STOPPED: Profiling stopped, can be restarted
+
+    Example:
+        >>> profiler = Profiler()  # INITIALIZED
+        >>> profiler.start()       # STARTED
+        >>> profiler.pause()       # PAUSED
+        >>> profiler.resume()      # STARTED
+        >>> profiler.stop()        # STOPPED
+        >>> profiler.start()       # STARTED (restart)
     """
 
     def __init__(
         self,
-        verbose=True,
-        full_path=False,
-        file=None,
         *,
+        verbose: bool = True,
+        full_path: bool = False,
         inverted: bool = False,
         width: int = 1200,
-        **kwargs,
+        sampling_interval: int = 8_000,
+        time: str = "cpu",
+        debug: bool = False,
+        ignore_frozen: bool = False,
+        tree_mode: bool = False,
+        focus_mode: bool = False,
+        timeout: int = 10,
+        output: str = "result.svg",
+        folded_saved: bool = False,
+        folded_filename: str = "result.folded",
+        merge: bool = False,
+        ignore_self: bool = True,
+        regex_patterns: list | None = None,
     ):
-        """Initialize the FunctionProfiler with TelepySysAsyncWorkerSampler."""
-        self._sampler = TelepySysAsyncWorkerSampler(**kwargs)
-        self._function_name: str | None = None
+        """Initialize the FunctionProfiler with TelepySysAsyncWorkerSampler.
+
+        Args:
+            verbose (bool): Enable verbose output messages during profiling.
+            full_path (bool): Display absolute file path in the flamegraph.
+            inverted (bool): Render flame graphs with the root frame at the top.
+            width (int): SVG width in pixels for generated flamegraphs.
+            sampling_interval (int): The interval at which the sampler will sample the
+                current stack trace.
+            time (str): Timer source selection. "cpu" uses SIGPROF/ITIMER_PROF;
+                "wall" uses SIGALRM/ITIMER_REAL.
+            debug (bool): Whether to print debug messages.
+            ignore_frozen (bool): Whether to ignore frozen threads.
+            tree_mode (bool): Whether to use the tree mode.
+            focus_mode (bool): Whether to focus on user code by ignoring standard
+                library and third-party packages.
+            timeout (int): Timeout in seconds for waiting for the subprocess.
+            output (str): Output filename for the flame graph.
+            folded_saved (bool): Whether to save the folded stack file.
+            folded_filename (str): Filename for the folded stack file if saved.
+            merge (bool): Whether to merge samples with the same stack trace.
+            ignore_self (bool): Whether to ignore telepy stack trace data.
+            regex_patterns (list | None): List of regex patterns for filtering stack traces.
+        """  # noqa: E501
+        if width <= 0:
+            raise ValueError("width must be a positive integer")
+        from .config import TelePySamplerConfig
+
+        # State machine initialization
+        self._state = ProfilerState.UNINITIALIZED
+        self._state_lock = threading.Lock()
+
+        config = TelePySamplerConfig(
+            interval=sampling_interval,
+            timeout=timeout,
+            debug=debug,
+            full_path=full_path,
+            tree_mode=tree_mode,
+            inverted=inverted,
+            time=time,
+            ignore_frozen=ignore_frozen,
+            include_telepy=not ignore_self,
+            focus_mode=focus_mode,
+            output=output,
+            folded_save=folded_saved,
+            folded_file=folded_filename,
+            merge=merge,
+            width=width,
+            regex_patterns=regex_patterns,
+        )
+
         self._context_depth = 0
         self._verbose = verbose
         self._full_path = full_path
-        self._file = file
+        self._output = output
         self._inverted = inverted
-        if width <= 0:
-            raise ValueError("width must be a positive integer")
         self._width = width
+        self._folded_saved = folded_saved
+        self._folded_filename = folded_filename
+        self._sampling_interval = sampling_interval
+        self._time = time
+        self._debug = debug
+        self._ignore_frozen = ignore_frozen
+        self._tree_mode = tree_mode
+        self._focus_mode = focus_mode
+        self._timeout = timeout
+        self._merge = merge
+        self._ignore_self = ignore_self
+        self._regex_patterns = regex_patterns
+        self._config = config
+
+        # Don't create context yet - defer until first use
+        # This prevents Environment singleton conflicts in tests
+        self._ctx = None
+        self._sampler: TelepySysAsyncWorkerSampler | None = None
+
+        # Mark as initialized
+        self._state = ProfilerState.INITIALIZED
+
+    @property
+    def state(self) -> ProfilerState:
+        """Get the current state of the profiler."""
+        with self._state_lock:
+            return self._state
+
+    def _transition_to(self, new_state: ProfilerState) -> None:
+        """Transition to a new state with validation.
+
+        Valid state transitions:
+            INITIALIZED -> STARTED
+            STARTED -> PAUSED
+            STARTED -> STOPPED
+            PAUSED -> STARTED
+            PAUSED -> STOPPED
+            STOPPED -> STARTED
+
+        Args:
+            new_state: The target state to transition to.
+
+        Raises:
+            RuntimeError: If the current state doesn't allow this transition.
+        """
+        # Define valid state transitions
+        valid_transitions = {
+            ProfilerState.INITIALIZED: [ProfilerState.STARTED],
+            ProfilerState.STARTED: [
+                ProfilerState.PAUSED,
+                ProfilerState.FINISHED,
+            ],
+            ProfilerState.PAUSED: [
+                ProfilerState.STARTED,
+                ProfilerState.FINISHED,
+            ],
+            ProfilerState.STOPPED: [],  # Deprecated, use FINISHED
+            ProfilerState.FINISHED: [],  # Terminal state
+        }
+
+        with self._state_lock:
+            allowed_states = valid_transitions.get(self._state, [])
+            if new_state not in allowed_states:
+                raise RuntimeError(
+                    f"Cannot transition to {new_state.value} from "
+                    f"{self._state.value}. "
+                    f"Allowed transitions: {[s.value for s in allowed_states]}"
+                )
+            self._state = new_state
 
     def __enter__(self):
         """Context manager entry."""
         self._context_depth += 1
         if self._context_depth == 1:
-            # Only start the sampler on the first entry and if not already started
-            if not self._sampler.started:
-                self._sampler.start()
+            # Create context on first use if not already created
+            if self._ctx is None:
+                from .environment import CodeMode, telepy_env
+
+                self._ctx = telepy_env(self._config, CodeMode.PyString)
+
+            # Initialize sampler from context if not already done
+            if self._sampler is None:
+                _, self._sampler = self._ctx.__enter__()
+
+            # Only start the sampler on the first entry
+            if self.state in (ProfilerState.INITIALIZED, ProfilerState.STOPPED):
+                if self._sampler is not None:
+                    self._transition_to(ProfilerState.STARTED)
+                    self._sampler.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self._context_depth -= 1
         if self._context_depth == 0:
-            # Only stop the sampler when all contexts have exited and if started
-            if self._sampler.started:
-                self._sampler.stop()
-            # Auto-save if file parameter is provided
-            if self._file:
-                self.save(self._file, truncate=True)
+            # Stop the profiler when all contexts have exited
+            if self.state in (ProfilerState.STARTED, ProfilerState.PAUSED):
+                self.stop()
         return False
 
     def start(self):
-        """Start the profiler."""
+        """Start the profiler.
+
+        Valid transitions:
+            INITIALIZED -> STARTED (first start)
+            STOPPED -> STARTED (restart)
+
+        Raises:
+            RuntimeError: If called from an invalid state.
+        """
+        from .environment import CodeMode, telepy_env
+
+        self._transition_to(ProfilerState.STARTED)
+
+        # Initialize sampler if needed
+        if self._sampler is None:
+            # Use existing context if available, otherwise create new one
+            if self._ctx is None:
+                self._ctx = telepy_env(self._config, CodeMode.PyString)
+            _, self._sampler = self._ctx.__enter__()
+
         self._sampler.start()
 
     def stop(self):
-        """Stop the profiler."""
-        self._sampler.stop()
+        """Stop the profiler completely (terminal state).
 
-    def save(
-        self,
-        filename: str,
-        truncate: bool = True,
-        verbose: bool | None = None,
-        full_path: bool | None = None,
-        width: int | None = None,
-    ):
+        This method stops profiling and transitions to FINISHED state.
+        The profiler cannot be restarted after calling stop().
+
+        Valid transitions:
+            STARTED -> FINISHED
+            PAUSED -> FINISHED
+
+        Raises:
+            RuntimeError: If called from an invalid state.
         """
-        Save the profiling data as an SVG flame graph.
+        self._transition_to(ProfilerState.FINISHED)
 
-        Args:
-            filename: The output filename for the SVG file
-            truncate: If True, only show the function as root node in the flame graph
-            verbose: If True, print progress and completion messages.
-                    If None, use the decorator's verbose setting
-            full_path: If True, display absolute file paths in the flamegraph instead of
-                      relative paths and hide site-packages details.
-                      If None, use the decorator's full_path setting
+        if self._sampler is not None:
+            # Don't stop sampler here - let telepy_finalize handle it
+            # This ensures sampler.started is still True when _do_save() runs
+            self._finalize()
+            if self._ctx is not None:
+                self._ctx.__exit__(None, None, None)
+                self._ctx = None
+
+    def pause(self):
+        """Pause the profiler.
+
+        Valid transitions:
+            STARTED -> PAUSED
+
+        Raises:
+            RuntimeError: If called from an invalid state.
         """
-        import os
-        import site
-        import sys
+        self._transition_to(ProfilerState.PAUSED)
 
-        from .flamegraph import FlameGraph, process_stack_trace
+        if self._sampler is not None:
+            self._sampler.stop()
 
-        # Use decorator defaults if not specified
-        if verbose is None:
-            verbose = self._verbose
-        if full_path is None:
-            full_path = self._full_path
-        width_value = width if width is not None else self._width
-        if width_value <= 0:
-            raise ValueError("width must be a positive integer")
+    def resume(self):
+        """Resume the profiler from paused state.
 
-        if verbose:
-            print(f"Saving profiling data to {filename}...")
+        Valid transitions:
+            PAUSED -> STARTED
 
-        # Get the raw profiling data
-        content = self._sampler.dumps()
-        lines = content.splitlines()  # No more last empty line
+        Raises:
+            RuntimeError: If called from an invalid state.
+        """
+        self._transition_to(ProfilerState.STARTED)
 
-        if truncate and self.function_name:
-            # Filter lines to only include stacks that contain the target function
-            filtered_lines = []
-            for line in lines:
-                if line.strip():
-                    stack_part = line.rsplit(" ", 1)[0]  # Get stack without count
-                    if self.function_name in stack_part:
-                        # Truncate the stack to start from the target function
-                        frames = stack_part.split(";")
-                        # Find the first occurrence of our function
-                        for i, frame in enumerate(frames):
-                            if self.function_name in frame:
-                                # Create new stack starting from this function
-                                new_stack = ";".join(frames[i:])
-                                count = line.rsplit(" ", 1)[1]
-                                filtered_lines.append(f"{new_stack} {count}")
-                                break
-            lines = filtered_lines
+        if self._sampler is not None:
+            self._sampler.start()
 
-        # Get site package path for flame graph configuration
-        site_path = site.getsitepackages()[0] if site.getsitepackages() else ""
-        work_dir = os.getcwd()
+    def _finalize(self):
+        """Finalize the profiler, stopping the sampler and cleaning up."""
+        from .environment import telepy_finalize
 
-        # Process stack traces (remove site packages info etc.) only if full_path is False
-        if not full_path:
-            lines = process_stack_trace(lines, site_path, work_dir)
+        # Call telepy_finalize to clean up environment
+        telepy_finalize()
 
-        # Generate flame graph
-        fg = FlameGraph(
-            lines,
-            title=f"TelePy Profiler {self.function_name}",
-            command=" ".join([sys.executable, *sys.argv]),
-            package_path=os.path.dirname(site_path) if site.getsitepackages() else "",
-            work_dir=work_dir,
-            inverted=self._inverted,
-            width=width_value,
-        )
-
-        fg.parse_input()
-        svg_content = fg.generate_svg()
-
-        # Save to file
-        with open(filename, "w") as f:
-            f.write(svg_content)
-
-        if verbose:
-            print(f"Profiling data saved to {filename}")
-
-    @property
-    def function_name(self):
-        """Get the function name for truncation purposes."""
-        return self._function_name
-
-    @function_name.setter
-    def function_name(self, name: str):
-        """Set the function name for truncation purposes."""
-        self._function_name = name
+        # Clean up internal state
+        if self._sampler is not None:
+            self._sampler = None
+        if self._ctx is not None:
+            self._ctx = None

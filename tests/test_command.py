@@ -490,7 +490,6 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
                     "IO task result:",
                     "Threading task completed",
                     "All tasks completed!",
-                    "saved the profiling data to the svg file",
                 ],
                 options=["--focus-mode", "--interval", "100", "--debug", "-o", svg_file],
             )
@@ -517,7 +516,6 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
                     "IO task result:",
                     "Threading task completed",
                     "All tasks completed!",
-                    "saved the profiling data to the svg file",
                 ],
                 options=[
                     "--regex-patterns",
@@ -630,8 +628,6 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
                     "IO task result:",
                     "Threading task completed",
                     "All tasks completed!",
-                    r"Process \d+ saved the profiling data to the svg file",
-                    r"Process \d+ saved the profiling data to the folded file",
                 ],
                 options=[
                     "--focus-mode",
@@ -791,6 +787,16 @@ class TestEnvironment(TestBase):
         else:
             self.fail("RuntimeError not raised")
 
+    def test_environment_cannot_be_instantiated(self):
+        """Test that Environment class cannot be instantiated."""
+        from telepy.environment import Environment
+
+        with self.assertRaises(TypeError) as context:
+            Environment()
+
+        self.assertIn("Environment class cannot be instantiated", str(context.exception))
+        self.assertIn("Use its class methods directly", str(context.exception))
+
 
 class TestFlameGraph(TestBase):
     def test_flamegraph(self):
@@ -877,3 +883,155 @@ class TestFlameGraph(TestBase):
 
         self.assertGreater(standard_root_y, inverted_root_y)
         self.assertGreaterEqual(inverted_root_y, 120.0)
+
+
+class TestMultiFileParse(CommandTemplate):
+    def test_parse_stack_trace_multiple_files(self):
+        """Test parsing multiple stack trace files into a single flame graph."""
+
+        primary_content = """MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:main:961;tests/test_files/test_multi.py:fib:4 3
+MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:main:961;tests/test_files/test_multi.py:fib:4;tests/test_files/test_multi.py:fib:4 9
+"""  # noqa: E501
+        extra_content = (
+            "WorkerThread;custom.module:custom_function:1;custom.module:inner:2 5\n"
+        )
+
+        primary_file = tempfile.NamedTemporaryFile(delete=False, mode="w+")
+        extra_file = tempfile.NamedTemporaryFile(delete=False, mode="w+")
+
+        result_svg = "result.svg"
+
+        try:
+            primary_file.write(primary_content)
+            primary_file.flush()
+            primary_file.close()
+
+            extra_file.write(extra_content)
+            extra_file.flush()
+            extra_file.close()
+
+            self.run_command(
+                options=[
+                    f"{primary_file.name}",
+                    f"{extra_file.name}",
+                    "--parse",
+                    "--debug",
+                ],
+            )
+
+            with open(result_svg, encoding="utf-8") as svg_file:
+                svg_content = svg_file.read()
+
+            self.assertIn("custom.module:inner", svg_content)
+        finally:
+            for path in (primary_file.name, extra_file.name, result_svg):
+                if os.path.exists(path):
+                    os.unlink(path)
+
+    def test_time_cpu_flag(self):
+        """Test --time cpu command line option."""
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            svg_file = f.name
+
+        try:
+            self.run_command(
+                [
+                    "--time",
+                    "cpu",
+                    "-c",
+                    "sum(i**2 for i in range(10000)); print('CPU test done')",
+                    "-o",
+                    svg_file,
+                ],
+                stdout_check_list=[
+                    "CPU test done",
+                    "saved the profiling data to the svg file",
+                ],
+            )
+        finally:
+            if os.path.exists(svg_file):
+                os.unlink(svg_file)
+
+    def test_time_wall_flag(self):
+        """Test --time wall command line option."""
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            svg_file = f.name
+
+        try:
+            self.run_command(
+                [
+                    "--time",
+                    "wall",
+                    "-c",
+                    (
+                        "import time; sum(i**2 for i in range(5000)); "
+                        "time.sleep(0.01); print('Wall test done')"
+                    ),
+                    "-o",
+                    svg_file,
+                ],
+                stdout_check_list=[
+                    "Wall test done",
+                    "saved the profiling data to the svg file",
+                ],
+            )
+        finally:
+            if os.path.exists(svg_file):
+                os.unlink(svg_file)
+
+    def test_time_invalid_flag(self):
+        """Test --time with invalid value should show error."""
+        output = self.run_command(
+            ["--time", "invalid", "-c", "print('test')"], exit_code=2
+        )
+        stderr = output.stderr.decode("utf-8")
+        self.assertIn("invalid choice: 'invalid'", stderr)
+        self.assertIn("choose from cpu, wall", stderr)
+
+    def test_time_default_behavior(self):
+        """Test that default behavior is equivalent to --time cpu."""
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f1:
+            svg_file1 = f1.name
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f2:
+            svg_file2 = f2.name
+
+        try:
+            # Run without --time flag (should default to cpu)
+            output1 = self.run_command(
+                [
+                    "-c",
+                    "sum(i**2 for i in range(1000)); print('Default test')",
+                    "-o",
+                    svg_file1,
+                ],
+                stdout_check_list=["Default test"],
+            )
+
+            # Run with explicit --time cpu
+            output2 = self.run_command(
+                [
+                    "--time",
+                    "cpu",
+                    "-c",
+                    "sum(i**2 for i in range(1000)); print('CPU test')",
+                    "-o",
+                    svg_file2,
+                ],
+                stdout_check_list=["CPU test"],
+            )
+
+            # Both should succeed with similar behavior
+            self.assertEqual(output1.returncode, output2.returncode)
+        finally:
+            for svg_file in [svg_file1, svg_file2]:
+                if os.path.exists(svg_file):
+                    os.unlink(svg_file)

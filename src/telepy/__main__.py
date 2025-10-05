@@ -110,26 +110,31 @@ class StackTraceHandler(ArgsHandler):
         return False
 
     def parse_stack_trace(self, args: argparse.Namespace) -> None:
+        input_files = getattr(args, "input", []) or []
+        folded_lines: list[str] = []
+        input_names: list[str] = []
+
+        for file_obj in input_files:
+            input_names.append(getattr(file_obj, "name", "<unknown>"))
+            folded_lines.extend(line for line in file_obj if line.strip() != "")
+
         flamegraph = FlameGraph(
-            [line for line in args.input[0] if line.strip() != ""],
+            folded_lines,
             inverted=getattr(args, "inverted", False),
             width=getattr(args, "width", 1200),
         )
         flamegraph.parse_input()
         svg = flamegraph.generate_svg()
 
-        if args.output is None:  # pragma: no cover
-            print(
-                "[red]output file is not specified, using result.svg as default[/red]",
-                file=sys.stderr,
-            )
-            args.output = "result.svg"
-        args.input[0].close()
+        for file_obj in input_files:
+            file_obj.close()
         with open(args.output, "w") as f:
             f.write(svg)
+
+        input_display = ", ".join(input_names) if input_names else "<unknown>"
         logger.log_success_panel(
             f"Generated a flamegraph svg file `{args.output}` from the stack "
-            f"trace file `{args.input[0].name}`, "
+            f"trace file(s) `{input_display}`, "
             f"please check it out via `open {args.output}`"
         )
 
@@ -315,9 +320,10 @@ def main():
         "-v", "--version", action="store_true", help="Show version information and exit."
     )
     parser.add_argument(
-        "--no-verbose",
-        action="store_true",
-        help="Disable verbose mode (default: False).",
+        "--verbose",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable verbose mode (default: True).",
     )
     parser.add_argument(
         "input",
@@ -330,7 +336,8 @@ def main():
         "--parse",
         action="store_true",
         help="Parse stack trace data to generate a flamegraph svg file, "
-        "such as `telepy -p result.folded`.",
+        "such as `telepy -p result.folded`. Multiple input files are supported, "
+        "TelePy will merge them into a single SVG file.",
     )
     parser.add_argument(
         "-i",
@@ -346,6 +353,13 @@ def main():
         "--debug",
         action="store_true",
         help="Enable debug mode (default: False). Print some debug information.",
+    )
+    parser.add_argument(
+        "--time",
+        choices=("cpu", "wall"),
+        default="cpu",
+        help="Select the timer source for sampling: 'cpu' uses SIGPROF/ITIMER_PROF,"
+        " while 'wall' uses SIGALRM/ITIMER_REAL (default: cpu).",
     )
     parser.add_argument(
         "--full-path",
@@ -385,7 +399,7 @@ def main():
         type=str,
         default="result.folded",
         help="Save folded stack traces into a file (default: result.folded). "
-        "You should enable --folded-file if using this option.",
+        "You should enable --folded-save if using this option.",
     )
     parser.add_argument(
         "-o", "--output", default="result.svg", help="Output file (default: result.svg)."
@@ -436,18 +450,71 @@ def main():
         "-c",
         "--cmd",
         type=str,
-        help="Command to run (default: None).",
+        help="program passed in as string.",
     )
     parser.add_argument(
         "--module",
         "-m",
         type=str,
-        help="Module to run (default: None).",
+        help="run library module as a script.",
     )
     parser.add_argument(
         "--create-config",
         action="store_true",
         help="Create an example configuration file at ~/.telepy/.telepyrc and exit.",
+    )
+    # PyTorch profiler arguments
+    parser.add_argument(
+        "--torch-profile",
+        action="store_true",
+        help="Enable PyTorch profiler integration (default: False).",
+    )
+    parser.add_argument(
+        "--torch-output-dir",
+        type=str,
+        default="./pytorch_profiles",
+        help="Directory to save PyTorch profiler outputs (default: ./pytorch_profiles).",
+    )
+    parser.add_argument(
+        "--torch-activities",
+        action="append",
+        choices=["cpu", "cuda", "xpu"],
+        help="PyTorch profiler activities to profile. Can be specified multiple times. "
+        "Options: cpu, cuda, xpu. Default: ['cpu'].",
+    )
+    parser.add_argument(
+        "--torch-record-shapes",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether to record tensor shapes in PyTorch profiler (default: True).",
+    )
+    parser.add_argument(
+        "--torch-profile-memory",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether to profile memory usage in PyTorch profiler (default: True).",
+    )
+    parser.add_argument(
+        "--torch-with-stack",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Whether to record call stack in PyTorch profiler (default: False).",
+    )
+    parser.add_argument(
+        "--torch-export-chrome-trace",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Whether to export Chrome trace format from PyTorch profiler "
+        "(default: False).",
+    )
+    parser.add_argument(
+        "--torch-sort-by",
+        type=str,
+        default="cpu_time_total",
+        help="Sort key for PyTorch profiler statistics (default: cpu_time_total). "
+        "Options: cpu_time, cuda_time, cpu_time_total, cuda_time_total, "
+        "cpu_memory_usage, cuda_memory_usage, self_cpu_memory_usage, "
+        "self_cuda_memory_usage, count.",
     )
 
     args = parser.parse_args(arguments)

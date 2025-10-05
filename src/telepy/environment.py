@@ -16,7 +16,7 @@ from . import logger
 from ._telepysys import sched_yield
 from .config import TelePySamplerConfig
 from .flamegraph import FlameGraph, process_stack_trace
-from .sampler import TelepySysAsyncWorkerSampler
+from .sampler import PyTorchProfilerMiddleware, TelepySysAsyncWorkerSampler
 
 # String constants
 CMD_SEPARATOR: Final = "--"
@@ -40,8 +40,6 @@ TITLE: Final = "TelePy Flame Graph"
 TITLE_SAMPLER_METRICS: Final = "TelePySampler Metrics"
 
 INTERNAL_ARGV: Final = "telepy_argv"
-
-_lock = threading.RLock()
 
 
 def patch_os_fork_in_child():
@@ -113,7 +111,7 @@ def patch_multiprocesssing():
                     + get_child_process_args()
                     + args[idx : idx + 2]
                 )
-                if not parser_args.no_verbose:
+                if parser_args.verbose:
                     logger.log_warning_panel(MESSAGE_FORKSERVER_NO_MERGE)
                 rest = args[idx + 2 :]
                 if rest:  # pragma: no cover
@@ -148,6 +146,7 @@ class Environment:
     initialized = False
     sampler_created = False
     code_mode = CodeMode.PyFile
+    _lock = threading.RLock()
     _sys_exit = sys.exit
     _os_exit = os._exit
     _spawnv_passfds = util.spawnv_passfds
@@ -155,6 +154,12 @@ class Environment:
     # Class attributes to store singleton instances
     _sampler: None | TelepySysAsyncWorkerSampler = None
     _args: None | TelePySamplerConfig = None
+
+    def __new__(cls):
+        """Prevent instantiation of Environment class."""
+        raise TypeError(
+            "Environment class cannot be instantiated. Use its class methods directly."
+        )
 
     @classmethod
     def get_sampler(cls) -> None | TelepySysAsyncWorkerSampler:
@@ -181,8 +186,62 @@ class Environment:
     @classmethod
     def clear_instances(cls) -> None:
         """Clear the singleton instances."""
-        cls._sampler = None
-        cls._args = None
+        with cls._lock:
+            cls._sampler = None
+            cls._args = None
+            cls.initialized = False
+
+    @classmethod
+    def _create_sampler(cls, config: TelePySamplerConfig) -> TelepySysAsyncWorkerSampler:
+        """
+        Create and configure a TelepySysAsyncWorkerSampler instance.
+
+        Args:
+            config (TelePySamplerConfig): The configuration for the sampler.
+
+        Returns:
+            TelepySysAsyncWorkerSampler: A configured sampler instance.
+        """
+        sampler = TelepySysAsyncWorkerSampler(
+            config.interval,
+            debug=config.debug,
+            ignore_frozen=config.ignore_frozen,
+            ignore_self=not config.include_telepy,
+            tree_mode=config.tree_mode,
+            focus_mode=config.focus_mode,
+            regex_patterns=config.regex_patterns,
+            is_root=not (config.fork_server or config.mp),
+            forkserver=config.fork_server,
+            from_mp=config.mp,
+            time_mode=config.time,
+        )
+        sampler.adjust()
+
+        # Register PyTorch profiler middleware if enabled
+        if config.torch_profile:
+            try:
+                torch_middleware = PyTorchProfilerMiddleware(
+                    output_dir=config.torch_output_dir,
+                    activities=config.torch_activities,
+                    record_shapes=config.torch_record_shapes,
+                    profile_memory=config.torch_profile_memory,
+                    with_stack=config.torch_with_stack,
+                    export_chrome_trace=config.torch_export_chrome_trace,
+                    sort_by=config.torch_sort_by,
+                    verbose=config.verbose,
+                )
+                sampler.register_middleware(torch_middleware)
+                if config.verbose:
+                    logger.log_success_panel(
+                        "PyTorch profiler middleware registered successfully"
+                    )
+            except ImportError:
+                if config.verbose:
+                    logger.log_warning_panel(
+                        "PyTorch not available. PyTorch profiler will be disabled."
+                    )
+
+        return sampler
 
     @classmethod
     def patch_sys_exit(cls, *_args, **kwargs):  # pragma: no cover
@@ -193,7 +252,7 @@ class Environment:
         sampler = cls.get_sampler()
         args = cls.get_args()
         if sampler is not None and sampler.started:
-            if not args.no_verbose:
+            if args.verbose:
                 logger.log_success_panel(
                     f"Process {os.getpid()} exited early via sys.exit(), "
                     "telepy saved profiling data and terminated. "
@@ -214,7 +273,7 @@ class Environment:
         sampler = cls.get_sampler()
         args = cls.get_args()
         if sampler is not None and sampler.started:
-            if not args.no_verbose:
+            if args.verbose:
                 logger.log_success_panel(
                     f"Process {os.getpid()} exited early via os._exit(), "
                     "telepy saved profiling data and terminated."
@@ -238,7 +297,7 @@ class Environment:
             mode (CodeMode): The code execution mode.
         """
         cls.code_mode = mode
-        with _lock:
+        with cls._lock:
             if cls.initialized:
                 raise RuntimeError(ERROR_ENV_INITIALIZED)
 
@@ -246,19 +305,7 @@ class Environment:
             cls.set_args(config)
 
             # Create and set the sampler
-            sampler = TelepySysAsyncWorkerSampler(
-                config.interval,
-                debug=config.debug,
-                ignore_frozen=config.ignore_frozen,
-                ignore_self=not config.include_telepy,
-                tree_mode=config.tree_mode,
-                focus_mode=config.focus_mode,
-                regex_patterns=config.regex_patterns,
-                is_root=not (config.fork_server or config.mp),
-                forkserver=config.fork_server,
-                from_mp=config.mp,
-            )
-            sampler.adjust()
+            sampler = cls._create_sampler(config)
             cls.set_sampler(sampler)
 
             sys.exit = cls.patch_sys_exit
@@ -333,7 +380,7 @@ class Environment:
         Returns:
             None
         """  # noqa: E501
-        with _lock:
+        with cls._lock:
             if not cls.initialized:
                 return
             sys.exit = cls._sys_exit
@@ -386,15 +433,36 @@ _MIN_SAMPLE_COUNT = 50
 
 class FlameGraphSaver:
     def __init__(
-        self, args: TelePySamplerConfig, sampler: TelepySysAsyncWorkerSampler
+        self,
+        sampler: TelepySysAsyncWorkerSampler,
+        *,
+        full_path: bool = False,
+        inverted: bool = False,
+        width: int = 1200,
+        output: str = "result.svg",
+        verbose: bool = False,
+        folded_save: bool = False,
+        folded_file: str = "result.folded",
+        merge: bool = True,
+        debug: bool = False,
+        timeout: float = 10,
     ) -> None:
-        self.args = args
         self.sampler = sampler
+        self.full_path = full_path
+        self.inverted = inverted
+        self.width = width
+        self.output = output
+        self.verbose = verbose
+        self.folded_save = folded_save
+        self.folded_file = folded_file
+        self.merge = merge
+        self.debug = debug
+        self.timeout_limit = timeout
         self.site_path = site.getsitepackages()[0]
         self.work_dir = os.getcwd()
         self.title = TITLE
         self.lines = sampler.dumps().splitlines()  # no more last empty line
-        if not self.args.full_path:  # type : ignore
+        if not self.full_path:
             self.lines = process_stack_trace(self.lines, self.site_path, self.work_dir)
 
         self.timeout = False
@@ -407,8 +475,8 @@ class FlameGraphSaver:
             command=" ".join([sys.executable, *sys.argv]),
             package_path=os.path.dirname(self.site_path),
             work_dir=self.work_dir,
-            inverted=self.args.inverted,
-            width=self.args.width,
+            inverted=self.inverted,
+            width=self.width,
         )
 
         fg.parse_input()
@@ -436,31 +504,31 @@ class FlameGraphSaver:
         return [f"Process({pid});" + line for line in lines]
 
     def _single_process_root(self) -> None:
-        self._save_svg(self.args.output)
-        if not self.args.no_verbose:
+        self._save_svg(self.output)
+        if self.verbose:
             logger.log_success_panel(
-                f"Process {self.pid} saved the profiling data to the svg file {self.args.output}"  # noqa: E501
+                f"Process {self.pid} saved the profiling data to the svg file {self.output}"  # noqa: E501
             )
-        if self.args.folded_save:
-            self._save_folded(self.args.folded_file)
-            if not self.args.no_verbose:
+        if self.folded_save:
+            self._save_folded(self.folded_file)
+            if self.verbose:
                 logger.log_success_panel(
-                    f"Process {self.pid} saved the profiling data to the folded file {self.args.folded_file}"  # noqa: E501
+                    f"Process {self.pid} saved the profiling data to the folded file {self.folded_file}"  # noqa: E501
                 )
 
     def _single_process_child(self) -> None:
         # filename: pid-ppid.svg pid-ppid.folded
-        if not self.args.merge:
+        if not self.merge:
             filename = f"{self.pid}-{os.getppid()}.svg"
             self._save_svg(filename)
-            if self.args.debug:
+            if self.debug:
                 logger.log_success_panel(
                     f"Process {self.pid} saved the profiling data to the svg file {filename}"  # noqa: E501
                 )
-            if self.args.folded_save:
+            if self.folded_save:
                 filename = f"{self.pid}-{os.getppid()}.folded"
                 self._save_folded(filename)
-                if self.args.debug:
+                if self.debug:
                     logger.log_success_panel(
                         f"Process {self.pid} saved the profiling data to the folded file {filename}"  # noqa: E501
                     )
@@ -470,13 +538,13 @@ class FlameGraphSaver:
                 self.lines, f"pid-{self.pid}, ppid-{os.getppid()}"
             )
             self._save_folded(filename)
-            if self.args.debug:
+            if self.debug:
                 logger.log_success_panel(
                     f"Process {self.pid} saved the profiling data to the folded file {filename}"  # noqa: E501
                 )
 
     def _multi_process_root(self) -> None:
-        if self.args.merge:
+        if self.merge:
             files = os.listdir(os.getcwd())
             foldeds = [file for file in files if file.endswith(f"{self.pid}.folded")]
 
@@ -487,43 +555,43 @@ class FlameGraphSaver:
                     with open(file, "r+") as fp:
                         lines = fp.readlines()
                     os.unlink(file)
-                    if self.args.debug:
+                    if self.debug:
                         logger.log_success_panel(
                             f"Root process {self.pid} read and removed file {file}"
                         )
                     self.lines.extend([line.strip() for line in lines])
 
             load_chidren_file()
-            self._save_svg(self.args.output)
-            if not self.args.no_verbose:
+            self._save_svg(self.output)
+            if self.verbose:
                 logger.log_success_panel(
                     f"Root process {self.pid} collected the profiling data to svg "
-                    f"file {self.args.output}"
+                    f"file {self.output}"
                 )
-            if self.args.folded_save:
-                self._save_folded(self.args.folded_file)
-                if not self.args.no_verbose:
+            if self.folded_save:
+                self._save_folded(self.folded_file)
+                if self.verbose:
                     logger.log_success_panel(
                         f"Root process {self.pid} collected the profiling data "
-                        f"{foldeds} to the folded file {self.args.folded_file}"
+                        f"{foldeds} to the folded file {self.folded_file}"
                     )
         else:
-            self._save_svg(self.args.output)
-            if not self.args.no_verbose:
+            self._save_svg(self.output)
+            if self.verbose:
                 logger.log_success_panel(
                     f"Root process {self.pid} saved the profiling data to"
-                    f" the svg file {self.args.output}"
+                    f" the svg file {self.output}"
                 )
-            if self.args.folded_save:
-                self._save_folded(self.args.folded_file)
-                if not self.args.no_verbose:
+            if self.folded_save:
+                self._save_folded(self.folded_file)
+                if self.verbose:
                     logger.log_success_panel(
                         f"Root process {self.pid} saved the profiling data to"
-                        f" the folded file {self.args.folded_file}"
+                        f" the folded file {self.folded_file}"
                     )
 
     def _multi_process_child(self) -> None:
-        if self.args.merge:
+        if self.merge:
             files = os.listdir(os.getcwd())
             foldeds = [file for file in files if file.endswith(f"{self.pid}.folded")]
             self.lines = self.add_pid_prefix(
@@ -535,7 +603,7 @@ class FlameGraphSaver:
                     with open(file, "r+") as fp:
                         lines = fp.readlines()
                     os.unlink(file)
-                    if self.args.debug:
+                    if self.debug:
                         logger.log_success_panel(
                             f"Process {self.pid} read and removed file {file}"
                         )
@@ -544,7 +612,7 @@ class FlameGraphSaver:
             load_chidren_file()
             filename = f"{self.pid}-{os.getppid()}.folded"
             self._save_folded(filename)
-            if self.args.debug:
+            if self.debug:
                 logger.log_success_panel(
                     f"Process {self.pid} collected the profiling data {foldeds}"
                     f" to the folded file {filename}"
@@ -552,14 +620,14 @@ class FlameGraphSaver:
         else:
             filename = f"{self.pid}-{os.getppid()}.svg"
             self._save_svg(filename)
-            if self.args.debug:
+            if self.debug:
                 logger.log_success_panel(
                     f"Process {self.pid} saved the profiling data to the svg file {filename}"  # noqa: E501
                 )
-            if self.args.folded_save:
+            if self.folded_save:
                 filename = f"{self.pid}-{os.getppid()}.folded"
                 self._save_folded(filename)
-                if self.args.debug:
+                if self.debug:
                     logger.log_success_panel(
                         f"Process {self.pid} saved the profiling data to the folded file {filename}"  # noqa: E501
                     )
@@ -579,11 +647,11 @@ class FlameGraphSaver:
 
     def wait_children(self) -> None:
         """Wait for all child processes to exit."""
-        if not self.args.merge:
+        if not self.merge:
             return
         res: list[str] = []
         begin = time.time()
-        if self.args.debug:
+        if self.debug:
             logger.log_success_panel(
                 f"Process {self.pid} are waiting for {self.sampler.child_cnt} "
                 "child processes to complete"
@@ -592,7 +660,7 @@ class FlameGraphSaver:
             sched_yield()
             files = os.listdir(os.getcwd())
             res = [file for file in files if file.endswith(f"{self.pid}.folded")]
-            if time.time() - begin > self.args.timeout:  # pragma: no cover
+            if time.time() - begin > self.timeout_limit:  # pragma: no cover
                 self.timeout = True
                 break
         if self.timeout:  # pragma: no cover
@@ -613,7 +681,7 @@ def clear_resources():
     Environment.clear_instances()
 
 
-def telepy_finalize() -> None:
+def telepy_finalize(save: bool = True) -> None:
     """Stop and clean up the global sampler resource.
 
     This function should be called to properly finalize the telepy environment
@@ -630,7 +698,8 @@ def telepy_finalize() -> None:
     # forserver mode will not start the sampler.
     if current_sampler.started:
         current_sampler.stop()
-        _do_save()
+        if save:
+            _do_save()
     Environment.clear_instances()
 
 
@@ -639,7 +708,19 @@ def _do_save():
     current_sampler = Environment.get_sampler()
     assert current_args is not None
     assert current_sampler is not None
-    saver = FlameGraphSaver(current_args, current_sampler)
+    saver = FlameGraphSaver(
+        current_sampler,
+        full_path=current_args.full_path,
+        inverted=current_args.inverted,
+        width=current_args.width,
+        output=current_args.output,
+        verbose=current_args.verbose,
+        folded_save=current_args.folded_save,
+        folded_file=current_args.folded_file,
+        merge=current_args.merge,
+        debug=current_args.debug,
+        timeout=current_args.timeout,
+    )
     saver.save()
     if current_args.debug:
         from .logger import console

@@ -17,10 +17,11 @@ Usage:
 Supported options (mirroring ``telepy`` CLI flags that affect sampling):
     --interval INT         Sampling interval in microseconds (default: 8000)
     --timeout FLOAT        Wait time for child processes (default: 10)
-    --no-verbose           Suppress verbose panels
+    --verbose/--no-verbose Enable/suppress verbose panels
     --ignore-frozen        Ignore frozen modules
     --include-telepy       Include TelePy frames in results
     --focus-mode           Focus on user code only
+    --time {cpu,wall}      Select sampling timer: cpu (SIGPROF) or wall (SIGALRM)
     --regex-patterns P     Regex pattern to filter stacks (repeatable)
     --tree-mode            Use call site line numbers
     --inverted             Render inverted flame graphs
@@ -75,12 +76,18 @@ def _build_parser() -> argparse.ArgumentParser:
     # Sampler and environment options (aligned with CLI behaviour)
     parser.add_argument("-i", "--interval", type=_positive_int, default=8000)
     parser.add_argument("--timeout", type=float, default=10)
-    parser.add_argument("--no-verbose", action="store_true", default=None)
+    parser.add_argument("--verbose", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--ignore-frozen", action="store_true", default=False)
     parser.add_argument("--include-telepy", action="store_true", default=False)
     parser.add_argument("--focus-mode", action="store_true", default=False)
     parser.add_argument("--tree-mode", action="store_true", default=False)
     parser.add_argument("--inverted", action="store_true", default=False)
+    parser.add_argument(
+        "--time",
+        choices=("cpu", "wall"),
+        default="cpu",
+        help="Select sampling timer: cpu (SIGPROF) or wall (SIGALRM).",
+    )
     parser.add_argument(
         "--regex-patterns",
         action="append",
@@ -130,19 +137,19 @@ class TelePyMagics(Magics):
             )
 
         defaults = TelePySamplerConfig()
-        if getattr(args, "no_verbose", None) is None:
-            args.no_verbose = defaults.no_verbose
+        if getattr(args, "verbose", None) is None:
+            args.verbose = defaults.verbose
         if getattr(args, "merge", None) is None:
             args.merge = defaults.merge
 
         config = TelePySamplerConfig.from_namespace(args)
-        config.no_verbose = getattr(args, "no_verbose", False)
+        config.verbose = getattr(args, "verbose", True)
 
         config.folded_save = False
         config.input = None
         config.cmd = None
         config.module = None
-        config.no_verbose = True
+        config.verbose = False
 
         finalize_exc: Exception | None = None
         finalize_needed = False
