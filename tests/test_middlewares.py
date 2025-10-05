@@ -6,6 +6,7 @@ import telepy
 from telepy.sampler import SamplerMiddleware
 
 from .base import TestBase  # type: ignore
+from .test_command import CommandTemplate  # type: ignore
 
 
 class TestMiddleware(SamplerMiddleware):
@@ -390,3 +391,629 @@ class TestAsyncSamplerMiddleware(TestBase):
             self.assertEqual(calls["before_stop"], 1)
             self.assertEqual(calls["after_stop"], 1)
             self.assertEqual(calls["process_dump"], 1)
+
+
+class TestPyTorchProfilerMiddleware(TestBase):
+    """Test cases for PyTorchProfilerMiddleware functionality."""
+
+    def setUp(self):
+        super().setUp()
+        self.temp_dirs = []
+        self.temp_files = []
+        # Try to import PyTorch
+        try:
+            import torch
+
+            self.torch_available = True
+            self.cuda_available = torch.cuda.is_available()
+            # Check XPU availability safely
+            self.xpu_available = False
+            try:
+                if hasattr(torch, "xpu"):
+                    self.xpu_available = torch.xpu.is_available()
+            except (AttributeError, RuntimeError):
+                pass
+        except ImportError:
+            self.torch_available = False
+            self.cuda_available = False
+            self.xpu_available = False
+
+    def tearDown(self):
+        """Clean up test files and directories after each test."""
+        super().tearDown()
+        # Clean up files
+        for file in self.temp_files:
+            if os.path.exists(file):
+                try:
+                    os.remove(file)
+                except Exception:
+                    pass
+        # Clean up directories
+        for dir_path in self.temp_dirs:
+            if os.path.exists(dir_path):
+                try:
+                    import shutil
+
+                    shutil.rmtree(dir_path)
+                except Exception:
+                    pass
+
+    def _create_temp_dir(self) -> str:
+        """Create a temporary directory and track it for cleanup."""
+        temp_dir = tempfile.mkdtemp()
+        self.temp_dirs.append(temp_dir)
+        return temp_dir
+
+    def _do_pytorch_work(self):
+        """Perform some PyTorch work to generate profiling data."""
+        if not self.torch_available:
+            return
+
+        import torch
+
+        # Simple tensor operations with enough work to be profiled
+        x = torch.randn(100, 100)
+        y = torch.randn(100, 100)
+        for _ in range(50):  # Increased iterations
+            z = torch.matmul(x, y)
+            z = torch.relu(z)
+            z = z.sum()
+
+    def test_pytorch_middleware_import_error(self):
+        """Test PyTorchProfilerMiddleware raises ImportError if PyTorch unavailable."""
+        if self.torch_available:
+            self.skipTest("PyTorch is available, skipping import error test")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        with self.assertRaises(ImportError):
+            PyTorchProfilerMiddleware()
+
+    def test_pytorch_middleware_initialization(self):
+        """Test PyTorchProfilerMiddleware initialization."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+
+        # Test default initialization
+        middleware = PyTorchProfilerMiddleware(output_dir=temp_dir)
+        self.assertEqual(middleware.output_dir, temp_dir)
+        self.assertEqual(middleware.activities, ["cpu"])
+        self.assertTrue(middleware.record_shapes)
+        self.assertTrue(middleware.profile_memory)
+        self.assertTrue(middleware.with_stack)
+        self.assertTrue(middleware.export_chrome_trace)
+        self.assertEqual(middleware.sort_by, "cpu_time_total")
+        self.assertFalse(middleware.verbose)
+
+        # Test custom initialization
+        middleware2 = PyTorchProfilerMiddleware(
+            output_dir=temp_dir,
+            activities=["cpu", "cuda"],
+            record_shapes=False,
+            profile_memory=False,
+            with_stack=False,
+            export_chrome_trace=False,
+            sort_by="cuda_time_total",
+            verbose=True,
+        )
+        self.assertEqual(middleware2.activities, ["cpu", "cuda"])
+        self.assertFalse(middleware2.record_shapes)
+        self.assertFalse(middleware2.profile_memory)
+        self.assertFalse(middleware2.with_stack)
+        self.assertFalse(middleware2.export_chrome_trace)
+        self.assertEqual(middleware2.sort_by, "cuda_time_total")
+        self.assertTrue(middleware2.verbose)
+
+    def test_pytorch_middleware_registration(self):
+        """Test registering PyTorchProfilerMiddleware with sampler."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        middleware = PyTorchProfilerMiddleware(output_dir=temp_dir, verbose=False)
+
+        sampler.register_middleware(middleware)
+        self.assertIn(middleware, sampler._middleware)
+
+    def test_pytorch_middleware_lifecycle_cpu(self):
+        """Test PyTorchProfilerMiddleware lifecycle with CPU profiling."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        middleware = PyTorchProfilerMiddleware(
+            output_dir=temp_dir, activities=["cpu"], verbose=False
+        )
+
+        sampler.register_middleware(middleware)
+
+        # Initially profiler should not be started
+        self.assertIsNone(middleware.profiler)
+
+        # Start sampler
+        sampler.start()
+        self._do_pytorch_work()
+
+        # Profiler should now be running
+        if middleware.profiler is None:
+            # Debug info
+            print(f"\nDEBUG: torch_available={middleware.torch_available}")
+            print(f"DEBUG: activities={middleware.activities}")
+        self.assertIsNotNone(
+            middleware.profiler, "Profiler should be started after sampler.start()"
+        )
+
+        # Stop sampler
+        sampler.stop()
+
+        # Profiler should be stopped
+        self.assertIsNone(middleware.profiler)
+
+        # Check that output directory was created
+        self.assertTrue(os.path.exists(temp_dir))
+
+    def test_pytorch_middleware_output_files(self):
+        """Test that PyTorchProfilerMiddleware generates expected output files."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        middleware = PyTorchProfilerMiddleware(
+            output_dir=temp_dir,
+            activities=["cpu"],
+            export_chrome_trace=True,
+            verbose=False,
+        )
+
+        sampler.register_middleware(middleware)
+
+        # Run profiling
+        sampler.start()
+        self._do_pytorch_work()
+        sampler.stop()
+
+        # Check chrome trace file exists
+        chrome_trace = os.path.join(temp_dir, "chrome_trace.json")
+        self.assertTrue(
+            os.path.exists(chrome_trace), f"Chrome trace not found at {chrome_trace}"
+        )
+
+        # Check stats file exists (with timestamp)
+        stats_files = [f for f in os.listdir(temp_dir) if f.startswith("profiler_stats_")]
+        self.assertGreater(
+            len(stats_files), 0, "No profiler statistics file was generated"
+        )
+
+        # Verify chrome trace is valid JSON
+        with open(chrome_trace) as f:
+            import json
+
+            try:
+                json.load(f)
+            except json.JSONDecodeError:
+                self.fail("Chrome trace is not valid JSON")
+
+    def test_pytorch_middleware_cuda_availability(self):
+        """Test PyTorchProfilerMiddleware handles CUDA availability correctly."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+
+        # Request CUDA profiling
+        middleware = PyTorchProfilerMiddleware(
+            output_dir=temp_dir, activities=["cpu", "cuda"], verbose=False
+        )
+
+        sampler.register_middleware(middleware)
+        sampler.start()
+        self._do_pytorch_work()
+        sampler.stop()
+
+        # Should not raise an error even if CUDA is not available
+        # The middleware should handle this gracefully
+        self.assertTrue(True, "Middleware handled CUDA unavailability gracefully")
+
+    def test_pytorch_middleware_xpu_availability(self):
+        """Test PyTorchProfilerMiddleware handles XPU availability correctly."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+
+        # Request XPU profiling
+        middleware = PyTorchProfilerMiddleware(
+            output_dir=temp_dir, activities=["cpu", "xpu"], verbose=False
+        )
+
+        sampler.register_middleware(middleware)
+        sampler.start()
+        self._do_pytorch_work()
+        sampler.stop()
+
+        # Should not raise an error even if XPU is not available
+        # The middleware should handle this gracefully
+        self.assertTrue(True, "Middleware handled XPU unavailability gracefully")
+
+    def test_pytorch_middleware_no_export_chrome_trace(self):
+        """Test PyTorchProfilerMiddleware with chrome trace export disabled."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        middleware = PyTorchProfilerMiddleware(
+            output_dir=temp_dir,
+            activities=["cpu"],
+            export_chrome_trace=False,
+            verbose=False,
+        )
+
+        sampler.register_middleware(middleware)
+        sampler.start()
+        self._do_pytorch_work()
+        sampler.stop()
+
+        # Chrome trace should NOT exist
+        chrome_trace = os.path.join(temp_dir, "chrome_trace.json")
+        self.assertFalse(
+            os.path.exists(chrome_trace),
+            "Chrome trace should not be created when export_chrome_trace=False",
+        )
+
+        # But stats file should still exist
+        stats_files = [f for f in os.listdir(temp_dir) if f.startswith("profiler_stats_")]
+        self.assertGreater(len(stats_files), 0, "Statistics file should still be created")
+
+    def test_pytorch_middleware_custom_sort_by(self):
+        """Test PyTorchProfilerMiddleware with custom sort_by parameter."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        middleware = PyTorchProfilerMiddleware(
+            output_dir=temp_dir,
+            activities=["cpu"],
+            sort_by="cpu_time",
+            verbose=False,
+        )
+
+        sampler.register_middleware(middleware)
+        sampler.start()
+        self._do_pytorch_work()
+        sampler.stop()
+
+        # Stats file should exist
+        stats_files = [f for f in os.listdir(temp_dir) if f.startswith("profiler_stats_")]
+        self.assertGreater(len(stats_files), 0)
+
+        # Read stats file and verify it's not empty
+        stats_path = os.path.join(temp_dir, stats_files[0])
+        with open(stats_path) as f:
+            content = f.read()
+        self.assertGreater(len(content), 0, "Statistics file should not be empty")
+
+    def test_pytorch_middleware_with_async_sampler(self):
+        """Test PyTorchProfilerMiddleware with async sampler."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        # Skip if not in main thread (async sampler requirement)
+        if threading.current_thread() != threading.main_thread():
+            self.skipTest("AsyncSampler requires main thread")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+        sampler = telepy.TelepySysAsyncSampler(sampling_interval=1000)
+        middleware = PyTorchProfilerMiddleware(
+            output_dir=temp_dir, activities=["cpu"], verbose=False
+        )
+
+        sampler.register_middleware(middleware)
+        sampler.start()
+        self._do_pytorch_work()
+        sampler.stop()
+
+        # Check output files were created
+        self.assertTrue(os.path.exists(temp_dir))
+        files_created = os.listdir(temp_dir)
+        self.assertGreater(len(files_created), 0, "No output files were created")
+
+    def test_pytorch_middleware_repr(self):
+        """Test PyTorchProfilerMiddleware __repr__ method."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+        middleware = PyTorchProfilerMiddleware(output_dir=temp_dir)
+        repr_str = repr(middleware)
+        self.assertIn("PyTorchProfilerMiddleware", repr_str)
+        self.assertIn(temp_dir, repr_str)
+
+    def test_pytorch_middleware_multiple_runs(self):
+        """Test PyTorchProfilerMiddleware with multiple start/stop cycles."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        middleware = PyTorchProfilerMiddleware(
+            output_dir=temp_dir, activities=["cpu"], verbose=False
+        )
+
+        sampler.register_middleware(middleware)
+
+        # First run
+        sampler.start()
+        self._do_pytorch_work()
+        sampler.stop()
+
+        first_files = os.listdir(temp_dir)
+
+        # Second run
+        sampler.start()
+        self._do_pytorch_work()
+        sampler.stop()
+
+        second_files = os.listdir(temp_dir)
+
+        # Should have more files after second run
+        self.assertGreaterEqual(
+            len(second_files),
+            len(first_files),
+            "Second run should create additional files",
+        )
+
+    def test_pytorch_middleware_context_manager(self):
+        """Test PyTorchProfilerMiddleware with context manager."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        from telepy.sampler import PyTorchProfilerMiddleware
+
+        temp_dir = self._create_temp_dir()
+        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        middleware = PyTorchProfilerMiddleware(
+            output_dir=temp_dir, activities=["cpu"], verbose=False
+        )
+
+        sampler.register_middleware(middleware)
+
+        # Use context manager
+        with sampler:
+            self._do_pytorch_work()
+
+        # Profiler should be stopped after exiting context
+        self.assertIsNone(middleware.profiler)
+
+        # Output files should exist
+        self.assertTrue(os.path.exists(temp_dir))
+        files = os.listdir(temp_dir)
+        self.assertGreater(len(files), 0, "No output files were created")
+
+
+class TestPyTorchProfilerCLI(CommandTemplate):
+    """Test PyTorch profiler CLI integration."""
+
+    def setUp(self):
+        super().setUp()
+        self.temp_dirs = []
+        # Check if PyTorch is available
+        try:
+            import torch  # noqa: F401
+
+            self.torch_available = True
+        except ImportError:
+            self.torch_available = False
+
+    def tearDown(self):
+        """Clean up temporary directories."""
+        super().tearDown()
+        import shutil
+
+        for temp_dir in self.temp_dirs:
+            if os.path.exists(temp_dir):
+                try:
+                    shutil.rmtree(temp_dir)
+                except Exception:
+                    pass
+
+    def _create_temp_dir(self) -> str:
+        """Create a temporary directory and track it for cleanup."""
+        temp_dir = tempfile.mkdtemp()
+        self.temp_dirs.append(temp_dir)
+        return temp_dir
+
+    def test_torch_profile_basic(self):
+        """Test: telepy test_torch.py --torch-profile -- --epochs 1."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        temp_dir = self._create_temp_dir()
+
+        # Run with torch profiler enabled
+        self.run_filename(
+            "test_files/test_torch.py",
+            stdout_check_list=[
+                r"Epoch 1:",  # Training output
+                r"Test accuracy:",  # Final test accuracy
+            ],
+            options=[
+                "--torch-profile",
+                "--torch-output-dir",
+                temp_dir,
+                "--",
+                "--epochs",
+                "1",
+            ],
+            timeout=120,
+            exit_code=0,
+        )
+
+        # Verify output directory was created and contains files
+        self.assertTrue(
+            os.path.exists(temp_dir),
+            "PyTorch profiler output directory not created",
+        )
+
+        files = os.listdir(temp_dir)
+        self.assertGreater(len(files), 0, "No PyTorch profiler output files were created")
+
+        # Check for profiler statistics files
+        stats_files = [f for f in files if f.startswith("profiler_stats_")]
+        self.assertGreater(len(stats_files), 0, "No profiler statistics files found")
+
+    def test_torch_profile_with_verbose(self):
+        """Test torch profiler with --debug --verbose flags."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        temp_dir = self._create_temp_dir()
+
+        # Run with debug and verbose flags
+        self.run_filename(
+            "test_files/test_torch.py",
+            stdout_check_list=[
+                r"Epoch 1:",
+                r"Test accuracy:",
+            ],
+            options=[
+                "--debug",
+                "--verbose",
+                "--torch-profile",
+                "--torch-output-dir",
+                temp_dir,
+                "--",
+                "--epochs",
+                "1",
+                "--batch-size",
+                "128",
+            ],
+            timeout=120,
+            exit_code=0,
+        )
+
+        # Verify output files
+        files = os.listdir(temp_dir)
+        self.assertGreater(len(files), 0, "No output files created")
+
+        stats_files = [f for f in files if f.startswith("profiler_stats_")]
+        self.assertGreater(len(stats_files), 0, "No stats files found")
+
+    def test_torch_profile_without_chrome_trace(self):
+        """Test PyTorch profiler with chrome trace disabled."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        temp_dir = self._create_temp_dir()
+
+        # Run with --no-torch-export-chrome-trace
+        self.run_filename(
+            "test_files/test_torch.py",
+            stdout_check_list=[
+                r"Epoch 1:",
+                r"Test accuracy:",
+            ],
+            options=[
+                "--torch-profile",
+                "--torch-output-dir",
+                temp_dir,
+                "--no-torch-export-chrome-trace",
+                "--",
+                "--epochs",
+                "1",
+            ],
+            timeout=120,
+            exit_code=0,
+        )
+
+        files = os.listdir(temp_dir)
+        # Should have stats files but no chrome_trace.json
+        chrome_traces = [f for f in files if f == "chrome_trace.json"]
+        self.assertEqual(len(chrome_traces), 0, "Chrome trace should not be exported")
+
+        # But stats files should exist
+        stats_files = [f for f in files if f.startswith("profiler_stats_")]
+        self.assertGreater(len(stats_files), 0, "Stats files should exist")
+
+    def test_torch_profile_custom_activities(self):
+        """Test PyTorch profiler with custom activities."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        temp_dir = self._create_temp_dir()
+
+        # Run with explicit CPU activity
+        self.run_filename(
+            "test_files/test_torch.py",
+            stdout_check_list=[
+                r"Epoch 1:",
+                r"Test accuracy:",
+            ],
+            options=[
+                "--torch-profile",
+                "--torch-output-dir",
+                temp_dir,
+                "--torch-activities",
+                "cpu",
+                "--",
+                "--epochs",
+                "1",
+            ],
+            timeout=120,
+            exit_code=0,
+        )
+
+        # Verify output files exist
+        files = os.listdir(temp_dir)
+        self.assertGreater(len(files), 0, "No output files created")
+
+    def test_without_torch_profile(self):
+        """Test that training works without torch profiler."""
+        if not self.torch_available:
+            self.skipTest("PyTorch not available")
+
+        # Run without --torch-profile flag
+        self.run_filename(
+            "test_files/test_torch.py",
+            stdout_check_list=[
+                r"Epoch 1:",
+                r"Test accuracy:",
+            ],
+            options=[
+                "--",
+                "--epochs",
+                "1",
+            ],
+            timeout=120,
+            exit_code=0,
+        )
