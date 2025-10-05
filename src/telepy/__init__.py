@@ -1,6 +1,5 @@
 """."""
 
-import os as _os
 import threading
 from enum import Enum
 from types import FrameType
@@ -520,11 +519,3 @@ class Profiler:
             self._sampler = None
         if self._ctx is not None:
             self._ctx = None
-
-    def clean(self):
-        """
-        Clean up temporary files created during profiling.
-        """
-        _os.unlink(self._output)
-        if self._folded_saved:
-            _os.unlink(self._folded_filename)
