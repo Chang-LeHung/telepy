@@ -693,6 +693,16 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
     exports the profiling results when the sampler stops.
     """
 
+    def _log(self, message: str, file=None) -> None:
+        """Print message with middleware prefix.
+
+        Args:
+            message: The message to print.
+            file: Optional file to print to (default: stdout).
+        """
+        if self.verbose:
+            print(f"[PyTorchProfilerMiddleware] {message}", file=file)
+
     def __init__(
         self,
         output_dir: str = "./pytorch_profiles",
@@ -701,7 +711,6 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
         profile_memory: bool = True,
         with_stack: bool = True,
         export_chrome_trace: bool = True,
-        export_tensorboard: bool = True,
         sort_by: str = "cpu_time_total",
         verbose: bool = False,
     ):
@@ -715,7 +724,6 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
             profile_memory: Whether to profile memory usage.
             with_stack: Whether to record call stack.
             export_chrome_trace: Whether to export Chrome trace format.
-            export_tensorboard: Whether to export TensorBoard format.
             schedule_wait: Number of steps to skip before profiling.
             schedule_warmup: Number of warmup steps.
             schedule_active: Number of active profiling steps.
@@ -724,29 +732,25 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
             verbose: Whether to print profiler messages (default: False).
         """
         # Check if PyTorch is available
+        self.verbose = verbose
         try:
             import torch  # noqa: F401
             from torch.profiler import profile
 
             self.torch_available = True
-            if verbose:
-                print("[PyTorchProfilerMiddleware] PyTorch detected")
+            self._log("PyTorch detected")
         except ImportError:
-            if verbose:
-                print("[PyTorchProfilerMiddleware] Warning: PyTorch not available")
+            self._log("Warning: PyTorch not available")
             raise
         self.output_dir = output_dir
-        self.verbose = verbose
         self.activities = activities or ["cpu"]
         self.record_shapes = record_shapes
         self.profile_memory = profile_memory
         self.with_stack = with_stack
         self.export_chrome_trace = export_chrome_trace
-        self.export_tensorboard = export_tensorboard
         self.sort_by = sort_by
 
         self.profiler: profile | None = None
-        self.torch_available = False
 
     def _get_timestamp(self) -> str:
         """Generate timestamp string with millisecond precision.
@@ -790,14 +794,13 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
             )
 
             self.profiler.start()
+            self._log("Started PyTorch profiler")
             if self.verbose:
-                print("[PyTorchProfilerMiddleware] Started PyTorch profiler")
                 print(f"  - Record shapes: {self.record_shapes}")
                 print(f"  - Profile memory: {self.profile_memory}")
 
         except Exception as e:
-            if self.verbose:
-                print(f"[PyTorchProfilerMiddleware] Error starting profiler: {e}")
+            self._log(f"Error starting profiler: {e}")
             self.profiler = None
 
     def on_before_stop(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
@@ -808,63 +811,44 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
         try:
             import os
 
+            # some of the following operations are slow, so we log them
+            self._log("Stopping PyTorch profiler...")
             self.profiler.stop()
-            if self.verbose:
-                print("[PyTorchProfilerMiddleware] Stopped PyTorch profiler")
+            self._log("Stopped PyTorch profiler")
 
             # Export additional formats if requested
             if self.export_chrome_trace:
+                self._log("Exporting Chrome trace...")
                 trace_path = os.path.join(self.output_dir, "chrome_trace.json")
                 self.profiler.export_chrome_trace(trace_path)
-                if self.verbose:
-                    print(
-                        f"[PyTorchProfilerMiddleware] Exported Chrome trace: {trace_path}"
-                    )
+                self._log(f"Exported Chrome trace: {trace_path}")
 
             # Get profiler statistics
+            self._log("Generating profiler statistics...")
             key_averages = self.profiler.key_averages()
             stats_table = key_averages.table(sort_by=self.sort_by, row_limit=-1)
+            self._log("Generated profiler statistics")
 
             # Save statistics to file
             timestamp = self._get_timestamp()
             stats_path = os.path.join(self.output_dir, f"profiler_stats_{timestamp}.txt")
             with open(stats_path, "w") as f:
                 f.write(stats_table)
-            if self.verbose:
-                print(
-                    f"[PyTorchProfilerMiddleware] Saved profiler statistics: {stats_path}"
-                )
+            self._log(f"Saved profiler statistics: {stats_path}")
 
         except Exception as e:
-            if self.verbose:
-                print(
-                    f"[PyTorchProfilerMiddleware] Error stopping profiler: {e}",
-                    file=sys.stderr,
-                )
+            self._log(f"Error stopping profiler: {e}", file=sys.stderr)
         finally:
             self.profiler = None
 
     def _trace_handler(self, prof):
-        """Handle trace export during profiling."""
-        try:
-            import os
+        """Handle trace export during profiling.
 
-            # Create trace_data subdirectory
-            trace_data_dir = os.path.join(self.output_dir, "trace_data")
-            os.makedirs(trace_data_dir, exist_ok=True)
-
-            timestamp = self._get_timestamp()
-            trace_path = os.path.join(trace_data_dir, f"pytorch_trace_{timestamp}.json")
-
-            prof.export_chrome_trace(trace_path)
-
-            if self.export_tensorboard:
-                tb_path = os.path.join(trace_data_dir, "tensorboard")
-                prof.export_stacks(tb_path, f"profiler_stacks_{timestamp}.txt")
-
-        except Exception as e:
-            if self.verbose:
-                print(f"[PyTorchProfilerMiddleware] Error in trace handler: {e}")
+        Note: This handler is called during profiling steps. We keep it simple
+        to avoid conflicts with the final export in on_before_stop.
+        """
+        # Trace handler is kept minimal - all exports happen in on_before_stop
+        pass
 
     def __repr__(self) -> str:
         return f"PyTorchProfilerMiddleware(output_dir='{self.output_dir}')"

@@ -463,6 +463,59 @@ def main():
         action="store_true",
         help="Create an example configuration file at ~/.telepy/.telepyrc and exit.",
     )
+    # PyTorch profiler arguments
+    parser.add_argument(
+        "--torch-profile",
+        action="store_true",
+        help="Enable PyTorch profiler integration (default: False).",
+    )
+    parser.add_argument(
+        "--torch-output-dir",
+        type=str,
+        default="./pytorch_profiles",
+        help="Directory to save PyTorch profiler outputs (default: ./pytorch_profiles).",
+    )
+    parser.add_argument(
+        "--torch-activities",
+        action="append",
+        choices=["cpu", "cuda", "xpu"],
+        help="PyTorch profiler activities to profile. Can be specified multiple times. "
+        "Options: cpu, cuda, xpu. Default: ['cpu'].",
+    )
+    parser.add_argument(
+        "--torch-record-shapes",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether to record tensor shapes in PyTorch profiler (default: True).",
+    )
+    parser.add_argument(
+        "--torch-profile-memory",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether to profile memory usage in PyTorch profiler (default: True).",
+    )
+    parser.add_argument(
+        "--torch-with-stack",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Whether to record call stack in PyTorch profiler (default: False).",
+    )
+    parser.add_argument(
+        "--torch-export-chrome-trace",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Whether to export Chrome trace format from PyTorch profiler "
+        "(default: False).",
+    )
+    parser.add_argument(
+        "--torch-sort-by",
+        type=str,
+        default="cpu_time_total",
+        help="Sort key for PyTorch profiler statistics (default: cpu_time_total). "
+        "Options: cpu_time, cuda_time, cpu_time_total, cuda_time_total, "
+        "cpu_memory_usage, cuda_memory_usage, self_cpu_memory_usage, "
+        "self_cuda_memory_usage, count.",
+    )
 
     args = parser.parse_args(arguments)
     _pre_checks(args, parser)

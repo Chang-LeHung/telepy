@@ -16,7 +16,7 @@ from . import logger
 from ._telepysys import sched_yield
 from .config import TelePySamplerConfig
 from .flamegraph import FlameGraph, process_stack_trace
-from .sampler import TelepySysAsyncWorkerSampler
+from .sampler import PyTorchProfilerMiddleware, TelepySysAsyncWorkerSampler
 
 # String constants
 CMD_SEPARATOR: Final = "--"
@@ -216,6 +216,31 @@ class Environment:
             time_mode=config.time,
         )
         sampler.adjust()
+
+        # Register PyTorch profiler middleware if enabled
+        if config.torch_profile:
+            try:
+                torch_middleware = PyTorchProfilerMiddleware(
+                    output_dir=config.torch_output_dir,
+                    activities=config.torch_activities,
+                    record_shapes=config.torch_record_shapes,
+                    profile_memory=config.torch_profile_memory,
+                    with_stack=config.torch_with_stack,
+                    export_chrome_trace=config.torch_export_chrome_trace,
+                    sort_by=config.torch_sort_by,
+                    verbose=config.verbose,
+                )
+                sampler.register_middleware(torch_middleware)
+                if config.verbose:
+                    logger.log_success_panel(
+                        "PyTorch profiler middleware registered successfully"
+                    )
+            except ImportError:
+                if config.verbose:
+                    logger.log_warning_panel(
+                        "PyTorch not available. PyTorch profiler will be disabled."
+                    )
+
         return sampler
 
     @classmethod

@@ -20,7 +20,11 @@ def _is_testing() -> bool:
 
 
 def _safe_print(message: str) -> None:
-    """Print message only if not in testing environment."""
+    """Print m        if not self.torch_export_chrome_trace:
+        args.append("--no-torch-export-chrome-trace")
+    if self.torch_sort_by != "cpu_time_total":      if not self.torch_export_chrome_trace:
+        args.append("--no-torch-export-chrome-trace")
+    if self.torch_sort_by != "cpu_time_total":nly if not in testing environment."""
     if not _is_testing():
         logger.console.print(message)
 
@@ -207,7 +211,16 @@ class TelePySamplerConfig:
         parse: bool = False,
         cmd: str | None = None,
         module: str | None = None,
-    ):
+        # PyTorch profiler options
+        torch_profile: bool = False,
+        torch_output_dir: str = "./pytorch_profiles",
+        torch_activities: list[str] | None = None,
+        torch_record_shapes: bool = True,
+        torch_profile_memory: bool = True,
+        torch_with_stack: bool = True,
+        torch_export_chrome_trace: bool = True,
+        torch_sort_by: str = "cpu_time_total",
+    ) -> None:
         """Initialize TelePySamplerConfig with keyword-only arguments.
 
         Args:
@@ -279,6 +292,24 @@ class TelePySamplerConfig:
                 Default: None.
             module: Module name to profile when using -m option.
                 Default: None.
+            torch_profile: Enable PyTorch profiler integration. When True,
+                PyTorch profiler will run alongside TelePy profiler.
+                Default: False.
+            torch_output_dir: Directory to save PyTorch profiler outputs.
+                Default: "./pytorch_profiles".
+            torch_activities: List of PyTorch profiler activities to profile.
+                Valid values: ["cpu", "cuda", "xpu"]. If None, defaults to ["cpu"].
+                Default: None.
+            torch_record_shapes: Whether to record tensor shapes in PyTorch profiler.
+                Default: True.
+            torch_profile_memory: Whether to profile memory usage in PyTorch profiler.
+                Default: True.
+            torch_with_stack: Whether to record call stack in PyTorch profiler.
+                Default: True.
+            torch_export_chrome_trace: Whether to export Chrome trace format.
+                Default: True.
+            torch_sort_by: Sort key for PyTorch profiler statistics.
+                Default: "cpu_time_total".
         """
         # Sampler configuration
         self.interval = interval
@@ -323,6 +354,16 @@ class TelePySamplerConfig:
         self.cmd = cmd
         self.module = module
 
+        # PyTorch profiler options
+        self.torch_profile = torch_profile
+        self.torch_output_dir = torch_output_dir
+        self.torch_activities = torch_activities or ["cpu"]
+        self.torch_record_shapes = torch_record_shapes
+        self.torch_profile_memory = torch_profile_memory
+        self.torch_with_stack = torch_with_stack
+        self.torch_export_chrome_trace = torch_export_chrome_trace
+        self.torch_sort_by = torch_sort_by
+
     @classmethod
     def from_namespace(cls, args_namespace) -> "TelePySamplerConfig":
         """Create TelePySamplerConfig from argparse.Namespace.
@@ -362,6 +403,18 @@ class TelePySamplerConfig:
             parse=getattr(args_namespace, "parse", False),
             cmd=getattr(args_namespace, "cmd", None),
             module=getattr(args_namespace, "module", None),
+            torch_profile=getattr(args_namespace, "torch_profile", False),
+            torch_output_dir=getattr(
+                args_namespace, "torch_output_dir", "./pytorch_profiles"
+            ),
+            torch_activities=getattr(args_namespace, "torch_activities", None),
+            torch_record_shapes=getattr(args_namespace, "torch_record_shapes", True),
+            torch_profile_memory=getattr(args_namespace, "torch_profile_memory", True),
+            torch_with_stack=getattr(args_namespace, "torch_with_stack", True),
+            torch_export_chrome_trace=getattr(
+                args_namespace, "torch_export_chrome_trace", True
+            ),
+            torch_sort_by=getattr(args_namespace, "torch_sort_by", "cpu_time_total"),
         )
 
     def to_cli_args(self) -> list[str]:
@@ -414,6 +467,26 @@ class TelePySamplerConfig:
         if self.fork_server:  # pragma: no cover
             # nobody writes code to use it.
             res.append("--fork-server")
+        if self.torch_profile:
+            res.append("--torch-profile")
+        if self.torch_output_dir:
+            res.append("--torch-output-dir")
+            res.append(self.torch_output_dir)
+        if self.torch_activities:
+            for activity in self.torch_activities:
+                res.append("--torch-activities")
+                res.append(activity)
+        if not self.torch_record_shapes:
+            res.append("--no-torch-record-shapes")
+        if not self.torch_profile_memory:
+            res.append("--no-torch-profile-memory")
+        if not self.torch_with_stack:
+            res.append("--no-torch-with-stack")
+        if not self.torch_export_chrome_trace:
+            res.append("--no-torch-export-chrome-trace")
+        if self.torch_sort_by != "cpu_time_total":
+            res.append("--torch-sort-by")
+            res.append(self.torch_sort_by)
         return res
 
 
