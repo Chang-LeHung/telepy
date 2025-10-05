@@ -192,6 +192,33 @@ class Environment:
             cls.initialized = False
 
     @classmethod
+    def _create_sampler(cls, config: TelePySamplerConfig) -> TelepySysAsyncWorkerSampler:
+        """
+        Create and configure a TelepySysAsyncWorkerSampler instance.
+
+        Args:
+            config (TelePySamplerConfig): The configuration for the sampler.
+
+        Returns:
+            TelepySysAsyncWorkerSampler: A configured sampler instance.
+        """
+        sampler = TelepySysAsyncWorkerSampler(
+            config.interval,
+            debug=config.debug,
+            ignore_frozen=config.ignore_frozen,
+            ignore_self=not config.include_telepy,
+            tree_mode=config.tree_mode,
+            focus_mode=config.focus_mode,
+            regex_patterns=config.regex_patterns,
+            is_root=not (config.fork_server or config.mp),
+            forkserver=config.fork_server,
+            from_mp=config.mp,
+            time_mode=config.time,
+        )
+        sampler.adjust()
+        return sampler
+
+    @classmethod
     def patch_sys_exit(cls, *_args, **kwargs):  # pragma: no cover
         """
         `telepy_finalize` will not be called when the process exits. We need to stop the
@@ -253,20 +280,7 @@ class Environment:
             cls.set_args(config)
 
             # Create and set the sampler
-            sampler = TelepySysAsyncWorkerSampler(
-                config.interval,
-                debug=config.debug,
-                ignore_frozen=config.ignore_frozen,
-                ignore_self=not config.include_telepy,
-                tree_mode=config.tree_mode,
-                focus_mode=config.focus_mode,
-                regex_patterns=config.regex_patterns,
-                is_root=not (config.fork_server or config.mp),
-                forkserver=config.fork_server,
-                from_mp=config.mp,
-                time_mode=config.time,
-            )
-            sampler.adjust()
+            sampler = cls._create_sampler(config)
             cls.set_sampler(sampler)
 
             sys.exit = cls.patch_sys_exit
