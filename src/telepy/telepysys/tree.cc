@@ -62,13 +62,13 @@ struct StackTree {
     }
 
     // callstack exmplae: main.py:hello:world
-    void AddCallStack(const char* callstack) {
+    void AddCallStack(const char* callstack, unsigned long cnt = 1) {
         std::vector<std::string> names;
         split(callstack, DLIM, names);
         auto node = root;
         for (const auto& s : names) {
             assert(node != nullptr);
-            node->acc_cnt++;
+            node->acc_cnt += cnt;
             if (node->child != nullptr) {
                 Node* next = node->child;
                 Node* prev = nullptr;
@@ -99,8 +99,8 @@ struct StackTree {
                 node->name = s;
             }
         }
-        node->cnt++;  // only leaf node can increment count
-        node->acc_cnt++;
+        node->cnt += cnt;  // only leaf node can increment count
+        node->acc_cnt += cnt;
     }
 
     void Save(std::ostream& out) {
@@ -204,6 +204,13 @@ Dumps(StackTree* tree) {
 void
 AddCallStack(StackTree* tree, const char* callstack) {
     tree->AddCallStack(callstack);
+}
+
+void
+AddCallStackWithCount(StackTree* tree,
+                      const char* callstack,
+                      unsigned long cnt) {
+    tree->AddCallStack(callstack, cnt);
 }
 
 

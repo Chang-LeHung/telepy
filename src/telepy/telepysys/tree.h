@@ -18,6 +18,12 @@ void
 AddCallStack(struct StackTree* tree, const char* callstack);
 
 void
+AddCallStackWithCount(struct StackTree* tree,
+                      const char* callstack,
+                      unsigned long cnt);
+
+
+void
 Dump(struct StackTree* tree, const char* filename);
 
 // returns a string that should be freed by caller (ownership returned )
