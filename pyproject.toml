@@ -37,3 +37,4 @@ version = { attr = "telepy.__version__" }
 
 [project.scripts]
 telepy = "telepy.__main__:main"
+tracec = "telepy.chrome_trace_converter:main"
