@@ -155,6 +155,12 @@ class Environment:
     _sampler: None | TelepySysAsyncWorkerSampler = None
     _args: None | TelePySamplerConfig = None
 
+    def __new__(cls):
+        """Prevent instantiation of Environment class."""
+        raise TypeError(
+            "Environment class cannot be instantiated. Use its class methods directly."
+        )
+
     @classmethod
     def get_sampler(cls) -> None | TelepySysAsyncWorkerSampler:
         """Get the singleton sampler instance."""
