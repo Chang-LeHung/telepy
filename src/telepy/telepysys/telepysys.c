@@ -25,10 +25,10 @@
 // Note: For now this is just a placeholder for the monitoring API implementation
 // The actual monitoring API has a different interface that will be implemented later
 static int
-trace_c_function_py312(PyObject* obj,
-                       PyFrameObject* frame,
-                       int what,
-                       PyObject* arg) {
+trace_c_function(PyObject* obj,
+                 PyFrameObject* frame,
+                 int what,
+                 PyObject* arg) {
     // TODO: Implement C function tracing logic for Python 3.12+
     // This will use the new sys.monitoring API for better performance
     // Reference: PEP 669 - Low Impact Monitoring for CPython
@@ -43,10 +43,10 @@ trace_c_function_py312(PyObject* obj,
 // Python < 3.12 uses PyEval_SetProfile
 // Skeleton trace function for Python < 3.12
 static int
-trace_c_function_legacy(PyObject* obj,
-                        PyFrameObject* frame,
-                        int what,
-                        PyObject* arg) {
+trace_c_function(PyObject* obj,
+                 PyFrameObject* frame,
+                 int what,
+                 PyObject* arg) {
     // TODO: Implement C function tracing logic for Python < 3.12
     // This uses the traditional profiling API
     // what can be: PyTrace_C_CALL, PyTrace_C_EXCEPTION, PyTrace_C_RETURN
@@ -600,10 +600,10 @@ Sampler_start_trace_cfunction(SamplerObject* self,
 
 #if PY_VERSION_HEX >= 0x030C0000
     // Use PyEval_SetProfile for Python 3.12+ (monitoring API to be implemented later)
-    PyEval_SetProfile(trace_c_function_py312, (PyObject*)self);
+    PyEval_SetProfile(trace_c_function, (PyObject*)self);
 #else
     // Use PyEval_SetProfile for Python < 3.12
-    PyEval_SetProfile(trace_c_function_legacy, (PyObject*)self);
+    PyEval_SetProfile(trace_c_function, (PyObject*)self);
 #endif
 
     Py_RETURN_NONE;
@@ -1493,10 +1493,10 @@ AsyncSampler_start_trace_cfunction(AsyncSamplerObject* self,
 
 #if PY_VERSION_HEX >= 0x030C0000
     // Use PyEval_SetProfile for Python 3.12+ (monitoring API to be implemented later)
-    PyEval_SetProfile(trace_c_function_py312, (PyObject*)base);
+    PyEval_SetProfile(trace_c_function, (PyObject*)base);
 #else
     // Use PyEval_SetProfile for Python < 3.12
-    PyEval_SetProfile(trace_c_function_legacy, (PyObject*)base);
+    PyEval_SetProfile(trace_c_function, (PyObject*)base);
 #endif
 
     Py_RETURN_NONE;
