@@ -436,6 +436,27 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         """
         return self.enabled()
 
+    def start_trace_cfunction(self) -> None:
+        """Start tracing C functions.
+
+        This method enables C function call tracing using PyEval_SetProfile
+        (Python < 3.12) or the monitoring API (Python >= 3.12).
+
+        Raises:
+            RuntimeError: If trace_cfunction is not enabled or sampler is not started.
+        """
+        super().start_trace_cfunction()
+
+    def stop_trace_cfunction(self) -> None:
+        """Stop tracing C functions.
+
+        This method disables C function call tracing.
+
+        Raises:
+            RuntimeError: If trace_cfunction is not enabled.
+        """
+        super().stop_trace_cfunction()
+
 
 class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessEnv):
     """
@@ -633,6 +654,27 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
             float: The ratio of time spent sampling versus total program runtime.
         """
         return self.acc_sampling_time / self.sampler_life_time
+
+    def start_trace_cfunction(self) -> None:
+        """Start tracing C functions.
+
+        This method enables C function call tracing using PyEval_SetProfile
+        (Python < 3.12) or the monitoring API (Python >= 3.12).
+
+        Raises:
+            RuntimeError: If trace_cfunction is not enabled or sampler is not started.
+        """
+        super().start_trace_cfunction()
+
+    def stop_trace_cfunction(self) -> None:
+        """Stop tracing C functions.
+
+        This method disables C function call tracing.
+
+        Raises:
+            RuntimeError: If trace_cfunction is not enabled.
+        """
+        super().stop_trace_cfunction()
 
 
 class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):

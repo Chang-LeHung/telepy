@@ -15,6 +15,54 @@
 #define TELEPYSYS_VERSION "0.1.0"
 
 
+// =============================================================================
+// C Function Trace Callbacks
+// =============================================================================
+
+#if PY_VERSION_HEX >= 0x030C0000
+// Python 3.12+ uses the new monitoring API for better performance
+// Skeleton trace function for Python 3.12+
+// Note: For now this is just a placeholder for the monitoring API implementation
+// The actual monitoring API has a different interface that will be implemented later
+static int
+trace_c_function_py312(PyObject* obj,
+                       PyFrameObject* frame,
+                       int what,
+                       PyObject* arg) {
+    // TODO: Implement C function tracing logic for Python 3.12+
+    // This will use the new sys.monitoring API for better performance
+    // Reference: PEP 669 - Low Impact Monitoring for CPython
+    (void)obj;
+    (void)frame;
+    (void)what;
+    (void)arg;
+    return 0;
+}
+
+#else
+// Python < 3.12 uses PyEval_SetProfile
+// Skeleton trace function for Python < 3.12
+static int
+trace_c_function_legacy(PyObject* obj,
+                        PyFrameObject* frame,
+                        int what,
+                        PyObject* arg) {
+    // TODO: Implement C function tracing logic for Python < 3.12
+    // This uses the traditional profiling API
+    // what can be: PyTrace_C_CALL, PyTrace_C_EXCEPTION, PyTrace_C_RETURN
+    (void)obj;
+    (void)frame;
+    (void)what;
+    (void)arg;
+    return 0;
+}
+#endif
+
+// =============================================================================
+// End of C Function Trace Callbacks
+// =============================================================================
+
+
 static PyObject*
 Sampler_start(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
 
@@ -531,6 +579,53 @@ Sampler_join(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     return res;
 }
 
+static PyObject*
+Sampler_start_trace_cfunction(SamplerObject* self,
+                              PyObject* Py_UNUSED(ignored)) {
+    // Check if trace_cfunction flag is enabled
+    if (!TRACE_CFUNCTION_ENABLED(self)) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "trace_cfunction is not enabled. Set "
+                        "trace_cfunction=True when creating the sampler.");
+        return NULL;
+    }
+
+    // Check if sampler is already started
+    if (!Sample_Enabled(self)) {
+        PyErr_SetString(
+            PyExc_RuntimeError,
+            "Sampler must be started before enabling C function tracing.");
+        return NULL;
+    }
+
+#if PY_VERSION_HEX >= 0x030C0000
+    // Use PyEval_SetProfile for Python 3.12+ (monitoring API to be implemented later)
+    PyEval_SetProfile(trace_c_function_py312, (PyObject*)self);
+#else
+    // Use PyEval_SetProfile for Python < 3.12
+    PyEval_SetProfile(trace_c_function_legacy, (PyObject*)self);
+#endif
+
+    Py_RETURN_NONE;
+}
+
+static PyObject*
+Sampler_stop_trace_cfunction(SamplerObject* self,
+                             PyObject* Py_UNUSED(ignored)) {
+    // Check if trace_cfunction flag is enabled
+    if (!TRACE_CFUNCTION_ENABLED(self)) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "trace_cfunction is not enabled. Set "
+                        "trace_cfunction=True when creating the sampler.");
+        return NULL;
+    }
+
+    // Disable profiling by setting NULL (same for all Python versions)
+    PyEval_SetProfile(NULL, NULL);
+
+    Py_RETURN_NONE;
+}
+
 
 static PyMethodDef Sampler_methods[] = {
     {
@@ -580,6 +675,18 @@ static PyMethodDef Sampler_methods[] = {
         (PyCFunction)Sampler_join,
         METH_NOARGS,
         "Join the sampling thread",
+    },
+    {
+        "start_trace_cfunction",
+        (PyCFunction)Sampler_start_trace_cfunction,
+        METH_NOARGS,
+        "Start tracing C functions",
+    },
+    {
+        "stop_trace_cfunction",
+        (PyCFunction)Sampler_stop_trace_cfunction,
+        METH_NOARGS,
+        "Stop tracing C functions",
     },
     {NULL, NULL, 0, NULL},
 };
@@ -1363,6 +1470,57 @@ AsyncSampler_stop(AsyncSamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     Py_RETURN_NONE;
 }
 
+static PyObject*
+AsyncSampler_start_trace_cfunction(AsyncSamplerObject* self,
+                                   PyObject* Py_UNUSED(ignored)) {
+    SamplerObject* base = (SamplerObject*)self;
+
+    // Check if trace_cfunction flag is enabled
+    if (!TRACE_CFUNCTION_ENABLED(base)) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "trace_cfunction is not enabled. Set "
+                        "trace_cfunction=True when creating the sampler.");
+        return NULL;
+    }
+
+    // Check if sampler is already started
+    if (!Sample_Enabled(base)) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "AsyncSampler must be started before enabling C "
+                        "function tracing.");
+        return NULL;
+    }
+
+#if PY_VERSION_HEX >= 0x030C0000
+    // Use PyEval_SetProfile for Python 3.12+ (monitoring API to be implemented later)
+    PyEval_SetProfile(trace_c_function_py312, (PyObject*)base);
+#else
+    // Use PyEval_SetProfile for Python < 3.12
+    PyEval_SetProfile(trace_c_function_legacy, (PyObject*)base);
+#endif
+
+    Py_RETURN_NONE;
+}
+
+static PyObject*
+AsyncSampler_stop_trace_cfunction(AsyncSamplerObject* self,
+                                  PyObject* Py_UNUSED(ignored)) {
+    SamplerObject* base = (SamplerObject*)self;
+
+    // Check if trace_cfunction flag is enabled
+    if (!TRACE_CFUNCTION_ENABLED(base)) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "trace_cfunction is not enabled. Set "
+                        "trace_cfunction=True when creating the sampler.");
+        return NULL;
+    }
+
+    // Disable profiling by setting NULL (same for all Python versions)
+    PyEval_SetProfile(NULL, NULL);
+
+    Py_RETURN_NONE;
+}
+
 
 static PyMethodDef AsyncSampler_methods[] = {
     {
@@ -1406,6 +1564,18 @@ static PyMethodDef AsyncSampler_methods[] = {
         (PyCFunction)Sampler_get_enabled,  // share it
         METH_NOARGS,
         "Get the sampling interval",
+    },
+    {
+        "start_trace_cfunction",
+        (PyCFunction)AsyncSampler_start_trace_cfunction,
+        METH_NOARGS,
+        "Start tracing C functions",
+    },
+    {
+        "stop_trace_cfunction",
+        (PyCFunction)AsyncSampler_stop_trace_cfunction,
+        METH_NOARGS,
+        "Stop tracing C functions",
     },
     {NULL, NULL, 0, NULL},
 };

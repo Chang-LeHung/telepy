@@ -72,6 +72,22 @@ class Sampler:
         """dump the sampled frames to a string"""
         ...
 
+    def start_trace_cfunction(self) -> None:
+        """Start tracing C functions.
+
+        Raises:
+            RuntimeError: if trace_cfunction is not enabled or sampler is not started
+        """
+        ...
+
+    def stop_trace_cfunction(self) -> None:
+        """Stop tracing C functions.
+
+        Raises:
+            RuntimeError: if trace_cfunction is not enabled
+        """
+        ...
+
 class AsyncSampler:
     def __init__(self) -> None:
         # sampling interval in microseconds
@@ -119,4 +135,20 @@ class AsyncSampler:
 
     def _async_routine(self, sig_num: int, frame: FrameType | None) -> None:
         """async routine"""
+        ...
+
+    def start_trace_cfunction(self) -> None:
+        """Start tracing C functions.
+
+        Raises:
+            RuntimeError: if trace_cfunction is not enabled or sampler is not started
+        """
+        ...
+
+    def stop_trace_cfunction(self) -> None:
+        """Stop tracing C functions.
+
+        Raises:
+            RuntimeError: if trace_cfunction is not enabled
+        """
         ...
