@@ -93,7 +93,11 @@ typedef struct SamplerObject {
     PyObject* regex_patterns;  // list of compiled regex patterns
     char* std_path;            // path to Python executable from sys.executable
 
+    // log buffer, we can not allocate memory in singal function, malloc is not async safe.
+    char* buf;
+    Py_ssize_t buf_size;
     uint32_t flags;
+
 } SamplerObject;
 
 typedef struct AsyncSamplerObject {
@@ -103,9 +107,6 @@ typedef struct AsyncSamplerObject {
     Telepy_time start;    // start time in microseconds
     Telepy_time end;      // end time in microseconds
     PyObject* threading;  // we can not import it in singal function
-    // log buffer, we can not allocate memory in singal function, malloc is not async safe.
-    char* buf;
-    Py_ssize_t buf_size;
 } AsyncSamplerObject;
 
 #ifdef __cplusplus

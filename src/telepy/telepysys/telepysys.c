@@ -1,19 +1,280 @@
 
+#include "htime.h"
 #include "inject.h"
+#include "list.h"
 #include "object.h"
 #include "telepysys.h"
 #include "tree.h"
 #include "tupleobject.h"
 #include <Python.h>
 #include <assert.h>
+#include <pthread.h>
 #include <sched.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
+static inline int
+is_stdlib_or_third_party(SamplerObject* sampler, PyObject* filename);
+
+static inline int
+PyUnicode_Contain(PyObject* filename, const char* str);
+
+static inline int
+matches_regex_patterns(PyObject* filename, PyObject* regex_patterns);
+
+static inline int
+PyUnicode_start_with(PyObject* filename, const char* str);
+
+#ifdef __APPLE__
+#include <os/lock.h>
+#define SPINLOCK_T os_unfair_lock
+#define SPINLOCK_INIT OS_UNFAIR_LOCK_INIT
+#define SPINLOCK_LOCK(lock) os_unfair_lock_lock(lock)
+#define SPINLOCK_UNLOCK(lock) os_unfair_lock_unlock(lock)
+#else
+// Linux uses pthread_spinlock_t
+#define SPINLOCK_T pthread_spinlock_t
+#define SPINLOCK_INIT {0}
+#define SPINLOCK_LOCK(lock) pthread_spin_lock(lock)
+#define SPINLOCK_UNLOCK(lock) pthread_spin_unlock(lock)
+#define SPINLOCK_INIT_FUNC(lock)                                              \
+    pthread_spin_init(lock, PTHREAD_PROCESS_PRIVATE)
+#endif
+
 
 #define TELEPYSYS_VERSION "0.1.0"
+#define MAX_THREAD_NUM 2048
 
+static __thread int ts_idx = -1;
+static SPINLOCK_T ts_lock = SPINLOCK_INIT;
+
+struct ThreadState {
+    pthread_t thread_id;
+    struct list_head list;
+};
+
+static struct ThreadState thread_states[MAX_THREAD_NUM];
+
+static int
+allocate_thread_state() {
+#if !defined(__APPLE__) && defined(SPINLOCK_INIT_FUNC)
+    static int ts_lock_initialized = 0;
+    if (!ts_lock_initialized) {
+        SPINLOCK_INIT_FUNC(&ts_lock);
+        ts_lock_initialized = 1;
+    }
+#endif
+    SPINLOCK_LOCK(&ts_lock);
+    for (int i = 0; i < MAX_THREAD_NUM; i++) {
+        if (thread_states[i].thread_id == 0) {
+            thread_states[i].thread_id = pthread_self();
+            SPINLOCK_UNLOCK(&ts_lock);
+            return i;
+        }
+    }
+    SPINLOCK_UNLOCK(&ts_lock);
+    return -1;  // No available slot
+}
+
+// Represents a C function call node in the call tree
+struct NativeCallNode {
+    PyCFunctionObject* cfunc;
+    PyFrameObject* py_frame;
+    uint64_t call_time_ns;
+    struct list_head list;
+};
+
+#define FREE_CALL_NODE(node)                                                  \
+    do {                                                                      \
+        Py_XDECREF((node)->py_frame);                                         \
+        Py_XDECREF((node)->cfunc);                                            \
+        free(node);                                                           \
+    } while (0)
+
+
+static int
+trace_cfunction_call_callback(SamplerObject* Py_UNUSED(self),
+                              PyFrameObject* frame,
+                              PyObject* arg) {
+    if (ts_idx == -1) {
+        ts_idx = allocate_thread_state();
+        if (ts_idx == -1) {
+            PyErr_SetString(PyExc_RuntimeError, "telepysys: too many threads");
+            return -1;
+        }
+    }
+    // create new node and insert it
+    struct NativeCallNode* node =
+        (struct NativeCallNode*)malloc(sizeof(struct NativeCallNode));
+    if (node == NULL) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "telepysys: failed to allocate memory for C function "
+                        "call node");
+        return -1;
+    }
+    node->cfunc = (PyCFunctionObject*)arg;
+    node->py_frame = frame;
+    node->call_time_ns = htime_get_thread_cpu_ns();
+    Py_INCREF(frame);
+    Py_INCREF((PyObject*)node->cfunc);
+    list_add(&node->list, &thread_states[ts_idx].list);
+    thread_states[ts_idx].thread_id = pthread_self();
+    return 0;
+}
+
+
+static int
+cfunc_call_stack(SamplerObject* self,
+                 struct list_head* h,
+                 char* buf,
+                 size_t buf_size) {
+
+#define BUFFER_OVERFLOW_CHECK(ret, buf_size, pos, context, goto_label)        \
+    do {                                                                      \
+        if ((ret) < 0 || (ret) >= (int)((buf_size) - (pos))) {                \
+            PyErr_Format(PyExc_RuntimeError,                                  \
+                         "telepysys: buffer overflow when writing %s, "       \
+                         "buffer size: %zu, position: %zd, required: %d",     \
+                         (context),                                           \
+                         (buf_size),                                          \
+                         (pos),                                               \
+                         (ret));                                              \
+            goto goto_label;                                                  \
+        }                                                                     \
+    } while (0)
+
+    struct NativeCallNode* node;
+    node = list_entry(h, struct NativeCallNode, list);
+    PyObject* list = PyList_New(0);
+    PyFrameObject* f = node->py_frame;
+    Py_INCREF(f);
+    while (f != NULL) {
+        PyList_Append(list, (PyObject*)f);
+        f = PyFrame_GetBack(f);  // return a new reference
+    }
+    Py_ssize_t pos = 0;
+    char* format = NULL;
+    for (Py_ssize_t i = PyList_Size(list) - 1; i >= 0; --i) {
+        PyFrameObject* frame = (PyFrameObject*)PyList_GetItem(list, i);
+        PyCodeObject* code = PyFrame_GetCode(frame);  // New reference
+        PyObject* filename = code->co_filename;
+        PyObject* name = code->co_name;
+#if PY_VERSION_HEX >= 0x030B00F0
+        name = code->co_qualname;
+#endif
+        if (name == NULL || filename == NULL) {
+            PyErr_Format(PyExc_RuntimeError,
+                         "telepysys: failed to get filename or name");
+            Py_DECREF(code);
+            goto error;
+        }
+        int lineno = code->co_firstlineno;
+        Py_DECREF(code);
+        if (FOCUS_MODE_ENABLED(self) &&
+            is_stdlib_or_third_party(self, filename)) {
+            continue;
+        }
+        if (IGNORE_SELF_ENABLED(self) &&
+            (PyUnicode_Contain(filename, "/site-packages/telepy") ||
+             PyUnicode_Contain(filename, "/bin/telepy"))) {
+            continue;
+        }
+        if (!matches_regex_patterns(name, self->regex_patterns) &&
+            !matches_regex_patterns(filename, self->regex_patterns)) {
+            continue;
+        }
+        if (IGNORE_FROZEN_ENABLED(self) &&
+            PyUnicode_start_with(filename, "<frozen")) {
+            continue;
+        }
+        if (TREE_MODE_ENABLED(self))
+            lineno = PyFrame_GetLineNumber(frame);
+        if (i > 0) {
+            format = "%s:%s:%d;";
+        } else {
+            format = "%s:%s:%d";
+        }
+        int ret = snprintf(buf + pos,
+                           buf_size - pos,
+                           format,
+                           PyUnicode_AsUTF8(filename),
+                           PyUnicode_AsUTF8(name),
+                           lineno);
+        BUFFER_OVERFLOW_CHECK(ret, buf_size, pos, "stack trace", error);
+        pos += ret;
+
+        if (frame == node->py_frame) {
+            // found the frame where the C function is called
+            const char* cfunc_format = NULL;
+            if (i > 0) {
+                cfunc_format = ";%s:%s:%d;";
+            } else {
+                cfunc_format = ";%s:%s:%d";
+            }
+            // Get module name from PyCFunctionObject
+            const char* module_name = NULL;
+            if (node->cfunc->m_module != NULL) {
+                if (PyUnicode_Check(node->cfunc->m_module)) {
+                    module_name = PyUnicode_AsUTF8(node->cfunc->m_module);
+                } else if (PyModule_Check(node->cfunc->m_module)) {
+                    module_name = PyModule_GetName(node->cfunc->m_module);
+                }
+            }
+            if (module_name == NULL) {
+                module_name = "<cfunc>";
+            }
+            const char* func_name = node->cfunc->m_ml->ml_name;
+            ret = snprintf(buf + pos,
+                           buf_size - pos,
+                           cfunc_format,
+                           module_name,
+                           func_name,
+                           0);
+            BUFFER_OVERFLOW_CHECK(ret, buf_size, pos, "cfunc trace", error);
+            pos += ret;
+            struct NativeCallNode* t =
+                list_entry(&node->list.prev, struct NativeCallNode, list);
+            FREE_CALL_NODE(node);
+            list_del(&node->list);
+            node = t;
+        }
+    }
+    Py_DECREF(list);
+    return 0;
+error:
+    Py_DECREF(list);
+    return -1;
+}
+
+static int
+trace_cfunction_return_callback(SamplerObject* self,
+                                PyFrameObject* Py_UNUSED(frame),
+                                PyObject* Py_UNUSED(arg)) {
+    assert(ts_idx != -1);
+    uint64_t return_time_ns = htime_get_thread_cpu_ns();
+    struct NativeCallNode* node =
+        list_entry(&thread_states[ts_idx].list, struct NativeCallNode, list);
+    uint64_t duration_us = (return_time_ns - node->call_time_ns) / 1000ULL;
+    char* buf = self->buf;
+    size_t buf_size = self->buf_size;
+    int ret =
+        cfunc_call_stack(self, thread_states[ts_idx].list.prev, buf, buf_size);
+    if (ret != 0) {
+        goto cleanup;
+    }
+    // TODO: find the best discount factor
+    AddCallStackWithCount(
+        self->tree,
+        buf,
+        duration_us / PyLong_AsLong(self->sampling_interval) *
+            0.8);  // discount 20% time for C function call overhead
+
+cleanup:
+    list_del(&node->list);
+    free(node);
+    return ret;
+}
 
 // =============================================================================
 // C Function Trace Callbacks
@@ -32,11 +293,27 @@ trace_c_function(PyObject* obj,
     // TODO: Implement C function tracing logic for Python 3.12+
     // This will use the new sys.monitoring API for better performance
     // Reference: PEP 669 - Low Impact Monitoring for CPython
-    (void)obj;
-    (void)frame;
-    (void)what;
-    (void)arg;
-    return 0;
+
+    // increase branch prediction accuracy
+    if (what != PyTrace_C_CALL && what != PyTrace_C_RETURN) {
+        return 0;
+    }
+
+    SamplerObject* self = (SamplerObject*)obj;
+    int ret = 0;
+
+    switch (what) {
+    case PyTrace_C_CALL:
+        ret = trace_cfunction_call_callback(self, frame, arg);
+        break;
+    case PyTrace_C_RETURN:
+        ret = trace_cfunction_return_callback(self, frame, arg);
+        break;
+    default:
+        return 0;
+    }
+
+    return ret;
 }
 
 #else
@@ -47,14 +324,26 @@ trace_c_function(PyObject* obj,
                  PyFrameObject* frame,
                  int what,
                  PyObject* arg) {
-    // TODO: Implement C function tracing logic for Python < 3.12
-    // This uses the traditional profiling API
-    // what can be: PyTrace_C_CALL, PyTrace_C_EXCEPTION, PyTrace_C_RETURN
-    (void)obj;
-    (void)frame;
-    (void)what;
-    (void)arg;
-    return 0;
+    // increase branch prediction accuracy
+    if (what != PyTrace_C_CALL && what != PyTrace_C_RETURN) {
+        return 0;
+    }
+
+    SamplerObject* self = (SamplerObject*)obj;
+    int ret = 0;
+
+    switch (what) {
+    case PyTrace_C_CALL:
+        ret = trace_cfunction_call_callback(self, frame, arg);
+        break;
+    case PyTrace_C_RETURN:
+        ret = trace_cfunction_return_callback(self, frame, arg);
+        break;
+    default:
+        return 0;
+    }
+
+    return ret;
 }
 #endif
 
@@ -427,8 +716,8 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
                         "threading module can not be imported");
         return NULL;
     }
-    const size_t buf_size = BUF_SIZE;
-    char* buf = (char*)malloc(buf_size);
+    const size_t buf_size = self->buf_size;
+    char* buf = self->buf;
     Telepy_time sampling_start = unix_micro_time();
     while (Sample_Enabled(self)) {
         self->sampling_times++;
@@ -511,14 +800,12 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
                    buf);
         }
     }
-    free(buf);
     Py_DECREF(threading);
     Telepy_time sampling_end = unix_micro_time();
     self->life_time = sampling_end - sampling_start;
     Py_RETURN_NONE;
 
 error:
-    free(buf);
     Py_DECREF(threading);
     return NULL;
 }
@@ -1092,6 +1379,13 @@ Sampler_new(PyTypeObject* type,
                             "Failed to initialize std_path");
             return NULL;
         }
+        self->buf = malloc(BUF_SIZE);
+        if (!self->buf) {
+            Py_DECREF(self);
+            PyErr_SetString(PyExc_RuntimeError, "Failed to allocate buffer");
+            return NULL;
+        }
+        self->buf_size = BUF_SIZE;
 
         return (PyObject*)self;
     }
@@ -1340,10 +1634,10 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     }
     ENABLE_SAMPLING((SamplerObject*)self);
     if (nargs != 2) {
-        PyErr_Format(
-            PyExc_TypeError,
-            "async_routine() takes 2 positional arguments but %zd were given",
-            nargs);
+        PyErr_Format(PyExc_TypeError,
+                     "async_routine() takes 2 positional arguments but "
+                     "%zd were given",
+                     nargs);
         return NULL;
     }
     SamplerObject* base = (SamplerObject*)self;
@@ -1359,8 +1653,8 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
 
     PyObject* main_frame = args[1];
 
-    const size_t buf_size = self->buf_size;
-    char* buf = self->buf;
+    const size_t buf_size = self->base.buf_size;
+    char* buf = self->base.buf;
 
     Telepy_time sampling_start = unix_micro_time();
 
@@ -1594,9 +1888,9 @@ AsyncSampler_clear(AsyncSamplerObject* self) {
         FreeTree(self->base.tree);
         self->base.tree = NULL;
     }
-    if (self->buf) {
-        free(self->buf);
-        self->buf = NULL;
+    if (self->base.buf) {
+        free(self->base.buf);
+        self->base.buf = NULL;
     }
     return 0;
 }
@@ -1641,8 +1935,8 @@ AsyncSampler_new(PyTypeObject* type,
             return NULL;
         }
 
-        self->buf_size = BUF_SIZE;
-        self->buf = malloc(self->buf_size);
+        self->base.buf_size = BUF_SIZE;
+        self->base.buf = malloc(self->base.buf_size);
         self->threading = PyImport_ImportModule("threading");
         return (PyObject*)self;
     }
@@ -1720,8 +2014,10 @@ telepysys_register_main(PyObject* Py_UNUSED(module),
     PyObject* new_args = PyTuple_GetSlice(args, 1, PyTuple_Size(args));
     Py_XINCREF(kwargs);
     Py_INCREF(callable);
-    int result = register_func_in_main(
-        callable, new_args, kwargs);  // pass ownship of new_args and kwArgs
+    int result =
+        register_func_in_main(callable,
+                              new_args,
+                              kwargs);  // pass ownship of new_args and kwArgs
     if (result) {
         PyErr_Format(
             PyExc_RuntimeError,
@@ -1785,6 +2081,7 @@ static PyMethodDef telepysys_methods[] = {
 
 static int
 telepysys_exec(PyObject* m) {
+    memset(thread_states, 0, sizeof(thread_states));
     if (PyModule_AddStringConstant(m, "__version__", TELEPYSYS_VERSION)) {
         return -1;
     }
@@ -1832,7 +2129,17 @@ telepysys_traverse(PyObject* module, visitproc visit, void* arg) {
 
 static void
 telepysys_free(void* module) {
-
+    for (int i = 0; i < MAX_THREAD_NUM; i++) {
+        if (thread_states[i].thread_id == 0)
+            break;
+        struct NativeCallNode* pos;
+        struct NativeCallNode* n;
+        list_for_each_entry_safe(pos, n, &thread_states[i].list, list) {
+            FREE_CALL_NODE(pos);
+            list_del(&pos->list);
+        }
+        thread_states[i].thread_id = 0;
+    }
     telepysys_clear(module);
 }
 

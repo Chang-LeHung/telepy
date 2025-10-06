@@ -49,6 +49,7 @@ ext_modules = [
         sources=[
             "src/telepy/telepysys/telepysys.c",
             "src/telepy/telepysys/inject.c",
+            "src/telepy/telepysys/htime.c",
         ],
         include_dirs=["src/telepy/telepysys"],
         extra_compile_args=flags,
