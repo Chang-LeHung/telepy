@@ -39,6 +39,7 @@ typedef struct TelePySysState {
 #define IGNORE_SELF 4
 #define TREE_MODE 5
 #define FOCUS_MODE 6
+#define TRACE_CFUNCTION 7
 
 #define Sample_Enabled(s) (BIT_CHECK((s)->flags, ENABLED))
 #define Sample_Disable(s) (BIT_CLEAR((s)->flags, ENABLED))
@@ -67,6 +68,10 @@ typedef struct TelePySysState {
 #define ENABLE_FOCUS_MODE(s) (BIT_SET((s)->flags, FOCUS_MODE))
 #define DISABLE_FOCUS_MODE(s) (BIT_CLEAR((s)->flags, FOCUS_MODE))
 #define FOCUS_MODE_ENABLED(s) (BIT_CHECK((s)->flags, FOCUS_MODE))
+
+#define ENABLE_TRACE_CFUNCTION(s) (BIT_SET((s)->flags, TRACE_CFUNCTION))
+#define DISABLE_TRACE_CFUNCTION(s) (BIT_CLEAR((s)->flags, TRACE_CFUNCTION))
+#define TRACE_CFUNCTION_ENABLED(s) (BIT_CHECK((s)->flags, TRACE_CFUNCTION))
 
 #define CHECK_FALG(s, flag) (BIT_CHECK((s)->flags, flag))
 

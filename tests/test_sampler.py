@@ -112,6 +112,13 @@ class TestAsyncSampler(TestBase):
         t.join()
         print(async_sampler.sampling_time_rate)
 
+    def test_trace_cfunction_flag_async(self):
+        """Ensure trace_cfunction flag toggles on async sampler."""
+        sampler = telepy.TelepySysAsyncSampler(trace_cfunction=True)
+        self.assertTrue(sampler.trace_cfunction)
+        sampler.trace_cfunction = False
+        self.assertFalse(sampler.trace_cfunction)
+
     def test_async_sampler_not_in_main(self):
         import threading
 
@@ -221,6 +228,17 @@ class TestSamplerContextManager(TestBase):
             self.assertGreater(result, 0)
 
         self.assertFalse(sampler.started)
+
+    def test_trace_cfunction_flag(self):
+        """Ensure trace_cfunction flag can be toggled."""
+        sampler = telepy.TelepySysSampler(sampling_interval=1000, trace_cfunction=True)
+        self.assertTrue(sampler.trace_cfunction)
+
+        sampler.trace_cfunction = False
+        self.assertFalse(sampler.trace_cfunction)
+
+        sampler.trace_cfunction = True
+        self.assertTrue(sampler.trace_cfunction)
 
     def test_context_manager_with_regex_patterns(self):
         """Test context manager with regex patterns."""

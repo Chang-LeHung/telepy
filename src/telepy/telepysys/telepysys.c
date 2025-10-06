@@ -768,6 +768,32 @@ Sampler_set_focus_mode(SamplerObject* self,
 
 
 static PyObject*
+Sampler_get_trace_cfunction(SamplerObject* self, void* Py_UNUSED(closure)) {
+    if (TRACE_CFUNCTION_ENABLED(self)) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
+
+static int
+Sampler_set_trace_cfunction(SamplerObject* self,
+                            PyObject* value,
+                            void* Py_UNUSED(closure)) {
+    if (!PyBool_Check(value)) {
+        PyErr_Format(PyExc_TypeError, "trace_cfunction must be a bool");
+        return -1;
+    }
+    if (Py_IsTrue(value)) {
+        ENABLE_TRACE_CFUNCTION(self);
+    } else {
+        DISABLE_TRACE_CFUNCTION(self);
+    }
+    return 0;
+}
+
+
+static PyObject*
 Sampler_get_regex_patterns(SamplerObject* self, void* Py_UNUSED(closure)) {
     if (self->regex_patterns == NULL) {
         Py_RETURN_NONE;
@@ -856,6 +882,13 @@ static PyGetSetDef Sampler_getset[] = {
         (getter)Sampler_get_focus_mode,
         (setter)Sampler_set_focus_mode,
         "focus mode - ignore stdlib and third-party libraries",
+        NULL,
+    },
+    {
+        "trace_cfunction",
+        (getter)Sampler_get_trace_cfunction,
+        (setter)Sampler_set_trace_cfunction,
+        "trace C functions via profiling hooks",
         NULL,
     },
     {
@@ -1090,6 +1123,13 @@ static PyGetSetDef AsyncSampler_getset[] = {
         (getter)Sampler_get_focus_mode,  // share it
         (setter)Sampler_set_focus_mode,  // share it
         "focus mode - ignore stdlib and third-party libraries",
+        NULL,
+    },
+    {
+        "trace_cfunction",
+        (getter)Sampler_get_trace_cfunction,  // share it
+        (setter)Sampler_set_trace_cfunction,  // share it
+        "trace C functions via profiling hooks",
         NULL,
     },
     {

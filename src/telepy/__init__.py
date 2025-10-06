@@ -122,6 +122,7 @@ def profile(
     tree_mode: bool = False,
     inverted: bool = False,
     focus_mode: bool = False,
+    trace_cfunction: bool = False,
     regex_patterns: list | None = None,
     verbose: bool = True,
     full_path: bool = False,
@@ -145,6 +146,7 @@ def profile(
             "wall" uses SIGALRM/ITIMER_REAL. Default: "cpu".
         inverted: Render profiling results with root frames at the top
         focus_mode: Whether to focus on user code
+        trace_cfunction: Whether to include C function calls when profiling
         regex_patterns: List of regex patterns for filtering stack traces
         verbose: If True, print progress and completion messages when saving
         full_path: If True, display absolute file paths instead of relative paths
@@ -184,6 +186,7 @@ def profile(
             time=time,
             inverted=inverted,
             focus_mode=focus_mode,
+            trace_cfunction=trace_cfunction,
             regex_patterns=regex_patterns,
             verbose=verbose,
             full_path=full_path,
@@ -268,6 +271,7 @@ class Profiler:
         ignore_frozen: bool = False,
         tree_mode: bool = False,
         focus_mode: bool = False,
+        trace_cfunction: bool = False,
         timeout: int = 10,
         output: str = "result.svg",
         folded_saved: bool = False,
@@ -292,6 +296,7 @@ class Profiler:
             tree_mode (bool): Whether to use the tree mode.
             focus_mode (bool): Whether to focus on user code by ignoring standard
                 library and third-party packages.
+            trace_cfunction (bool): Whether to include C function calls in profiling output.
             timeout (int): Timeout in seconds for waiting for the subprocess.
             output (str): Output filename for the flame graph.
             folded_saved (bool): Whether to save the folded stack file.
@@ -319,6 +324,7 @@ class Profiler:
             ignore_frozen=ignore_frozen,
             include_telepy=not ignore_self,
             focus_mode=focus_mode,
+            trace_cfunction=trace_cfunction,
             output=output,
             folded_save=folded_saved,
             folded_file=folded_filename,
@@ -341,6 +347,7 @@ class Profiler:
         self._ignore_frozen = ignore_frozen
         self._tree_mode = tree_mode
         self._focus_mode = focus_mode
+        self._trace_cfunction = trace_cfunction
         self._timeout = timeout
         self._merge = merge
         self._ignore_self = ignore_self

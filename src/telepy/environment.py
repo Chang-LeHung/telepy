@@ -209,6 +209,7 @@ class Environment:
             ignore_self=not config.include_telepy,
             tree_mode=config.tree_mode,
             focus_mode=config.focus_mode,
+            trace_cfunction=config.trace_cfunction,
             regex_patterns=config.regex_patterns,
             is_root=not (config.fork_server or config.mp),
             forkserver=config.fork_server,

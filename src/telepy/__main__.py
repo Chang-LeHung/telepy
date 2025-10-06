@@ -383,6 +383,11 @@ def main():
         "third-party packages (default: False).",
     )
     parser.add_argument(
+        "--trace-cfunction",
+        action="store_true",
+        help="Include C function calls (c_call events) alongside Python frames.",
+    )
+    parser.add_argument(
         "--regex-patterns",
         action="append",
         help="Regex patterns for filtering stack traces. Only files or function/class "

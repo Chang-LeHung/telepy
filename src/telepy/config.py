@@ -147,6 +147,7 @@ class TelePyConfig:
                 # "--tree-mode",     # Enable tree mode
                 # Filtering options
                 "--ignore-frozen",  # Ignore frozen modules (recommended)
+                # "--trace-cfunction",  # Include C functions when profiling
                 # "--include-telepy", # Include telepy in profiling
                 # Process handling
                 "--merge",  # Merge multiprocess results
@@ -192,6 +193,7 @@ class TelePySamplerConfig:
         ignore_frozen: bool = False,
         include_telepy: bool = False,
         focus_mode: bool = False,
+        trace_cfunction: bool = False,
         regex_patterns: list[str] | None = None,
         # Output configuration
         output: str = "result.svg",
@@ -254,6 +256,8 @@ class TelePySamplerConfig:
             focus_mode: When enabled, ignores standard library and third-party
                 packages in stack traces, focusing only on user code.
                 Default: False.
+            trace_cfunction: When enabled, include C function calls captured via
+                profiling hooks alongside Python frames. Default: False.
             regex_patterns: List of regex pattern strings for filtering stack
                 traces. Only files or function/class names matching at least one pattern
                 will be included. If None or empty, all files are included. Default: None.
@@ -328,6 +332,7 @@ class TelePySamplerConfig:
         self.ignore_frozen = ignore_frozen
         self.include_telepy = include_telepy
         self.focus_mode = focus_mode
+        self.trace_cfunction = trace_cfunction
         self.regex_patterns = regex_patterns
 
         # Output configuration
@@ -388,6 +393,7 @@ class TelePySamplerConfig:
             ignore_frozen=getattr(args_namespace, "ignore_frozen", False),
             include_telepy=getattr(args_namespace, "include_telepy", False),
             focus_mode=getattr(args_namespace, "focus_mode", False),
+            trace_cfunction=getattr(args_namespace, "trace_cfunction", False),
             regex_patterns=getattr(args_namespace, "regex_patterns", None),
             output=getattr(args_namespace, "output", "result.svg"),
             folded_file=getattr(args_namespace, "folded_file", "result.folded"),
@@ -437,6 +443,8 @@ class TelePySamplerConfig:
             res.append("--include-telepy")
         if self.focus_mode:
             res.append("--focus-mode")
+        if self.trace_cfunction:
+            res.append("--trace-cfunction")
         if self.regex_patterns:
             for pattern in self.regex_patterns:
                 res.append("--regex-patterns")

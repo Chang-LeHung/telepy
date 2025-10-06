@@ -274,6 +274,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         ignore_self: bool = True,
         tree_mode: bool = False,
         focus_mode: bool = False,
+        trace_cfunction: bool = False,
         regex_patterns: list | None = None,
         is_root: bool = True,
         from_fork: bool = False,
@@ -295,6 +296,8 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
                 Whether to use the tree mode.
             focus_mode (bool):
                 Whether to focus on user code by ignoring standard library and third-party packages.
+            trace_cfunction (bool):
+                Whether to trace C functions (c_call events) in addition to Python frames.
             regex_patterns (list | None):
                 List of regex pattern strings for filtering stack traces. Only files or function/class names matching
                 at least one pattern will be included. If None or empty, all files are included.
@@ -318,6 +321,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         self.ignore_self = ignore_self
         self.tree_mode = tree_mode
         self.focus_mode = focus_mode
+        self.trace_cfunction = trace_cfunction
         self.regex_patterns = self._compile_regex_patterns(regex_patterns)
         self.is_root = is_root
         self.from_fork = from_fork
@@ -446,6 +450,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         ignore_self: bool = True,
         tree_mode: bool = False,
         focus_mode: bool = False,
+        trace_cfunction: bool = False,
         regex_patterns: list | None = None,
         is_root: bool = True,
         from_fork: bool = False,
@@ -467,6 +472,8 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
                 Whether to use the tree mode.
             focus_mode (bool):
                 Whether to focus on user code by ignoring standard library and third-party packages.
+            trace_cfunction (bool):
+                Whether to trace C functions (c_call events) in addition to Python frames.
             regex_patterns (list | None):
                 List of regex pattern strings for filtering stack traces. Only files or function/class names matching
                 at least one pattern will be included. If None or empty, all files are included.
@@ -494,6 +501,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self.ignore_self = ignore_self
         self.tree_mode = tree_mode
         self.focus_mode = focus_mode
+        self.trace_cfunction = trace_cfunction
         self.regex_patterns = self._compile_regex_patterns(regex_patterns)
         self.is_root = is_root
         self.from_fork = from_fork
@@ -640,6 +648,7 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
         ignore_self: bool = True,
         tree_mode: bool = False,
         focus_mode: bool = False,
+        trace_cfunction: bool = False,
         regex_patterns: list | None = None,
         is_root: bool = True,
         from_fork: bool = False,
@@ -654,6 +663,7 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
             ignore_self=ignore_self,
             tree_mode=tree_mode,
             focus_mode=focus_mode,
+            trace_cfunction=trace_cfunction,
             regex_patterns=regex_patterns,
             is_root=is_root,
             from_fork=from_fork,
