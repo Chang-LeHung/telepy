@@ -804,7 +804,7 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
             self.profiler = None
 
     def on_before_stop(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
-        """Called after the sampler stops - stop profiler and export results."""
+        """Called before the sampler stops - stop profiler and export results."""
         if not self.torch_available or self.profiler is None:
             return
 
