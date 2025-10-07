@@ -218,9 +218,9 @@ cfunc_call_stack(SamplerObject* self,
             // found the frame where the C function is called
             const char* cfunc_format = NULL;
             if (i > 0) {
-                cfunc_format = "%s:%s:%d;";
+                cfunc_format = "%s:%s:%s;";
             } else {
-                cfunc_format = ";%s:%s:%d";
+                cfunc_format = ";%s:%s:%s";
             }
             // Get module name from PyCFunctionObject
             const char* module_name = NULL;
@@ -232,7 +232,7 @@ cfunc_call_stack(SamplerObject* self,
                 }
             }
             if (module_name == NULL) {
-                module_name = "<cfunc>";
+                module_name = "<cmodule>";
             }
             const char* func_name = node->cfunc->m_ml->ml_name;
             ret = snprintf(buf + pos,
@@ -240,7 +240,7 @@ cfunc_call_stack(SamplerObject* self,
                            cfunc_format,
                            module_name,
                            func_name,
-                           0);
+                           "<cfunc>");
             BUFFER_OVERFLOW_CHECK(ret, buf_size, pos, "cfunc trace", error);
             pos += ret;
             if (current->next != head) {
@@ -282,7 +282,7 @@ trace_cfunction_return_callback(SamplerObject* self,
         goto cleanup;
     }
     // TODO: find the best discount factor
-    int count = duration_us / PyLong_AsLong(self->sampling_interval) * 0.8;
+    int count = duration_us / PyLong_AsLong(self->sampling_interval) * 0.33;
     AddCallStackWithCount(self->tree, buf, count > 0 ? count : 1);
     if (strlen(buf) < 10)
         printf("%s\n", buf);
