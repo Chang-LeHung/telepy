@@ -708,6 +708,14 @@ unix_micro_time() {
     return (Telepy_time)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
 }
 
+static inline Telepy_time
+sampler_now_us(SamplerObject* self) {
+    if (TIME_MODE_IS_CPU(self)) {
+        return (Telepy_time)htime_get_thread_cpu_us();
+    }
+    return unix_micro_time();
+}
+
 static PyObject*
 _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     PyObject* threading = PyImport_ImportModule("threading");
@@ -718,7 +726,7 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     }
     const size_t buf_size = self->buf_size;
     char* buf = self->buf;
-    Telepy_time sampling_start = unix_micro_time();
+    Telepy_time sampling_start = sampler_now_us(self);
     while (Sample_Enabled(self)) {
         self->sampling_times++;
         Py_BEGIN_ALLOW_THREADS;
@@ -731,7 +739,7 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
             perror("telepysys: nanosleep error");
         }
         Py_END_ALLOW_THREADS;
-        Telepy_time sampler_start = unix_micro_time();
+        Telepy_time sampler_start = sampler_now_us(self);
         PyObject* frames = _PyThread_CurrentFrames();  // New reference
         if (frames == NULL) {
             PyErr_Format(PyExc_RuntimeError,
@@ -788,7 +796,7 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
         }
         Py_DECREF(frames);
         Py_DECREF(threads);
-        Telepy_time sampler_end = unix_micro_time();
+        Telepy_time sampler_end = sampler_now_us(self);
         self->acc_sampling_time += sampler_end - sampler_start;
         if (CHECK_FALG(self, VERBOSE)) {
             printf("Telepysys Debug Info: sampling cnt: %ld, interval: %ld, "
@@ -801,7 +809,7 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
         }
     }
     Py_DECREF(threading);
-    Telepy_time sampling_end = unix_micro_time();
+    Telepy_time sampling_end = sampler_now_us(self);
     self->life_time = sampling_end - sampling_start;
     Py_RETURN_NONE;
 
@@ -1188,6 +1196,60 @@ Sampler_set_trace_cfunction(SamplerObject* self,
 
 
 static PyObject*
+Sampler_get_time_mode(SamplerObject* self, void* Py_UNUSED(closure)) {
+    if (TIME_MODE_IS_CPU(self)) {
+        return PyUnicode_FromString("cpu");
+    }
+    if (TIME_MODE_IS_WALL(self)) {
+        return PyUnicode_FromString("wall");
+    }
+    Py_RETURN_NONE;
+}
+
+
+static int
+Sampler_set_time_mode(SamplerObject* self,
+                      PyObject* value,
+                      void* Py_UNUSED(closure)) {
+    if (value == NULL) {
+        PyErr_SetString(PyExc_TypeError, "cannot delete time_mode");
+        return -1;
+    }
+    if (value == Py_None) {
+        SET_TIME_MODE_NONE(self);
+        return 0;
+    }
+    if (!PyUnicode_Check(value)) {
+        PyErr_SetString(PyExc_TypeError, "time_mode must be a string or None");
+        return -1;
+    }
+    PyObject* lower = PyObject_CallMethod(value, "lower", NULL);
+    if (!lower) {
+        return -1;
+    }
+    const char* mode = PyUnicode_AsUTF8(lower);
+    if (!mode) {
+        Py_DECREF(lower);
+        return -1;
+    }
+    if (strcmp(mode, "cpu") == 0) {
+        SET_TIME_MODE_CPU(self);
+        Py_DECREF(lower);
+        return 0;
+    }
+    if (strcmp(mode, "wall") == 0) {
+        SET_TIME_MODE_WALL(self);
+        Py_DECREF(lower);
+        return 0;
+    }
+    Py_DECREF(lower);
+    PyErr_SetString(PyExc_ValueError,
+                    "time_mode must be either 'cpu', 'wall', or None");
+    return -1;
+}
+
+
+static PyObject*
 Sampler_get_regex_patterns(SamplerObject* self, void* Py_UNUSED(closure)) {
     if (self->regex_patterns == NULL) {
         Py_RETURN_NONE;
@@ -1283,6 +1345,13 @@ static PyGetSetDef Sampler_getset[] = {
         (getter)Sampler_get_trace_cfunction,
         (setter)Sampler_set_trace_cfunction,
         "trace C functions via profiling hooks",
+        NULL,
+    },
+    {
+        "time_mode",
+        (getter)Sampler_get_time_mode,
+        (setter)Sampler_set_time_mode,
+        "sampling timer source ('cpu' for CPU time, 'wall' for monotonic)",
         NULL,
     },
     {
@@ -1534,6 +1603,13 @@ static PyGetSetDef AsyncSampler_getset[] = {
         NULL,
     },
     {
+        "time_mode",
+        (getter)Sampler_get_time_mode,  // share it
+        (setter)Sampler_set_time_mode,  // share it
+        "sampling timer source ('cpu' for CPU time, 'wall' for monotonic)",
+        NULL,
+    },
+    {
         "regex_patterns",
         (getter)Sampler_get_regex_patterns,  // share it
         (setter)Sampler_set_regex_patterns,  // share it
@@ -1656,7 +1732,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     const size_t buf_size = self->base.buf_size;
     char* buf = self->base.buf;
 
-    Telepy_time sampling_start = unix_micro_time();
+    Telepy_time sampling_start = sampler_now_us(base);
 
     PyObject* frames = _PyThread_CurrentFrames();  // New reference
     if (frames == NULL) {
@@ -1733,7 +1809,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     // }
     // =======================================================================
 
-    Telepy_time sampling_end = unix_micro_time();
+    Telepy_time sampling_end = sampler_now_us(base);
     base->acc_sampling_time += sampling_end - sampling_start;
     base->sampling_times++;
     DISABLE_SAMPLING(base);
@@ -1751,7 +1827,7 @@ static PyObject*
 AsyncSampler_start(AsyncSamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     SamplerObject* base = (SamplerObject*)self;
     Sample_Enable(base);
-    self->start = unix_micro_time();
+    self->start = sampler_now_us(base);
     Py_RETURN_NONE;
 }
 
@@ -1759,62 +1835,10 @@ static PyObject*
 AsyncSampler_stop(AsyncSamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     SamplerObject* base = (SamplerObject*)self;
     Sample_Disable(base);
-    self->end = unix_micro_time();
+    self->end = sampler_now_us(base);
     base->life_time = self->end - self->start;
     Py_RETURN_NONE;
 }
-
-static PyObject*
-AsyncSampler_start_trace_cfunction(AsyncSamplerObject* self,
-                                   PyObject* Py_UNUSED(ignored)) {
-    SamplerObject* base = (SamplerObject*)self;
-
-    // Check if trace_cfunction flag is enabled
-    if (!TRACE_CFUNCTION_ENABLED(base)) {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "trace_cfunction is not enabled. Set "
-                        "trace_cfunction=True when creating the sampler.");
-        return NULL;
-    }
-
-    // Check if sampler is already started
-    if (!Sample_Enabled(base)) {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "AsyncSampler must be started before enabling C "
-                        "function tracing.");
-        return NULL;
-    }
-
-#if PY_VERSION_HEX >= 0x030C0000
-    // Use PyEval_SetProfile for Python 3.12+ (monitoring API to be implemented later)
-    PyEval_SetProfile(trace_c_function, (PyObject*)base);
-#else
-    // Use PyEval_SetProfile for Python < 3.12
-    PyEval_SetProfile(trace_c_function, (PyObject*)base);
-#endif
-
-    Py_RETURN_NONE;
-}
-
-static PyObject*
-AsyncSampler_stop_trace_cfunction(AsyncSamplerObject* self,
-                                  PyObject* Py_UNUSED(ignored)) {
-    SamplerObject* base = (SamplerObject*)self;
-
-    // Check if trace_cfunction flag is enabled
-    if (!TRACE_CFUNCTION_ENABLED(base)) {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "trace_cfunction is not enabled. Set "
-                        "trace_cfunction=True when creating the sampler.");
-        return NULL;
-    }
-
-    // Disable profiling by setting NULL (same for all Python versions)
-    PyEval_SetProfile(NULL, NULL);
-
-    Py_RETURN_NONE;
-}
-
 
 static PyMethodDef AsyncSampler_methods[] = {
     {
@@ -1861,13 +1885,13 @@ static PyMethodDef AsyncSampler_methods[] = {
     },
     {
         "start_trace_cfunction",
-        (PyCFunction)AsyncSampler_start_trace_cfunction,
+        (PyCFunction)Sampler_start_trace_cfunction,  // share it
         METH_NOARGS,
         "Start tracing C functions",
     },
     {
         "stop_trace_cfunction",
-        (PyCFunction)AsyncSampler_stop_trace_cfunction,
+        (PyCFunction)Sampler_stop_trace_cfunction,  // share it
         METH_NOARGS,
         "Stop tracing C functions",
     },

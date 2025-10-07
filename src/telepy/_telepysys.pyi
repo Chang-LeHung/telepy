@@ -39,6 +39,7 @@ class Sampler:
         self.ignore_self: bool = False
         self.tree_mode: bool = False
         self.focus_mode: bool = False
+        self.time_mode: str | None = None
         self.trace_cfunction: bool = False
         self.regex_patterns: list | None = None
 
@@ -103,6 +104,7 @@ class AsyncSampler:
         self.ignore_self: bool = False
         self.tree_mode: bool = False
         self.focus_mode: bool = False
+        self.time_mode: str | None = None
         self.trace_cfunction: bool = False
         self.regex_patterns: list | None = None
 

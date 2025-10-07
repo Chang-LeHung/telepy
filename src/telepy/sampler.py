@@ -331,7 +331,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         if normalized_time_mode not in {"cpu", "wall"}:
             raise ValueError("time_mode must be either 'cpu' or 'wall'")
         self.time_mode = cast(Literal["cpu", "wall"], normalized_time_mode)
-        if self.time_mode == "cpu":
+        if normalized_time_mode == "cpu":
             self._timer_signal = signal.SIGPROF
             self._timer_type = signal.ITIMER_PROF
         else:
@@ -403,9 +403,23 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         # Call middleware before starting
         self._call_middleware_before_start()
 
+        started = False
         try:
             # Call the C extension's start method
             super().start()
+            started = True
+
+            if self.trace_cfunction:
+                try:
+                    self.start_trace_cfunction()
+                except Exception:
+                    # Attempt to roll back the sampler state before re-raising
+                    if started:
+                        try:
+                            super().stop()
+                        except Exception:
+                            pass
+                    raise
 
             # Call middleware after successful star
             self._call_middleware_after_start()
@@ -420,6 +434,13 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         self._call_middleware_before_stop()
 
         try:
+            if self.trace_cfunction and self.started:
+                try:
+                    self.stop_trace_cfunction()
+                except Exception:
+                    # Continue stopping even if C tracing teardown fails
+                    pass
+
             # Call the C extension's stop method
             super().stop()
 
@@ -532,7 +553,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         if normalized_time_mode not in {"cpu", "wall"}:
             raise ValueError("time_mode must be either 'cpu' or 'wall'")
         self.time_mode = cast(Literal["cpu", "wall"], normalized_time_mode)
-        if self.time_mode == "cpu":
+        if normalized_time_mode == "cpu":
             self._timer_signal = signal.SIGPROF
             self._timer_type = signal.ITIMER_PROF
         else:
@@ -606,16 +627,35 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         # Call middleware before starting
         self._call_middleware_before_start()
 
+        started = False
+        c_trace_started = False
         try:
             self.sampling_tid = threading.get_ident()  # required for base class
             signal.signal(self._timer_signal, self._async_routine)
             interval_sec = self.sampling_interval * 1e-6
             signal.setitimer(self._timer_type, interval_sec, interval_sec)
             super().start()
+            started = True
+
+            if self.trace_cfunction:
+                self.start_trace_cfunction()
+                c_trace_started = True
 
             # Call middleware after successful star
             self._call_middleware_after_start()
         except Exception:
+            if c_trace_started:
+                try:
+                    self.stop_trace_cfunction()
+                except Exception:
+                    pass
+            signal.setitimer(self._timer_type, 0, 0)
+            signal.signal(self._timer_signal, signal.SIG_IGN)
+            if started:
+                try:
+                    super().stop()
+                except Exception:
+                    pass
             # If start fails, clean up
             raise
 
@@ -628,6 +668,11 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
         self._call_middleware_before_stop()
 
         try:
+            if self.trace_cfunction and self.started:
+                try:
+                    self.stop_trace_cfunction()
+                except Exception:
+                    pass
             signal.setitimer(self._timer_type, 0, 0)
             signal.signal(self._timer_signal, signal.SIG_IGN)
             super().stop()

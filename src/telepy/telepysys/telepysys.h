@@ -40,6 +40,35 @@ typedef struct TelePySysState {
 #define TREE_MODE 5
 #define FOCUS_MODE 6
 #define TRACE_CFUNCTION 7
+#define TIME_MODE_BIT0 8
+#define TIME_MODE_BIT1 9
+
+#define TIME_MODE_MASK ((1U << TIME_MODE_BIT0) | (1U << TIME_MODE_BIT1))
+#define TIME_MODE_NONE_BITS 0U
+#define TIME_MODE_CPU_BITS (1U << TIME_MODE_BIT0)
+#define TIME_MODE_WALL_BITS ((1U << TIME_MODE_BIT0) | (1U << TIME_MODE_BIT1))
+
+#define SET_TIME_MODE_NONE(s)                                                 \
+    do {                                                                      \
+        BIT_CLEAR((s)->flags, TIME_MODE_BIT0);                                \
+        BIT_CLEAR((s)->flags, TIME_MODE_BIT1);                                \
+    } while (0)
+
+#define SET_TIME_MODE_CPU(s)                                                  \
+    do {                                                                      \
+        BIT_SET((s)->flags, TIME_MODE_BIT0);                                  \
+        BIT_CLEAR((s)->flags, TIME_MODE_BIT1);                                \
+    } while (0)
+
+#define SET_TIME_MODE_WALL(s)                                                 \
+    do {                                                                      \
+        BIT_SET((s)->flags, TIME_MODE_BIT0);                                  \
+        BIT_SET((s)->flags, TIME_MODE_BIT1);                                  \
+    } while (0)
+
+#define TIME_MODE_BITS(s) ((s)->flags & TIME_MODE_MASK)
+#define TIME_MODE_IS_CPU(s) (TIME_MODE_BITS(s) == TIME_MODE_CPU_BITS)
+#define TIME_MODE_IS_WALL(s) (TIME_MODE_BITS(s) == TIME_MODE_WALL_BITS)
 
 #define Sample_Enabled(s) (BIT_CHECK((s)->flags, ENABLED))
 #define Sample_Disable(s) (BIT_CLEAR((s)->flags, ENABLED))
