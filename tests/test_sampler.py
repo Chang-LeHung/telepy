@@ -1,5 +1,6 @@
 import os
 import threading
+from unittest import mock
 
 import telepy
 
@@ -118,6 +119,28 @@ class TestAsyncSampler(TestBase):
         self.assertTrue(sampler.trace_cfunction)
         sampler.trace_cfunction = False
         self.assertFalse(sampler.trace_cfunction)
+
+    def test_async_sampler_trace_cfunction_hooks(self):
+        """Async sampler should toggle C tracing hooks when enabled."""
+        sampler = telepy.TelepySysAsyncSampler(trace_cfunction=True)
+
+        with (
+            mock.patch.object(
+                sampler, "start_trace_cfunction", autospec=True
+            ) as mock_start,
+            mock.patch.object(
+                sampler, "stop_trace_cfunction", autospec=True
+            ) as mock_stop,
+        ):
+            try:
+                sampler.start()
+            finally:
+                # Ensure stop executes when the sampler successfully started
+                if sampler.started:
+                    sampler.stop()
+
+        mock_start.assert_called_once()
+        mock_stop.assert_called_once()
 
     def test_async_sampler_not_in_main(self):
         import threading
@@ -239,6 +262,24 @@ class TestSamplerContextManager(TestBase):
 
         sampler.trace_cfunction = True
         self.assertTrue(sampler.trace_cfunction)
+
+    def test_sampler_trace_cfunction_hooks(self):
+        """Sync sampler should toggle C tracing hooks when enabled."""
+        sampler = telepy.TelepySysSampler(sampling_interval=1000, trace_cfunction=True)
+
+        with (
+            mock.patch.object(
+                sampler, "start_trace_cfunction", autospec=True
+            ) as mock_start,
+            mock.patch.object(
+                sampler, "stop_trace_cfunction", autospec=True
+            ) as mock_stop,
+        ):
+            with sampler:
+                self.assertTrue(sampler.started)
+
+        mock_start.assert_called_once()
+        mock_stop.assert_called_once()
 
     def test_context_manager_with_regex_patterns(self):
         """Test context manager with regex patterns."""
