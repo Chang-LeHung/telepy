@@ -99,6 +99,7 @@ trace_cfunction_call_callback(SamplerObject* Py_UNUSED(self),
                               PyObject* arg) {
     if (ts_idx == -1) {
         ts_idx = allocate_thread_state();
+        INIT_LIST_HEAD(&thread_states[ts_idx].list);
         if (ts_idx == -1) {
             PyErr_SetString(PyExc_RuntimeError, "telepysys: too many threads");
             return -1;
@@ -118,7 +119,7 @@ trace_cfunction_call_callback(SamplerObject* Py_UNUSED(self),
     node->call_time_ns = htime_get_thread_cpu_ns();
     Py_INCREF(frame);
     Py_INCREF((PyObject*)node->cfunc);
-    list_add(&node->list, &thread_states[ts_idx].list);
+    list_add_tail(&node->list, &thread_states[ts_idx].list);
     thread_states[ts_idx].thread_id = pthread_self();
     return 0;
 }
@@ -144,8 +145,16 @@ cfunc_call_stack(SamplerObject* self,
         }                                                                     \
     } while (0)
 
-    struct NativeCallNode* node;
-    node = list_entry(h, struct NativeCallNode, list);
+    assert(ts_idx != -1);
+    struct list_head* head = &thread_states[ts_idx].list;
+    struct list_head* current = h;
+    if (current == head) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "telepysys: native call stack underflow");
+        goto error_direct;
+    }
+    struct NativeCallNode* node =
+        list_entry(current, struct NativeCallNode, list);
     PyObject* list = PyList_New(0);
     PyFrameObject* f = node->py_frame;
     Py_INCREF(f);
@@ -153,6 +162,7 @@ cfunc_call_stack(SamplerObject* self,
         PyList_Append(list, (PyObject*)f);
         f = PyFrame_GetBack(f);  // return a new reference
     }
+    node = list_entry(head->next, struct NativeCallNode, list);
     Py_ssize_t pos = 0;
     char* format = NULL;
     for (Py_ssize_t i = PyList_Size(list) - 1; i >= 0; --i) {
@@ -204,11 +214,11 @@ cfunc_call_stack(SamplerObject* self,
         BUFFER_OVERFLOW_CHECK(ret, buf_size, pos, "stack trace", error);
         pos += ret;
 
-        if (frame == node->py_frame) {
+        if (node != NULL && frame == node->py_frame) {
             // found the frame where the C function is called
             const char* cfunc_format = NULL;
             if (i > 0) {
-                cfunc_format = ";%s:%s:%d;";
+                cfunc_format = "%s:%s:%d;";
             } else {
                 cfunc_format = ";%s:%s:%d";
             }
@@ -233,17 +243,20 @@ cfunc_call_stack(SamplerObject* self,
                            0);
             BUFFER_OVERFLOW_CHECK(ret, buf_size, pos, "cfunc trace", error);
             pos += ret;
-            struct NativeCallNode* t =
-                list_entry(&node->list.prev, struct NativeCallNode, list);
-            FREE_CALL_NODE(node);
-            list_del(&node->list);
-            node = t;
+            if (current->next != head) {
+                current = current->next;
+                node = list_entry(current, struct NativeCallNode, list);
+            } else {
+                node = NULL;
+            }
         }
     }
     Py_DECREF(list);
     return 0;
 error:
     Py_DECREF(list);
+    return -1;
+error_direct:
     return -1;
 }
 
@@ -253,26 +266,30 @@ trace_cfunction_return_callback(SamplerObject* self,
                                 PyObject* Py_UNUSED(arg)) {
     assert(ts_idx != -1);
     uint64_t return_time_ns = htime_get_thread_cpu_ns();
+    struct list_head* head = &thread_states[ts_idx].list;
+    if (list_empty(head)) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "telepysys: native call stack empty on return");
+        return -1;
+    }
     struct NativeCallNode* node =
-        list_entry(&thread_states[ts_idx].list, struct NativeCallNode, list);
+        list_entry(head->prev, struct NativeCallNode, list);
     uint64_t duration_us = (return_time_ns - node->call_time_ns) / 1000ULL;
     char* buf = self->buf;
     size_t buf_size = self->buf_size;
-    int ret =
-        cfunc_call_stack(self, thread_states[ts_idx].list.prev, buf, buf_size);
+    int ret = cfunc_call_stack(self, &node->list, buf, buf_size);
     if (ret != 0) {
         goto cleanup;
     }
     // TODO: find the best discount factor
-    AddCallStackWithCount(
-        self->tree,
-        buf,
-        duration_us / PyLong_AsLong(self->sampling_interval) *
-            0.8);  // discount 20% time for C function call overhead
+    int count = duration_us / PyLong_AsLong(self->sampling_interval) * 0.8;
+    AddCallStackWithCount(self->tree, buf, count > 0 ? count : 1);
+    if (strlen(buf) < 10)
+        printf("%s\n", buf);
 
 cleanup:
     list_del(&node->list);
-    free(node);
+    FREE_CALL_NODE(node);
     return ret;
 }
 
@@ -2159,8 +2176,8 @@ telepysys_free(void* module) {
         struct NativeCallNode* pos;
         struct NativeCallNode* n;
         list_for_each_entry_safe(pos, n, &thread_states[i].list, list) {
-            FREE_CALL_NODE(pos);
             list_del(&pos->list);
+            FREE_CALL_NODE(pos);
         }
         thread_states[i].thread_id = 0;
     }
