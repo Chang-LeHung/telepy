@@ -54,7 +54,14 @@ ext_modules = [
         extra_compile_args=flags,
         extra_link_args=["build/tree.o"],
         language="c++",
-    )
+    ),
+    Extension(
+        name="telepy._gc_stats",
+        sources=["src/telepy/telepysys/gc_stats.c"],
+        include_dirs=["src/telepy/telepysys"],
+        extra_compile_args=flags,
+        language="c",
+    ),
 ]
 
 setup(

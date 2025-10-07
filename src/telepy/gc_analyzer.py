@@ -10,6 +10,14 @@ import gc
 from collections import Counter
 from typing import Any
 
+# Try to import the C extension for better performance
+try:
+    from telepy import _gc_stats  # type: ignore
+
+    _HAS_C_EXTENSION = True
+except ImportError:
+    _HAS_C_EXTENSION = False
+
 
 class GCAnalyzer:
     """Analyzer for Python garbage collection diagnostics."""
@@ -83,6 +91,65 @@ class GCAnalyzer:
 
         return "\n".join(lines)
 
+    def _calculate_stats_python(
+        self, objects: list, calculate_memory: bool
+    ) -> tuple[Counter[str], dict[str, int], int, int]:
+        """Python implementation of object statistics calculation.
+
+        This is the fallback implementation when C extension is not available.
+
+        Args:
+            objects: List of objects to analyze
+            calculate_memory: Whether to calculate memory usage
+
+        Returns:
+            Tuple of (type_counter, type_memory, total_objects, total_memory)
+        """
+        import sys
+
+        type_counter: Counter[str] = Counter()
+        type_memory: dict[str, int] = {}
+
+        if calculate_memory:
+            for obj in objects:
+                type_name = type(obj).__name__
+                type_counter[type_name] += 1
+                try:
+                    size = sys.getsizeof(obj)
+                    type_memory[type_name] = type_memory.get(type_name, 0) + size
+                except (TypeError, AttributeError):
+                    # Some objects don't support getsizeof
+                    pass
+        else:
+            for obj in objects:
+                type_counter[type(obj).__name__] += 1
+
+        total = sum(type_counter.values())
+        total_memory = sum(type_memory.values()) if calculate_memory else 0
+
+        return type_counter, type_memory, total, total_memory
+
+    def _calculate_stats_c(
+        self, objects: list, calculate_memory: bool
+    ) -> tuple[dict[str, int], dict[str, int] | None, int, int]:
+        """C extension implementation of object statistics calculation.
+
+        Uses the _gc_stats C extension for better performance.
+
+        Args:
+            objects: List of objects to analyze
+            calculate_memory: Whether to calculate memory usage
+
+        Returns:
+            Tuple of (type_counter, type_memory, total_objects, total_memory)
+        """
+        result = _gc_stats.calculate_stats(objects, calculate_memory)
+        type_counter = result["type_counter"]
+        type_memory = result["type_memory"] if calculate_memory else {}
+        total_objects = result["total_objects"]
+        total_memory = result["total_memory"]
+        return type_counter, type_memory, total_objects, total_memory
+
     def get_object_stats(
         self,
         generation: int | None = None,
@@ -115,33 +182,21 @@ class GCAnalyzer:
             list: 890 (32.6%)
             ...
         """
-        import sys
-
         try:
             objects = gc.get_objects(generation)
         except TypeError:
             # Python < 3.8 doesn't support generation parameter
             objects = gc.get_objects()
 
-        type_counter: Counter[str] = Counter()
-        type_memory: dict[str, int] = {}
-
-        if calculate_memory:
-            for obj in objects:
-                type_name = type(obj).__name__
-                type_counter[type_name] += 1
-                try:
-                    size = sys.getsizeof(obj)
-                    type_memory[type_name] = type_memory.get(type_name, 0) + size
-                except (TypeError, AttributeError):
-                    # Some objects don't support getsizeof
-                    pass
+        # Use C extension if available, otherwise fall back to Python
+        if _HAS_C_EXTENSION:
+            type_counter, type_memory, total, total_memory = self._calculate_stats_c(
+                objects, calculate_memory
+            )
         else:
-            for obj in objects:
-                type_counter[type(obj).__name__] += 1
-
-        total = sum(type_counter.values())
-        total_memory = sum(type_memory.values()) if calculate_memory else 0
+            type_counter, type_memory, total, total_memory = self._calculate_stats_python(
+                objects, calculate_memory
+            )
 
         # Build result list with all type information
         all_stats: list[dict[str, Any]] = []
@@ -154,6 +209,7 @@ class GCAnalyzer:
             }
 
             if calculate_memory:
+                assert type_memory is not None
                 memory = type_memory.get(type_name, 0)
                 stat_dict["memory"] = memory
                 stat_dict["avg_memory"] = memory / count if count > 0 else 0
