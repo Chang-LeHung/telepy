@@ -162,7 +162,7 @@ class TestCommand(CommandTemplate):
                 "test_files/test_forkserver.py",
                 options=[
                     "--interval",
-                    "5",
+                    "10",
                     "--debug",
                     "--full-path",
                     "--ignore-frozen",
@@ -633,7 +633,7 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
                     "--focus-mode",
                     "--folded-save",
                     "--interval",
-                    "100",
+                    "1000",
                     "--debug",
                     "-o",
                     svg_file,
