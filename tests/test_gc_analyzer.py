@@ -214,18 +214,14 @@ class TestGCAnalyzer(unittest.TestCase):
 
         # Check that stats are sorted by avg_memory
         for i in range(len(stats) - 1):
-            self.assertGreaterEqual(
-                stats[i]["avg_memory"], stats[i + 1]["avg_memory"]
-            )
+            self.assertGreaterEqual(stats[i]["avg_memory"], stats[i + 1]["avg_memory"])
 
         # Keep test_data alive
         self.assertIsNotNone(test_data)
 
     def test_get_object_stats_with_memory_percentage(self):
         """Test that memory percentage is calculated correctly."""
-        stats = self.analyzer.get_object_stats(
-            limit=5, calculate_memory=True
-        )
+        stats = self.analyzer.get_object_stats(limit=5, calculate_memory=True)
 
         # Check that memory_percentage exists and is reasonable
         total_pct = sum(s.get("memory_percentage", 0) for s in stats)

@@ -311,10 +311,7 @@ def gc_objects(req: TelePyRequest, resp: TelePyResponse):
         return
 
     # Validate sort_by parameter
-    if (
-        parse_args.sort_by in ["memory", "avg_memory"]
-        and not parse_args.calculate_memory
-    ):
+    if parse_args.sort_by in ["memory", "avg_memory"] and not parse_args.calculate_memory:
         resp.return_json(
             {
                 "data": f"Error: --sort-by {parse_args.sort_by} requires "

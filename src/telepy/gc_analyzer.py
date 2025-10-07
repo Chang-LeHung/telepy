@@ -166,9 +166,7 @@ class GCAnalyzer:
         # Sort by specified key
         if sort_by in ["memory", "avg_memory"]:
             if not calculate_memory:
-                raise ValueError(
-                    f"sort_by='{sort_by}' requires calculate_memory=True"
-                )
+                raise ValueError(f"sort_by='{sort_by}' requires calculate_memory=True")
             all_stats.sort(key=lambda x: x[sort_by], reverse=True)
         else:  # sort by count (default)
             all_stats.sort(key=lambda x: x["count"], reverse=True)
