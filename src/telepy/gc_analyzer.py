@@ -14,7 +14,7 @@ from typing import Any
 class GCAnalyzer:
     """Analyzer for Python garbage collection diagnostics."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the GC analyzer."""
         self._last_collection_count = [0, 0, 0]
         self._collection_history: list[tuple[int, int, int]] = []
@@ -88,6 +88,7 @@ class GCAnalyzer:
         generation: int | None = None,
         limit: int = 20,
         calculate_memory: bool = False,
+        sort_by: str = "count",
     ) -> list[dict[str, Any]]:
         """Get statistics about tracked objects by type.
 
@@ -95,12 +96,14 @@ class GCAnalyzer:
             generation: Which generation to analyze (0, 1, 2, or None for all).
             limit: Maximum number of object types to return.
             calculate_memory: If True, calculate memory usage for each type.
+            sort_by: Sort method - 'count' (default), 'memory', or 'avg_memory'.
+                    Note: 'memory' and 'avg_memory' sorts require calculate_memory=True.
 
         Returns:
             list[dict]: List of dictionaries with type_name, count, and
-                        percentage, sorted by count (descending).
-                        If calculate_memory is True, also includes 'memory'
-                        and 'avg_memory' fields.
+                        percentage, sorted by specified key (descending).
+                        If calculate_memory is True, also includes 'memory',
+                        'avg_memory', and 'memory_percentage' fields.
 
         Example:
             >>> analyzer = GCAnalyzer()
@@ -138,9 +141,11 @@ class GCAnalyzer:
                 type_counter[type(obj).__name__] += 1
 
         total = sum(type_counter.values())
-        result: list[dict[str, Any]] = []
+        total_memory = sum(type_memory.values()) if calculate_memory else 0
 
-        for type_name, count in type_counter.most_common(limit):
+        # Build result list with all type information
+        all_stats: list[dict[str, Any]] = []
+        for type_name, count in type_counter.items():
             percentage = (count / total * 100) if total > 0 else 0
             stat_dict: dict[str, Any] = {
                 "type_name": type_name,
@@ -152,16 +157,31 @@ class GCAnalyzer:
                 memory = type_memory.get(type_name, 0)
                 stat_dict["memory"] = memory
                 stat_dict["avg_memory"] = memory / count if count > 0 else 0
+                stat_dict["memory_percentage"] = (
+                    (memory / total_memory * 100) if total_memory > 0 else 0
+                )
 
-            result.append(stat_dict)
+            all_stats.append(stat_dict)
 
-        return result
+        # Sort by specified key
+        if sort_by in ["memory", "avg_memory"]:
+            if not calculate_memory:
+                raise ValueError(
+                    f"sort_by='{sort_by}' requires calculate_memory=True"
+                )
+            all_stats.sort(key=lambda x: x[sort_by], reverse=True)
+        else:  # sort by count (default)
+            all_stats.sort(key=lambda x: x["count"], reverse=True)
+
+        # Return limited results
+        return all_stats[:limit]
 
     def get_object_stats_formatted(
         self,
         generation: int | None = None,
         limit: int = 20,
         calculate_memory: bool = False,
+        sort_by: str = "count",
     ) -> str:
         """Get formatted object statistics.
 
@@ -169,6 +189,7 @@ class GCAnalyzer:
             generation: Which generation to analyze (0, 1, 2, or None for all).
             limit: Maximum number of types to include in output.
             calculate_memory: If True, include memory usage in the output.
+            sort_by: Sort method - 'count' (default), 'memory', or 'avg_memory'.
 
         Returns:
             str: Human-readable table of object types and counts.
@@ -184,11 +205,12 @@ class GCAnalyzer:
             list                890        32.6%
             ...
         """
-        stats = self.get_object_stats(generation, limit, calculate_memory)
+        stats = self.get_object_stats(generation, limit, calculate_memory, sort_by)
         total = sum(s["count"] for s in stats)
 
         lines = []
-        lines.append(f"Object Statistics (Top {limit}):")
+        sort_desc = f" (sorted by {sort_by})" if sort_by != "count" else ""
+        lines.append(f"Object Statistics (Top {limit}{sort_desc}):")
         gen_str = f"Generation {generation}" if generation is not None else "All"
         lines.append(f"Generation: {gen_str}")
         lines.append(f"Total Objects: {total}")
@@ -203,21 +225,24 @@ class GCAnalyzer:
             header = (
                 f"{'Type':<{type_width}} "
                 f"{'Count':>10}   "
-                f"{'Percentage':>10}   "
+                f"{'Count %':>10}   "
                 f"{'Memory':>12}   "
+                f"{'Memory %':>10}   "
                 f"{'Avg Memory':>12}"
             )
             lines.append(header)
-            lines.append("─" * (type_width + 60))
+            lines.append("─" * (type_width + 75))
 
             for stat in stats:
                 memory_str = self._format_bytes(stat.get("memory", 0))
                 avg_memory_str = self._format_bytes(stat.get("avg_memory", 0))
+                memory_pct = stat.get("memory_percentage", 0)
                 lines.append(
                     f"{stat['type_name']:<{type_width}} "
                     f"{stat['count']:>10}   "
                     f"{stat['percentage']:>9.1f}%   "
                     f"{memory_str:>12}   "
+                    f"{memory_pct:>9.1f}%   "
                     f"{avg_memory_str:>12}"
                 )
         else:

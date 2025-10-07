@@ -130,8 +130,9 @@ class TestGCAnalyzer(unittest.TestCase):
         self.assertIn("Object Statistics", formatted)
         self.assertIn("Type", formatted)
         self.assertIn("Count", formatted)
-        self.assertIn("Percentage", formatted)
+        self.assertIn("Count %", formatted)
         self.assertIn("Memory", formatted)
+        self.assertIn("Memory %", formatted)
         self.assertIn("Avg Memory", formatted)
 
     def test_get_object_stats_formatted_with_generation(self):
@@ -155,6 +156,95 @@ class TestGCAnalyzer(unittest.TestCase):
         for bytes_size, expected in test_cases:
             result = self.analyzer._format_bytes(bytes_size)
             self.assertEqual(result, expected)
+
+    def test_get_object_stats_sort_by_count(self):
+        """Test sorting by count (default)."""
+        # Create some test objects
+        test_data = [1, 2, 3, "test", {"key": "value"}, [1, 2, 3]]
+
+        stats = self.analyzer.get_object_stats(
+            limit=10, calculate_memory=True, sort_by="count"
+        )
+
+        # Check that stats are sorted by count
+        for i in range(len(stats) - 1):
+            self.assertGreaterEqual(stats[i]["count"], stats[i + 1]["count"])
+
+        # Keep test_data alive
+        self.assertIsNotNone(test_data)
+
+    def test_get_object_stats_sort_by_memory(self):
+        """Test sorting by memory."""
+        # Create some test objects with different sizes
+        test_data = {
+            "large_lists": [list(range(1000)) for _ in range(10)],
+            "small_ints": [i for i in range(100)],
+        }
+
+        stats = self.analyzer.get_object_stats(
+            limit=10, calculate_memory=True, sort_by="memory"
+        )
+
+        # Check that stats are sorted by memory
+        for i in range(len(stats) - 1):
+            self.assertGreaterEqual(stats[i]["memory"], stats[i + 1]["memory"])
+
+        # Keep test_data alive
+        self.assertIsNotNone(test_data)
+
+    def test_get_object_stats_sort_by_memory_without_calculate(self):
+        """Test that sorting by memory without calculate_memory raises error."""
+        with self.assertRaises(ValueError) as context:
+            self.analyzer.get_object_stats(
+                limit=10, calculate_memory=False, sort_by="memory"
+            )
+        self.assertIn("calculate_memory=True", str(context.exception))
+
+    def test_get_object_stats_sort_by_avg_memory(self):
+        """Test sorting by average memory."""
+        # Create some test objects with different sizes
+        test_data = {
+            "large_dicts": [{f"key_{i}": f"value_{i}" * 100} for i in range(10)],
+            "small_tuples": [tuple(range(5)) for _ in range(50)],
+        }
+
+        stats = self.analyzer.get_object_stats(
+            limit=10, calculate_memory=True, sort_by="avg_memory"
+        )
+
+        # Check that stats are sorted by avg_memory
+        for i in range(len(stats) - 1):
+            self.assertGreaterEqual(
+                stats[i]["avg_memory"], stats[i + 1]["avg_memory"]
+            )
+
+        # Keep test_data alive
+        self.assertIsNotNone(test_data)
+
+    def test_get_object_stats_with_memory_percentage(self):
+        """Test that memory percentage is calculated correctly."""
+        stats = self.analyzer.get_object_stats(
+            limit=5, calculate_memory=True
+        )
+
+        # Check that memory_percentage exists and is reasonable
+        total_pct = sum(s.get("memory_percentage", 0) for s in stats)
+        # Total percentage should be <= 100 (since we're limiting results)
+        self.assertLessEqual(total_pct, 100.0)
+
+        for stat in stats:
+            self.assertIn("memory_percentage", stat)
+            self.assertGreaterEqual(stat["memory_percentage"], 0)
+            self.assertLessEqual(stat["memory_percentage"], 100)
+
+    def test_get_object_stats_formatted_with_sort_by(self):
+        """Test formatted output includes sort indicator."""
+        formatted = self.analyzer.get_object_stats_formatted(
+            limit=5, calculate_memory=True, sort_by="memory"
+        )
+
+        self.assertIsInstance(formatted, str)
+        self.assertIn("sorted by memory", formatted)
 
     def test_collect_garbage(self):
         """Test manual garbage collection."""

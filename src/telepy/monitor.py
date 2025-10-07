@@ -283,6 +283,15 @@ def gc_objects(req: TelePyRequest, resp: TelePyResponse):
         help="Calculate memory usage for each object type",
     )
     parser.add_argument(
+        "--sort-by",
+        "-s",
+        type=str,
+        default="count",
+        choices=["count", "memory", "avg_memory"],
+        help="Sort by 'count' (default), 'memory', or 'avg_memory' "
+        "(requires -m/--calculate-memory)",
+    )
+    parser.add_argument(
         "--help",
         "-h",
         default=False,
@@ -301,13 +310,31 @@ def gc_objects(req: TelePyRequest, resp: TelePyResponse):
         resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
         return
 
+    # Validate sort_by parameter
+    if (
+        parse_args.sort_by in ["memory", "avg_memory"]
+        and not parse_args.calculate_memory
+    ):
+        resp.return_json(
+            {
+                "data": f"Error: --sort-by {parse_args.sort_by} requires "
+                "--calculate-memory/-m",
+                "code": ERROR_CODE,
+            }
+        )
+        return
+
     analyzer = get_analyzer()
-    formatted = analyzer.get_object_stats_formatted(
-        generation=parse_args.generation,
-        limit=parse_args.limit,
-        calculate_memory=parse_args.calculate_memory,
-    )
-    resp.return_json({"data": formatted, "code": SUCCESS_CODE})
+    try:
+        formatted = analyzer.get_object_stats_formatted(
+            generation=parse_args.generation,
+            limit=parse_args.limit,
+            calculate_memory=parse_args.calculate_memory,
+            sort_by=parse_args.sort_by,
+        )
+        resp.return_json({"data": formatted, "code": SUCCESS_CODE})
+    except ValueError as e:
+        resp.return_json({"data": str(e), "code": ERROR_CODE})
 
 
 def gc_garbage(req: TelePyRequest, resp: TelePyResponse):
