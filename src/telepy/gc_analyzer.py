@@ -214,12 +214,10 @@ class GCAnalyzer:
         lines.append(f"Total Objects: {total}")
         lines.append("")
 
-        # 使用动态列宽以适应最长的类型名
         max_type_len = max((len(s["type_name"]) for s in stats), default=20)
         type_width = max(max_type_len + 2, 25)
 
         if calculate_memory:
-            # 添加内存列
             header = (
                 f"{'Type':<{type_width}} "
                 f"{'Count':>10}   "
