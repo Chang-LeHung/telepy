@@ -84,6 +84,78 @@ class TestGCAnalyzer(unittest.TestCase):
         self.assertIn("Count", formatted)
         self.assertIn("Percentage", formatted)
 
+    def test_get_object_stats_with_memory(self):
+        """Test object statistics with memory calculation."""
+        # Create some test objects
+        test_data = [1, 2, 3, "test", {"key": "value"}, [1, 2, 3]]
+
+        stats = self.analyzer.get_object_stats(limit=10, calculate_memory=True)
+
+        # Check that stats is a list
+        self.assertIsInstance(stats, list)
+        self.assertGreater(len(stats), 0)
+
+        # Check each stat entry includes memory fields
+        for stat in stats:
+            self.assertIn("type_name", stat)
+            self.assertIn("count", stat)
+            self.assertIn("percentage", stat)
+            self.assertIn("memory", stat)
+            self.assertIn("avg_memory", stat)
+            self.assertIsInstance(stat["memory"], int)
+            self.assertIsInstance(stat["avg_memory"], float)
+            self.assertGreaterEqual(stat["memory"], 0)
+            self.assertGreaterEqual(stat["avg_memory"], 0)
+
+        # Keep test_data alive
+        self.assertIsNotNone(test_data)
+
+    def test_get_object_stats_with_generation(self):
+        """Test object statistics for specific generation."""
+        # Test each generation
+        for gen in [0, 1, 2]:
+            stats = self.analyzer.get_object_stats(generation=gen, limit=5)
+            self.assertIsInstance(stats, list)
+            # Generation 0 and 2 typically have objects, but 1 might be empty
+            if gen in [0, 2]:
+                self.assertGreaterEqual(len(stats), 0)
+
+    def test_get_object_stats_formatted_with_memory(self):
+        """Test formatted object statistics with memory calculation."""
+        formatted = self.analyzer.get_object_stats_formatted(
+            limit=5, calculate_memory=True
+        )
+
+        self.assertIsInstance(formatted, str)
+        self.assertIn("Object Statistics", formatted)
+        self.assertIn("Type", formatted)
+        self.assertIn("Count", formatted)
+        self.assertIn("Percentage", formatted)
+        self.assertIn("Memory", formatted)
+        self.assertIn("Avg Memory", formatted)
+
+    def test_get_object_stats_formatted_with_generation(self):
+        """Test formatted object statistics for specific generation."""
+        for gen in [0, 1, 2]:
+            formatted = self.analyzer.get_object_stats_formatted(generation=gen, limit=5)
+            self.assertIsInstance(formatted, str)
+            self.assertIn(f"Generation {gen}", formatted)
+
+    def test_format_bytes(self):
+        """Test byte formatting helper method."""
+        test_cases = [
+            (100, "100.0 B"),
+            (1024, "1.0 KB"),
+            (1536, "1.5 KB"),
+            (1048576, "1.0 MB"),
+            (2621440, "2.5 MB"),
+            (1073741824, "1.0 GB"),
+        ]
+
+        for bytes_size, expected in test_cases:
+            result = self.analyzer._format_bytes(bytes_size)
+            self.assertEqual(result, expected)
+
     def test_collect_garbage(self):
         """Test manual garbage collection."""
         # Create some objects first

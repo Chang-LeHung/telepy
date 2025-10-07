@@ -262,9 +262,25 @@ def gc_objects(req: TelePyRequest, resp: TelePyResponse):
     parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
     parser.add_argument(
         "--limit",
+        "-l",
         type=int,
         default=20,
         help="Limit the number of object types to display (default: 20)",
+    )
+    parser.add_argument(
+        "--generation",
+        "-g",
+        type=int,
+        default=None,
+        choices=[0, 1, 2],
+        help="Specify which generation to analyze (0, 1, or 2, default: all generations)",
+    )
+    parser.add_argument(
+        "--calculate-memory",
+        "-m",
+        action="store_true",
+        default=False,
+        help="Calculate memory usage for each object type",
     )
     parser.add_argument(
         "--help",
@@ -286,7 +302,11 @@ def gc_objects(req: TelePyRequest, resp: TelePyResponse):
         return
 
     analyzer = get_analyzer()
-    formatted = analyzer.get_object_stats_formatted(limit=parse_args.limit)
+    formatted = analyzer.get_object_stats_formatted(
+        generation=parse_args.generation,
+        limit=parse_args.limit,
+        calculate_memory=parse_args.calculate_memory,
+    )
     resp.return_json({"data": formatted, "code": SUCCESS_CODE})
 
 
@@ -326,6 +346,7 @@ def gc_collect(req: TelePyRequest, resp: TelePyResponse):
     parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
     parser.add_argument(
         "--generation",
+        "-g",
         type=int,
         default=2,
         choices=[0, 1, 2],
