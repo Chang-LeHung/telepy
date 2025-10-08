@@ -142,8 +142,62 @@ class TestMonitor(TestBase):
         self.compound_template_command("ping", expected_data=["pong"])
 
     def test_stack(self):
+        """Test stack command basic functionality."""
         self.compound_template_command(
             "stack", expected_data=["MainThread", "daemon", "telepy"]
+        )
+
+    def test_stack_help(self):
+        """Test stack command help output."""
+        self.compound_template_command(
+            "stack",
+            args=["-h"],
+            expected_data=[
+                "usage",
+                "--strip-site-packages",
+                "--strip-cwd",
+                "--help",
+            ],
+        )
+
+    def test_stack_strip_site_packages(self):
+        """Test stack command with --strip-site-packages flag."""
+        self.compound_template_command(
+            "stack",
+            args=["--strip-site-packages"],
+            expected_data=["MainThread", "daemon", "telepy"],
+        )
+
+    def test_stack_strip_site_packages_short(self):
+        """Test stack command with -s short flag."""
+        self.compound_template_command(
+            "stack",
+            args=["-s"],
+            expected_data=["MainThread", "daemon", "telepy"],
+        )
+
+    def test_stack_strip_cwd(self):
+        """Test stack command with --strip-cwd flag."""
+        self.compound_template_command(
+            "stack",
+            args=["--strip-cwd"],
+            expected_data=["MainThread", "daemon", "telepy"],
+        )
+
+    def test_stack_strip_cwd_short(self):
+        """Test stack command with -c short flag."""
+        self.compound_template_command(
+            "stack",
+            args=["-c"],
+            expected_data=["MainThread", "daemon", "telepy"],
+        )
+
+    def test_stack_combined_flags(self):
+        """Test stack command with combined flags."""
+        self.compound_template_command(
+            "stack",
+            args=["-s", "-c"],
+            expected_data=["MainThread", "daemon", "telepy"],
         )
 
     def launch_server(self, port: int = 6666, in_thread: bool = False) -> None:
