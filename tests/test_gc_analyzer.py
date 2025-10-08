@@ -350,6 +350,260 @@ class TestGCAnalyzer(unittest.TestCase):
         # Keep container alive
         self.assertIsNotNone(container)
 
+    def test_c_extension_availability(self):
+        """Test C extension import handling."""
+        from telepy import gc_analyzer
+
+        # Check if C extension flag is set
+        self.assertIsInstance(gc_analyzer._HAS_C_EXTENSION, bool)
+
+    def test_c_extension_fallback(self):
+        """Test fallback to Python implementation when C extension unavailable."""
+        # Save original value
+        from telepy import gc_analyzer
+
+        original_has_c_ext = gc_analyzer._HAS_C_EXTENSION
+
+        try:
+            # Force Python fallback
+            gc_analyzer._HAS_C_EXTENSION = False
+
+            # This should use Python implementation
+            stats = self.analyzer.get_object_stats(limit=10)
+
+            # Verify it still works
+            self.assertIsInstance(stats, list)
+            self.assertGreater(len(stats), 0)
+
+        finally:
+            # Restore original value
+            gc_analyzer._HAS_C_EXTENSION = original_has_c_ext
+
+    def test_c_extension_import_error(self):
+        """Test handling of C extension import error.
+
+        Note: This test verifies that the code gracefully handles
+        the ImportError when C extension is not available.
+        The actual coverage of lines 18-19 happens during the initial
+        module import if the C extension is not installed.
+        """
+        from telepy import gc_analyzer
+
+        # The _HAS_C_EXTENSION flag should be properly set
+        # based on whether C extension import succeeded or failed
+        self.assertIsInstance(gc_analyzer._HAS_C_EXTENSION, bool)
+
+        # Verify that the analyzer still works regardless
+        # of C extension availability
+        analyzer = GCAnalyzer()
+        stats = analyzer.get_object_stats(limit=5)
+        self.assertIsInstance(stats, list)
+
+    def test_calculate_stats_python_with_memory(self):
+        """Test Python fallback for stats calculation with memory."""
+        # Create test objects with various types
+        test_objects = [1, 2, "test", {"key": "value"}, [1, 2, 3], (1, 2)]
+
+        type_counter, type_memory, total, total_memory = (
+            self.analyzer._calculate_stats_python(test_objects, calculate_memory=True)
+        )
+
+        # Verify results
+        self.assertIsInstance(type_counter, dict)
+        self.assertIsInstance(type_memory, dict)
+        self.assertIsInstance(total, int)
+        self.assertIsInstance(total_memory, int)
+        self.assertGreater(total, 0)
+        self.assertGreater(total_memory, 0)
+
+        # Check that memory was calculated for each type
+        for type_name in type_counter.keys():
+            self.assertIn(type_name, type_memory)
+            self.assertGreater(type_memory[type_name], 0)
+
+    def test_calculate_stats_python_without_memory(self):
+        """Test Python fallback for stats calculation without memory."""
+        test_objects = [1, 2, "test", {"key": "value"}, [1, 2, 3]]
+
+        type_counter, type_memory, total, total_memory = (
+            self.analyzer._calculate_stats_python(test_objects, calculate_memory=False)
+        )
+
+        # Verify results
+        self.assertIsInstance(type_counter, dict)
+        self.assertIsInstance(type_memory, dict)
+        self.assertIsInstance(total, int)
+        self.assertEqual(total_memory, 0)  # Should be 0 when not calculating memory
+        self.assertEqual(len(type_memory), 0)  # Should be empty dict
+
+    def test_calculate_stats_with_getsizeof_error(self):
+        """Test handling of objects that don't support getsizeof."""
+
+        # Create a class that raises TypeError for getsizeof
+        class UnsizedObject:
+            def __sizeof__(self):
+                raise TypeError("Cannot get size")
+
+        test_objects = [UnsizedObject(), UnsizedObject(), 1, 2, "test"]
+
+        # Should not raise an exception
+        type_counter, type_memory, total, total_memory = (
+            self.analyzer._calculate_stats_python(test_objects, calculate_memory=True)
+        )
+
+        # Verify the function handled the error gracefully
+        self.assertIsInstance(type_counter, dict)
+        self.assertIn("UnsizedObject", type_counter)
+        self.assertEqual(type_counter["UnsizedObject"], 2)
+
+        # Memory for UnsizedObject should be 0 or not present
+        # since getsizeof raised TypeError
+        if "UnsizedObject" in type_memory:
+            # It's ok if it's 0 due to the exception handling
+            self.assertGreaterEqual(type_memory["UnsizedObject"], 0)
+
+    def test_get_object_stats_with_old_python_fallback(self):
+        """Test get_object_stats with TypeError fallback for old Python."""
+        from unittest.mock import patch
+
+        # Mock gc.get_objects to raise TypeError (simulating Python < 3.8)
+        with patch("gc.get_objects") as mock_get_objects:
+            # First call with generation parameter raises TypeError
+            mock_get_objects.side_effect = [
+                TypeError("get_objects() takes no arguments"),
+                [1, 2, "test"],  # Second call without parameter succeeds
+            ]
+
+            stats = self.analyzer.get_object_stats(generation=0, limit=10)
+
+            # Verify it fell back to calling without generation parameter
+            self.assertEqual(mock_get_objects.call_count, 2)
+            self.assertIsInstance(stats, list)
+
+    def test_format_bytes_various_sizes(self):
+        """Test byte formatting with various sizes."""
+        # Test B
+        self.assertEqual(self.analyzer._format_bytes(100), "100.0 B")
+
+        # Test KB
+        self.assertEqual(self.analyzer._format_bytes(1024), "1.0 KB")
+        self.assertEqual(self.analyzer._format_bytes(1536), "1.5 KB")
+
+        # Test MB
+        self.assertEqual(self.analyzer._format_bytes(1024 * 1024), "1.0 MB")
+        self.assertEqual(self.analyzer._format_bytes(1024 * 1024 * 2.5), "2.5 MB")
+
+        # Test GB
+        self.assertEqual(self.analyzer._format_bytes(1024 * 1024 * 1024), "1.0 GB")
+
+        # Test TB
+        self.assertEqual(self.analyzer._format_bytes(1024 * 1024 * 1024 * 1024), "1.0 TB")
+
+        # Test PB
+        self.assertEqual(
+            self.analyzer._format_bytes(1024 * 1024 * 1024 * 1024 * 1024), "1.0 PB"
+        )
+
+    def test_get_garbage_info_with_objects(self):
+        """Test get_garbage_info when garbage exists."""
+        # Save original garbage
+        original_garbage = gc.garbage[:]
+
+        try:
+            # Add some test objects to garbage (for testing only)
+            gc.garbage.append({"test": "object1"})
+            gc.garbage.append([1, 2, 3])
+            gc.garbage.append({"test": "object2"})
+
+            info = self.analyzer.get_garbage_info()
+
+            # Check that we detected the garbage objects
+            self.assertGreater(info["count"], 0)
+            self.assertIn("dict", info["types"])
+            self.assertIn("list", info["types"])
+            self.assertEqual(info["types"]["dict"], 2)
+            self.assertEqual(info["types"]["list"], 1)
+
+            # Check objects list (should be limited to 100)
+            self.assertLessEqual(len(info["objects"]), 100)
+
+        finally:
+            # Restore original garbage state
+            gc.garbage[:] = original_garbage
+
+    def test_get_garbage_formatted_with_objects(self):
+        """Test formatted garbage report when objects exist."""
+        original_garbage = gc.garbage[:]
+
+        try:
+            # Add test objects to garbage
+            gc.garbage.append({"test": "object"})
+            gc.garbage.append([1, 2, 3])
+
+            formatted = self.analyzer.get_garbage_formatted()
+
+            # Should contain the report and object details
+            self.assertIn("Garbage Collection Report", formatted)
+            self.assertIn("Objects by Type", formatted)
+            self.assertIn("dict:", formatted)
+            self.assertIn("list:", formatted)
+
+        finally:
+            # Restore original garbage state
+            gc.garbage[:] = original_garbage
+
+    def test_get_garbage_formatted_empty(self):
+        """Test formatted garbage report when no objects exist."""
+        # Ensure garbage is empty
+        gc.garbage.clear()
+
+        formatted = self.analyzer.get_garbage_formatted()
+
+        # Should contain the "no objects" message
+        self.assertIn("No uncollectable objects found", formatted)
+
+    def test_get_debug_info_with_flags(self):
+        """Test debug info with various debug flags set."""
+        # Save original debug flags
+        original_flags = gc.get_debug()
+
+        try:
+            # Test with DEBUG_STATS
+            gc.set_debug(gc.DEBUG_STATS)
+            debug_info = self.analyzer.get_debug_info()
+            self.assertIn("DEBUG_STATS", debug_info["flag_names"])
+            self.assertTrue(debug_info["enabled"])
+
+            # Test with DEBUG_COLLECTABLE
+            gc.set_debug(gc.DEBUG_COLLECTABLE)
+            debug_info = self.analyzer.get_debug_info()
+            self.assertIn("DEBUG_COLLECTABLE", debug_info["flag_names"])
+
+            # Test with DEBUG_UNCOLLECTABLE
+            gc.set_debug(gc.DEBUG_UNCOLLECTABLE)
+            debug_info = self.analyzer.get_debug_info()
+            self.assertIn("DEBUG_UNCOLLECTABLE", debug_info["flag_names"])
+
+            # Test with DEBUG_SAVEALL
+            gc.set_debug(gc.DEBUG_SAVEALL)
+            debug_info = self.analyzer.get_debug_info()
+            self.assertIn("DEBUG_SAVEALL", debug_info["flag_names"])
+
+            # Test with DEBUG_LEAK (combination of flags)
+            gc.set_debug(gc.DEBUG_LEAK)
+            debug_info = self.analyzer.get_debug_info()
+            self.assertIn("DEBUG_LEAK", debug_info["flag_names"])
+
+            # Test with no flags
+            gc.set_debug(0)
+            debug_info = self.analyzer.get_debug_info()
+            self.assertEqual(len(debug_info["flag_names"]), 0)
+            self.assertFalse(debug_info["enabled"])
+
+        finally:
+            # Restore original debug flags
+            gc.set_debug(original_flags)
+
 
 if __name__ == "__main__":
     unittest.main()
