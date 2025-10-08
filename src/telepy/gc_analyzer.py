@@ -12,10 +12,10 @@ from typing import Any
 
 # Try to import the C extension for better performance
 try:
-    from telepy import _gc_stats  # type: ignore
+    from telepy import _gc_stats
 
     _HAS_C_EXTENSION = True
-except ImportError:
+except ImportError:  # pragma: no cover
     _HAS_C_EXTENSION = False
 
 
