@@ -177,9 +177,9 @@ gc_stats_calculate_stats(PyObject* Py_UNUSED(self),
     }
 
     PyDict_SetItemString(result, "type_counter", type_counter);
-    PyDict_SetItemString(
-        result, "total_objects", PyLong_FromSsize_t(total_objects));
-
+    PyObject* total_objects_obj = PyLong_FromSsize_t(total_objects);
+    PyDict_SetItemString(result, "total_objects", total_objects_obj);
+    Py_DECREF(total_objects_obj);
     if (calculate_memory) {
         PyDict_SetItemString(result, "type_memory", type_memory);
         PyDict_SetItemString(
