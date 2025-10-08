@@ -35,6 +35,9 @@ jobs:
       - name: Build extension
         run: make build
 
+      - name: Install package
+        run: make install
+
       - name: Run tests with retry (Attempt 1)
         id: test_attempt_1
         continue-on-error: true
@@ -83,6 +86,9 @@ jobs:
 
       - name: Build extension
         run: make build
+
+      - name: Install package
+        run: make install
 
       - name: Run coverage with retry (Attempt 1)
         id: coverage_attempt_1
