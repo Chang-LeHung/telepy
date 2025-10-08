@@ -373,3 +373,321 @@ class TestMonitor(TestBase):
         req = request.Request(f"http://127.0.0.1:{port}/shutdown")
         with request.urlopen(req) as response:
             self.assertEqual(response.status, 200)
+
+    def test_gc_status(self):
+        """Test gc-status command."""
+        self.compound_template_command(
+            "gc-status", expected_data=["enabled", "count", "threshold"]
+        )
+
+    def test_gc_status_help(self):
+        """Test gc-status help message."""
+        self.compound_template_command(
+            "gc-status", ["--help"], expected_data=["usage", "--help"]
+        )
+
+    def test_gc_stats(self):
+        """Test gc-stats command."""
+        self.compound_template_command(
+            "gc-stats",
+            expected_data=["GC Status", "Collections", "Collected", "Uncollectable"],
+        )
+
+    def test_gc_stats_help(self):
+        """Test gc-stats help message."""
+        self.compound_template_command(
+            "gc-stats", ["--help"], expected_data=["usage", "--help"]
+        )
+
+    def test_gc_objects(self):
+        """Test gc-objects command with default parameters."""
+        self.compound_template_command(
+            "gc-objects", expected_data=["Object Statistics", "Type", "Count"]
+        )
+
+    def test_gc_objects_with_limit(self):
+        """Test gc-objects command with custom limit."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--limit", "10"],
+            expected_data=["Object Statistics", "Type", "Count"],
+        )
+
+    def test_gc_objects_with_generation(self):
+        """Test gc-objects command with specific generation."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--generation", "0"],
+            expected_data=["Object Statistics", "Type", "Count"],
+        )
+
+    def test_gc_objects_with_memory(self):
+        """Test gc-objects command with memory calculation."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--calculate-memory"],
+            expected_data=["Object Statistics", "Type", "Count", "Memory"],
+        )
+
+    def test_gc_objects_sort_by_memory(self):
+        """Test gc-objects command sorted by memory."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--calculate-memory", "--sort-by", "memory"],
+            expected_data=["Object Statistics", "Type", "Count", "Memory"],
+        )
+
+    def test_gc_objects_sort_by_avg_memory(self):
+        """Test gc-objects command sorted by average memory."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--calculate-memory", "--sort-by", "avg_memory"],
+            expected_data=["Object Statistics", "Type", "Count", "Memory"],
+        )
+
+    def test_gc_objects_help(self):
+        """Test gc-objects help message."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--help"],
+            expected_data=[
+                "usage",
+                "--limit",
+                "--generation",
+                "--calculate-memory",
+                "--sort-by",
+            ],
+        )
+
+    def test_gc_objects_error_sort_without_memory(self):
+        """Test gc-objects error when sorting by memory without --calculate-memory."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--sort-by", "memory"],
+            expected_data=["Error", "--sort-by memory requires --calculate-memory"],
+        )
+
+    def test_gc_garbage(self):
+        """Test gc-garbage command."""
+        self.compound_template_command(
+            "gc-garbage", expected_data=["count", "types", "objects"]
+        )
+
+    def test_gc_garbage_help(self):
+        """Test gc-garbage help message."""
+        self.compound_template_command(
+            "gc-garbage", ["--help"], expected_data=["usage", "--help"]
+        )
+
+    def test_gc_collect(self):
+        """Test gc-collect command with default generation."""
+        self.compound_template_command(
+            "gc-collect", expected_data=["generation", "unreachable", "collected"]
+        )
+
+    def test_gc_collect_generation_0(self):
+        """Test gc-collect command for generation 0."""
+        self.compound_template_command(
+            "gc-collect",
+            ["--generation", "0"],
+            expected_data=["generation.*0", "unreachable", "collected"],
+        )
+
+    def test_gc_collect_generation_1(self):
+        """Test gc-collect command for generation 1."""
+        self.compound_template_command(
+            "gc-collect",
+            ["--generation", "1"],
+            expected_data=["generation.*1", "unreachable", "collected"],
+        )
+
+    def test_gc_collect_generation_2(self):
+        """Test gc-collect command for generation 2."""
+        self.compound_template_command(
+            "gc-collect",
+            ["--generation", "2"],
+            expected_data=["generation.*2", "unreachable", "collected"],
+        )
+
+    def test_gc_collect_help(self):
+        """Test gc-collect help message."""
+        self.compound_template_command(
+            "gc-collect", ["--help"], expected_data=["usage", "--generation", "--help"]
+        )
+
+    def test_gc_monitor(self):
+        """Test gc-monitor command."""
+        self.compound_template_command(
+            "gc-monitor", expected_data=["current_counts", "current_collections", "delta"]
+        )
+
+    def test_gc_monitor_help(self):
+        """Test gc-monitor help message."""
+        self.compound_template_command(
+            "gc-monitor", ["--help"], expected_data=["usage", "--help"]
+        )
+
+    # ========== GC Commands Error/Exception Tests ==========
+
+    def test_gc_status_error_invalid_arg(self):
+        """Test gc-status with invalid argument."""
+        self.compound_template_command(
+            "gc-status", ["--invalid"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_status_error_unknown_flag(self):
+        """Test gc-status with unknown flag."""
+        self.compound_template_command(
+            "gc-status", ["-x"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_stats_error_invalid_arg(self):
+        """Test gc-stats with invalid argument."""
+        self.compound_template_command(
+            "gc-stats", ["--invalid"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_stats_error_unknown_flag(self):
+        """Test gc-stats with unknown flag."""
+        self.compound_template_command(
+            "gc-stats", ["-x"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_objects_error_invalid_limit(self):
+        """Test gc-objects with invalid limit value."""
+        self.compound_template_command(
+            "gc-objects", ["--limit", "invalid"], expected_data=["invalid int value"]
+        )
+
+    def test_gc_objects_error_invalid_generation(self):
+        """Test gc-objects with invalid generation value."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--generation", "5"],
+            expected_data=["invalid choice.*5"],
+        )
+
+    def test_gc_objects_error_negative_limit(self):
+        """Test gc-objects with negative limit."""
+        self.compound_template_command("gc-objects", ["--limit", "-10"], expected_data=[])
+
+    def test_gc_objects_error_invalid_sort_by(self):
+        """Test gc-objects with invalid sort-by value."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--sort-by", "invalid"],
+            expected_data=["invalid choice"],
+        )
+
+    def test_gc_objects_error_sort_memory_without_flag(self):
+        """Test gc-objects sorting by memory without --calculate-memory flag."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--sort-by", "memory"],
+            expected_data=["Error", "--sort-by memory requires --calculate-memory"],
+        )
+
+    def test_gc_objects_error_sort_avg_memory_without_flag(self):
+        """Test gc-objects sorting by avg_memory without --calculate-memory."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--sort-by", "avg_memory"],
+            expected_data=["Error", "--sort-by avg_memory requires --calculate-memory"],
+        )
+
+    def test_gc_objects_error_multiple_invalid_args(self):
+        """Test gc-objects with multiple invalid arguments."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--invalid1", "--invalid2"],
+            expected_data=["unrecognized arguments"],
+        )
+
+    def test_gc_garbage_error_invalid_arg(self):
+        """Test gc-garbage with invalid argument."""
+        self.compound_template_command(
+            "gc-garbage", ["--invalid"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_garbage_error_unknown_flag(self):
+        """Test gc-garbage with unknown flag."""
+        self.compound_template_command(
+            "gc-garbage", ["-x"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_collect_error_invalid_generation(self):
+        """Test gc-collect with invalid generation value."""
+        self.compound_template_command(
+            "gc-collect",
+            ["--generation", "3"],
+            expected_data=["invalid choice.*3"],
+        )
+
+    def test_gc_collect_error_invalid_generation_negative(self):
+        """Test gc-collect with negative generation value."""
+        self.compound_template_command(
+            "gc-collect",
+            ["--generation", "-1"],
+            expected_data=["invalid choice"],
+        )
+
+    def test_gc_collect_error_invalid_generation_type(self):
+        """Test gc-collect with non-integer generation value."""
+        self.compound_template_command(
+            "gc-collect",
+            ["--generation", "invalid"],
+            expected_data=["invalid int value"],
+        )
+
+    def test_gc_collect_error_unknown_flag(self):
+        """Test gc-collect with unknown flag."""
+        self.compound_template_command(
+            "gc-collect", ["-x"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_collect_error_multiple_invalid_args(self):
+        """Test gc-collect with multiple invalid arguments."""
+        self.compound_template_command(
+            "gc-collect",
+            ["--invalid1", "--invalid2"],
+            expected_data=["unrecognized arguments"],
+        )
+
+    def test_gc_monitor_error_invalid_arg(self):
+        """Test gc-monitor with invalid argument."""
+        self.compound_template_command(
+            "gc-monitor", ["--invalid"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_monitor_error_unknown_flag(self):
+        """Test gc-monitor with unknown flag."""
+        self.compound_template_command(
+            "gc-monitor", ["-x"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_objects_value_error_exception(self):
+        """Test gc-objects ValueError exception handling from analyzer."""
+        from unittest.mock import MagicMock, patch
+
+        from telepy.monitor import gc_objects
+
+        # Create mock request and response objects
+        req = MagicMock()
+        req.headers = {"args": ""}
+        resp = MagicMock()
+
+        # Mock the analyzer to raise ValueError
+        with patch("telepy.monitor.get_analyzer") as mock_get_analyzer:
+            mock_analyzer = mock_get_analyzer.return_value
+            mock_analyzer.get_object_stats_formatted.side_effect = ValueError(
+                "Test ValueError from analyzer"
+            )
+
+            # Call the function directly
+            gc_objects(req, resp)
+
+            # Verify error response was returned
+            resp.return_json.assert_called_once()
+            call_args = resp.return_json.call_args[0][0]
+            self.assertEqual(call_args["code"], -1)  # ERROR_CODE
+            self.assertIn("Test ValueError from analyzer", call_args["data"])

@@ -133,6 +133,36 @@ class Help(CommandProcessor):
         return CommandManager.help_msg(), True
 
 
+@register_command("gc-status", "show GC status and configuration")
+class GCStatus(CommandProcessor):
+    pass
+
+
+@register_command("gc-stats", "show detailed GC statistics")
+class GCStats(CommandProcessor):
+    pass
+
+
+@register_command("gc-objects", "show tracked objects by type")
+class GCObjects(CommandProcessor):
+    pass
+
+
+@register_command("gc-garbage", "show uncollectable garbage objects")
+class GCGarbage(CommandProcessor):
+    pass
+
+
+@register_command("gc-collect", "manually trigger garbage collection")
+class GCCollect(CommandProcessor):
+    pass
+
+
+@register_command("gc-monitor", "monitor GC collection activity")
+class GCMonitor(CommandProcessor):
+    pass
+
+
 class CommandManager(CommandProcessor):
     def __init__(self, host: str = "127.0.0.1", port: int = 8026) -> None:
         super().__init__(host, port)

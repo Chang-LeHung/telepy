@@ -13,6 +13,7 @@ If code is 0, the data represents the successful msg, otherwise it represent err
 import argparse
 from typing import Final, cast
 
+from .gc_analyzer import get_analyzer
 from .server import TelePyApp, TelePyRequest, TelePyResponse
 from .system import TelePySystem
 
@@ -196,6 +197,238 @@ def profile(req: TelePyRequest, resp: TelePyResponse):
         )
 
 
+def gc_status(req: TelePyRequest, resp: TelePyResponse):
+    """Get Python garbage collection status."""
+    from argparse import ArgumentError
+
+    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser.add_argument(
+        "--help",
+        "-h",
+        default=False,
+        action="store_true",
+        help="Show this help message and exit",
+    )
+
+    args = req.headers.get("args", "").strip().split()
+    try:
+        parse_args = parser.parse_args(args)
+    except ArgumentError as e:
+        resp.return_json({"data": e.message, "code": ERROR_CODE})
+        return
+
+    if parse_args.help:
+        resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
+        return
+
+    analyzer = get_analyzer()
+    status = analyzer.get_status()
+    resp.return_json({"data": status, "code": SUCCESS_CODE})
+
+
+def gc_stats(req: TelePyRequest, resp: TelePyResponse):
+    """Get detailed garbage collection statistics."""
+    from argparse import ArgumentError
+
+    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser.add_argument(
+        "--help",
+        "-h",
+        default=False,
+        action="store_true",
+        help="Show this help message and exit",
+    )
+
+    args = req.headers.get("args", "").strip().split()
+    try:
+        parse_args = parser.parse_args(args)
+    except ArgumentError as e:
+        resp.return_json({"data": e.message, "code": ERROR_CODE})
+        return
+
+    if parse_args.help:
+        resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
+        return
+
+    analyzer = get_analyzer()
+    stats = analyzer.get_stats_summary()
+    resp.return_json({"data": stats, "code": SUCCESS_CODE})
+
+
+def gc_objects(req: TelePyRequest, resp: TelePyResponse):
+    """Get statistics about tracked objects by type."""
+    from argparse import ArgumentError
+
+    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser.add_argument(
+        "--limit",
+        "-l",
+        type=int,
+        default=20,
+        help="Limit the number of object types to display (default: 20)",
+    )
+    parser.add_argument(
+        "--generation",
+        "-g",
+        type=int,
+        default=None,
+        choices=[0, 1, 2],
+        help="Specify which generation to analyze (0, 1, or 2, default: all generations)",
+    )
+    parser.add_argument(
+        "--calculate-memory",
+        "-m",
+        action="store_true",
+        default=False,
+        help="Calculate memory usage for each object type",
+    )
+    parser.add_argument(
+        "--sort-by",
+        "-s",
+        type=str,
+        default="count",
+        choices=["count", "memory", "avg_memory"],
+        help="Sort by 'count' (default), 'memory', or 'avg_memory' "
+        "(requires -m/--calculate-memory)",
+    )
+    parser.add_argument(
+        "--help",
+        "-h",
+        default=False,
+        action="store_true",
+        help="Show this help message and exit",
+    )
+
+    args = req.headers.get("args", "").strip().split()
+    try:
+        parse_args = parser.parse_args(args)
+    except ArgumentError as e:
+        resp.return_json({"data": e.message, "code": ERROR_CODE})
+        return
+
+    if parse_args.help:
+        resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
+        return
+
+    # Validate sort_by parameter
+    if parse_args.sort_by in ["memory", "avg_memory"] and not parse_args.calculate_memory:
+        resp.return_json(
+            {
+                "data": f"Error: --sort-by {parse_args.sort_by} requires "
+                "--calculate-memory/-m",
+                "code": ERROR_CODE,
+            }
+        )
+        return
+
+    analyzer = get_analyzer()
+    try:
+        formatted = analyzer.get_object_stats_formatted(
+            generation=parse_args.generation,
+            limit=parse_args.limit,
+            calculate_memory=parse_args.calculate_memory,
+            sort_by=parse_args.sort_by,
+        )
+        resp.return_json({"data": formatted, "code": SUCCESS_CODE})
+    except ValueError as e:
+        resp.return_json({"data": str(e), "code": ERROR_CODE})
+
+
+def gc_garbage(req: TelePyRequest, resp: TelePyResponse):
+    """Get information about uncollectable garbage objects."""
+    from argparse import ArgumentError
+
+    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser.add_argument(
+        "--help",
+        "-h",
+        default=False,
+        action="store_true",
+        help="Show this help message and exit",
+    )
+
+    args = req.headers.get("args", "").strip().split()
+    try:
+        parse_args = parser.parse_args(args)
+    except ArgumentError as e:
+        resp.return_json({"data": e.message, "code": ERROR_CODE})
+        return
+
+    if parse_args.help:
+        resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
+        return
+
+    analyzer = get_analyzer()
+    garbage_info = analyzer.get_garbage_info()
+    resp.return_json({"data": garbage_info, "code": SUCCESS_CODE})
+
+
+def gc_collect(req: TelePyRequest, resp: TelePyResponse):
+    """Manually trigger garbage collection."""
+    from argparse import ArgumentError
+
+    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser.add_argument(
+        "--generation",
+        "-g",
+        type=int,
+        default=2,
+        choices=[0, 1, 2],
+        help="Specify which generation to collect (0, 1, or 2, default: 2)",
+    )
+    parser.add_argument(
+        "--help",
+        "-h",
+        default=False,
+        action="store_true",
+        help="Show this help message and exit",
+    )
+
+    args = req.headers.get("args", "").strip().split()
+    try:
+        parse_args = parser.parse_args(args)
+    except ArgumentError as e:
+        resp.return_json({"data": e.message, "code": ERROR_CODE})
+        return
+
+    if parse_args.help:
+        resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
+        return
+
+    analyzer = get_analyzer()
+    result = analyzer.collect_garbage(generation=parse_args.generation)
+    resp.return_json({"data": result, "code": SUCCESS_CODE})
+
+
+def gc_monitor(req: TelePyRequest, resp: TelePyResponse):
+    """Monitor garbage collection activity since last check."""
+    from argparse import ArgumentError
+
+    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser.add_argument(
+        "--help",
+        "-h",
+        default=False,
+        action="store_true",
+        help="Show this help message and exit",
+    )
+
+    args = req.headers.get("args", "").strip().split()
+    try:
+        parse_args = parser.parse_args(args)
+    except ArgumentError as e:
+        resp.return_json({"data": e.message, "code": ERROR_CODE})
+        return
+
+    if parse_args.help:
+        resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
+        return
+
+    analyzer = get_analyzer()
+    monitor_result = analyzer.monitor_collection_activity()
+    resp.return_json({"data": monitor_result, "code": SUCCESS_CODE})
+
+
 class TelePyMonitor:
     def __init__(self, port: int = 8026, host: str = "127.0.0.1", log=True):
         app = TelePyApp(port=port, host=host, log=log)
@@ -204,6 +437,12 @@ class TelePyMonitor:
         app.route("/stack")(stack)
         app.route("/ping")(ping)
         app.route("/profile")(profile)
+        app.route("/gc-status")(gc_status)
+        app.route("/gc-stats")(gc_stats)
+        app.route("/gc-objects")(gc_objects)
+        app.route("/gc-garbage")(gc_garbage)
+        app.route("/gc-collect")(gc_collect)
+        app.route("/gc-monitor")(gc_monitor)
         self.app = app
 
     def run(self):
