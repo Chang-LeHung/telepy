@@ -50,6 +50,13 @@ gc_stats_calculate_stats(PyObject* Py_UNUSED(self),
                          PyObject* kwargs) {
     PyObject* objects = NULL;
     int calculate_memory = 0;
+    PyObject* type_counter = NULL;
+    PyObject* type_memory = NULL;
+    PyObject* sys_module = NULL;
+    PyObject* getsizeof = NULL;
+    PyObject* result = NULL;
+    Py_ssize_t total_objects = 0;
+    unsigned long long total_memory = 0;
 
     static char* kwlist[] = {"objects", "calculate_memory", NULL};
 
@@ -64,41 +71,29 @@ gc_stats_calculate_stats(PyObject* Py_UNUSED(self),
     }
 
     // Create result dictionaries
-    PyObject* type_counter = PyDict_New();
-    PyObject* type_memory = NULL;
-
+    type_counter = PyDict_New();
     if (type_counter == NULL) {
-        return NULL;
+        goto error;
     }
 
     if (calculate_memory) {
         type_memory = PyDict_New();
         if (type_memory == NULL) {
-            Py_DECREF(type_counter);
-            return NULL;
+            goto error;
         }
     }
 
-    Py_ssize_t total_objects = PyList_Size(objects);
-    unsigned long long total_memory = 0;
+    total_objects = PyList_Size(objects);
 
     // Get sys.getsizeof for memory calculation
-    PyObject* sys_module = NULL;
-    PyObject* getsizeof = NULL;
-
     if (calculate_memory) {
         sys_module = PyImport_ImportModule("sys");
         if (sys_module == NULL) {
-            Py_DECREF(type_counter);
-            Py_XDECREF(type_memory);
-            return NULL;
+            goto error;
         }
         getsizeof = PyObject_GetAttrString(sys_module, "getsizeof");
         if (getsizeof == NULL) {
-            Py_DECREF(sys_module);
-            Py_DECREF(type_counter);
-            Py_XDECREF(type_memory);
-            return NULL;
+            goto error;
         }
     }
 
@@ -122,13 +117,23 @@ gc_stats_calculate_stats(PyObject* Py_UNUSED(self),
         PyObject* count = PyDict_GetItem(type_counter, py_type_name);
         if (count == NULL) {
             // First occurrence of this type
-            PyDict_SetItem(type_counter, py_type_name, PyLong_FromLong(1));
+            PyObject* one = PyLong_FromLong(1);
+            if (one == NULL) {
+                Py_DECREF(py_type_name);
+                goto error;
+            }
+            PyDict_SetItem(type_counter, py_type_name, one);
+            Py_DECREF(one);
         } else {
             // Increment existing count
             long current_count = PyLong_AsLong(count);
-            PyDict_SetItem(type_counter,
-                           py_type_name,
-                           PyLong_FromLong(current_count + 1));
+            PyObject* new_count = PyLong_FromLong(current_count + 1);
+            if (new_count == NULL) {
+                Py_DECREF(py_type_name);
+                goto error;
+            }
+            PyDict_SetItem(type_counter, py_type_name, new_count);
+            Py_DECREF(new_count);
         }
 
         // Calculate memory if requested
@@ -143,13 +148,25 @@ gc_stats_calculate_stats(PyObject* Py_UNUSED(self),
                     // Update type memory
                     PyObject* mem = PyDict_GetItem(type_memory, py_type_name);
                     if (mem == NULL) {
-                        PyDict_SetItem(
-                            type_memory, py_type_name, PyLong_FromLong(size));
+                        PyObject* size_long = PyLong_FromLong(size);
+                        if (size_long == NULL) {
+                            Py_DECREF(size_obj);
+                            Py_DECREF(py_type_name);
+                            goto error;
+                        }
+                        PyDict_SetItem(type_memory, py_type_name, size_long);
+                        Py_DECREF(size_long);
                     } else {
                         long current_mem = PyLong_AsLong(mem);
-                        PyDict_SetItem(type_memory,
-                                       py_type_name,
-                                       PyLong_FromLong(current_mem + size));
+                        PyObject* new_mem =
+                            PyLong_FromLong(current_mem + size);
+                        if (new_mem == NULL) {
+                            Py_DECREF(size_obj);
+                            Py_DECREF(py_type_name);
+                            goto error;
+                        }
+                        PyDict_SetItem(type_memory, py_type_name, new_mem);
+                        Py_DECREF(new_mem);
                     }
                 }
                 Py_DECREF(size_obj);
@@ -163,28 +180,36 @@ gc_stats_calculate_stats(PyObject* Py_UNUSED(self),
     }
 
     // Clean up
-    if (calculate_memory) {
-        Py_XDECREF(getsizeof);
-        Py_XDECREF(sys_module);
-    }
+    Py_XDECREF(getsizeof);
+    Py_XDECREF(sys_module);
+    getsizeof = NULL;
+    sys_module = NULL;
 
     // Build result dictionary
-    PyObject* result = PyDict_New();
+    result = PyDict_New();
     if (result == NULL) {
-        Py_DECREF(type_counter);
-        Py_XDECREF(type_memory);
-        return NULL;
+        goto error;
     }
 
     PyDict_SetItemString(result, "type_counter", type_counter);
+
     PyObject* total_objects_obj = PyLong_FromSsize_t(total_objects);
+    if (total_objects_obj == NULL) {
+        goto error;
+    }
     PyDict_SetItemString(result, "total_objects", total_objects_obj);
     Py_DECREF(total_objects_obj);
+
     if (calculate_memory) {
         PyDict_SetItemString(result, "type_memory", type_memory);
-        PyDict_SetItemString(
-            result, "total_memory", PyLong_FromUnsignedLongLong(total_memory));
+        PyObject* total_memory_obj = PyLong_FromUnsignedLongLong(total_memory);
+        if (total_memory_obj == NULL) {
+            goto error;
+        }
+        PyDict_SetItemString(result, "total_memory", total_memory_obj);
+        Py_DECREF(total_memory_obj);
         Py_DECREF(type_memory);
+        type_memory = NULL;
     } else {
         Py_INCREF(Py_None);
         PyDict_SetItemString(result, "type_memory", Py_None);
@@ -196,8 +221,17 @@ gc_stats_calculate_stats(PyObject* Py_UNUSED(self),
     }
 
     Py_DECREF(type_counter);
+    type_counter = NULL;
 
     return result;
+
+error:
+    Py_XDECREF(type_counter);
+    Py_XDECREF(type_memory);
+    Py_XDECREF(sys_module);
+    Py_XDECREF(getsizeof);
+    Py_XDECREF(result);
+    return NULL;
 }
 
 PyDoc_STRVAR(
