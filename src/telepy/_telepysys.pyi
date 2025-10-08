@@ -26,17 +26,19 @@ def sched_yield() -> None:
     Relax to call me, we handle the GIL properly.
     """
 
-def vm_read(tid: int, name: str) -> object | None:
+def vm_read(tid: int, name: str, level: int = 0) -> object | None:
     """
     Read a variable from the specified thread's frame.
 
     Args:
         tid: Thread ID (thread identifier)
         name: Variable name to read
+        level: Frame level (default 0). 0 is the top frame (current),
+               1 is the second from top (f_back), and so on.
 
     Returns:
         The value of the variable if found in the thread's locals or globals,
-        None otherwise (including when the thread doesn't exist)
+        None otherwise (including when the thread doesn't exist or level is too deep)
 
     Example:
         >>> import threading
@@ -46,8 +48,11 @@ def vm_read(tid: int, name: str) -> object | None:
         ...     time.sleep(2)
         >>> thread = threading.Thread(target=worker)
         >>> thread.start()
+        >>> # Read from top frame (level=0, default)
         >>> value = _telepysys.vm_read(thread.ident, "local_var")
         >>> print(value)  # "Hello"
+        >>> # Read from previous frame (level=1)
+        >>> value = _telepysys.vm_read(thread.ident, "some_var", level=1)
     """
     ...
 

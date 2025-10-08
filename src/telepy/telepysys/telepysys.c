@@ -1544,18 +1544,21 @@ PyDoc_STRVAR(telepysys_vm_read_doc,
              "Read a variable from the specified thread's frame.\n\n"
              "Args:\n"
              "    tid: Thread ID\n"
-             "    name: Variable name to read\n\n"
+             "    name: Variable name to read\n"
+             "    level: Frame level (default 0). 0 is top frame, 1 is second "
+             "from top, etc.\n\n"
              "Returns:\n"
-             "    The value of the variable if found, None otherwise");
+             "    The value of the variable if found, None otherwise "
+             "(including when level is too deep)");
 
 static PyObject*
 telepysys_vm_read(PyObject* Py_UNUSED(module),
                   PyObject* const* args,
                   Py_ssize_t nargs) {
-    // Check argument count
-    if (nargs != 2) {
+    // Check argument count (2 or 3 arguments)
+    if (nargs < 2 || nargs > 3) {
         PyErr_Format(PyExc_TypeError,
-                     "vm_read() takes exactly 2 arguments (%zd given)",
+                     "vm_read() takes 2 or 3 arguments (%zd given)",
                      nargs);
         return NULL;
     }
@@ -1585,6 +1588,28 @@ telepysys_vm_read(PyObject* Py_UNUSED(module),
         return NULL;
     }
 
+    // Third argument: level (optional, default 0)
+    long level = 0;
+    if (nargs == 3) {
+        PyObject* level_obj = args[2];
+        if (!PyLong_Check(level_obj)) {
+            PyErr_SetString(
+                PyExc_TypeError,
+                "vm_read() argument 3 must be an integer (frame level)");
+            return NULL;
+        }
+        level = PyLong_AsLong(level_obj);
+        if (level == -1 && PyErr_Occurred()) {
+            return NULL;
+        }
+        if (level < 0) {
+            PyErr_SetString(
+                PyExc_ValueError,
+                "vm_read() argument 3 (level) must be non-negative");
+            return NULL;
+        }
+    }
+
     // Get all thread frames - _PyThread_CurrentFrames() returns a new reference
     PyObject* frames_dict = _PyThread_CurrentFrames();
     if (frames_dict == NULL) {
@@ -1604,6 +1629,22 @@ telepysys_vm_read(PyObject* Py_UNUSED(module),
     // frames_dict
     Py_INCREF(frame);
     Py_DECREF(frames_dict);  // Done with frames_dict
+
+    // Navigate to the specified frame level
+    // level=0 means top frame (current frame), level=1 means f_back, etc.
+    for (long i = 0; i < level; i++) {
+        PyObject* back_frame = PyObject_GetAttrString(frame, "f_back");
+        Py_DECREF(frame);
+
+        if (back_frame == NULL || back_frame == Py_None) {
+            // Level is too deep, reached end of stack
+            Py_XDECREF(back_frame);
+            PyErr_Clear();  // Clear any attribute error
+            Py_RETURN_NONE;
+        }
+
+        frame = back_frame;  // Move to the previous frame
+    }
 
     PyObject* result = NULL;
 
