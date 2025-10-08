@@ -526,3 +526,141 @@ class TestMonitor(TestBase):
         self.compound_template_command(
             "gc-monitor", ["--help"], expected_data=["usage", "--help"]
         )
+
+    # ========== GC Commands Error/Exception Tests ==========
+
+    def test_gc_status_error_invalid_arg(self):
+        """Test gc-status with invalid argument."""
+        self.compound_template_command(
+            "gc-status", ["--invalid"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_status_error_unknown_flag(self):
+        """Test gc-status with unknown flag."""
+        self.compound_template_command(
+            "gc-status", ["-x"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_stats_error_invalid_arg(self):
+        """Test gc-stats with invalid argument."""
+        self.compound_template_command(
+            "gc-stats", ["--invalid"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_stats_error_unknown_flag(self):
+        """Test gc-stats with unknown flag."""
+        self.compound_template_command(
+            "gc-stats", ["-x"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_objects_error_invalid_limit(self):
+        """Test gc-objects with invalid limit value."""
+        self.compound_template_command(
+            "gc-objects", ["--limit", "invalid"], expected_data=["invalid int value"]
+        )
+
+    def test_gc_objects_error_invalid_generation(self):
+        """Test gc-objects with invalid generation value."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--generation", "5"],
+            expected_data=["invalid choice.*5"],
+        )
+
+    def test_gc_objects_error_negative_limit(self):
+        """Test gc-objects with negative limit."""
+        self.compound_template_command("gc-objects", ["--limit", "-10"], expected_data=[])
+
+    def test_gc_objects_error_invalid_sort_by(self):
+        """Test gc-objects with invalid sort-by value."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--sort-by", "invalid"],
+            expected_data=["invalid choice"],
+        )
+
+    def test_gc_objects_error_sort_memory_without_flag(self):
+        """Test gc-objects sorting by memory without --calculate-memory flag."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--sort-by", "memory"],
+            expected_data=["Error", "--sort-by memory requires --calculate-memory"],
+        )
+
+    def test_gc_objects_error_sort_avg_memory_without_flag(self):
+        """Test gc-objects sorting by avg_memory without --calculate-memory."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--sort-by", "avg_memory"],
+            expected_data=["Error", "--sort-by avg_memory requires --calculate-memory"],
+        )
+
+    def test_gc_objects_error_multiple_invalid_args(self):
+        """Test gc-objects with multiple invalid arguments."""
+        self.compound_template_command(
+            "gc-objects",
+            ["--invalid1", "--invalid2"],
+            expected_data=["unrecognized arguments"],
+        )
+
+    def test_gc_garbage_error_invalid_arg(self):
+        """Test gc-garbage with invalid argument."""
+        self.compound_template_command(
+            "gc-garbage", ["--invalid"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_garbage_error_unknown_flag(self):
+        """Test gc-garbage with unknown flag."""
+        self.compound_template_command(
+            "gc-garbage", ["-x"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_collect_error_invalid_generation(self):
+        """Test gc-collect with invalid generation value."""
+        self.compound_template_command(
+            "gc-collect",
+            ["--generation", "3"],
+            expected_data=["invalid choice.*3"],
+        )
+
+    def test_gc_collect_error_invalid_generation_negative(self):
+        """Test gc-collect with negative generation value."""
+        self.compound_template_command(
+            "gc-collect",
+            ["--generation", "-1"],
+            expected_data=["invalid choice"],
+        )
+
+    def test_gc_collect_error_invalid_generation_type(self):
+        """Test gc-collect with non-integer generation value."""
+        self.compound_template_command(
+            "gc-collect",
+            ["--generation", "invalid"],
+            expected_data=["invalid int value"],
+        )
+
+    def test_gc_collect_error_unknown_flag(self):
+        """Test gc-collect with unknown flag."""
+        self.compound_template_command(
+            "gc-collect", ["-x"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_collect_error_multiple_invalid_args(self):
+        """Test gc-collect with multiple invalid arguments."""
+        self.compound_template_command(
+            "gc-collect",
+            ["--invalid1", "--invalid2"],
+            expected_data=["unrecognized arguments"],
+        )
+
+    def test_gc_monitor_error_invalid_arg(self):
+        """Test gc-monitor with invalid argument."""
+        self.compound_template_command(
+            "gc-monitor", ["--invalid"], expected_data=["unrecognized arguments"]
+        )
+
+    def test_gc_monitor_error_unknown_flag(self):
+        """Test gc-monitor with unknown flag."""
+        self.compound_template_command(
+            "gc-monitor", ["-x"], expected_data=["unrecognized arguments"]
+        )
