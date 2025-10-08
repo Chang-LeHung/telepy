@@ -186,8 +186,13 @@ gc_stats_calculate_stats(PyObject* Py_UNUSED(self),
             result, "total_memory", PyLong_FromUnsignedLongLong(total_memory));
         Py_DECREF(type_memory);
     } else {
+        Py_INCREF(Py_None);
         PyDict_SetItemString(result, "type_memory", Py_None);
-        PyDict_SetItemString(result, "total_memory", PyLong_FromLong(0));
+        PyObject* zero = PyLong_FromLong(0);
+        if (zero != NULL) {
+            PyDict_SetItemString(result, "total_memory", zero);
+            Py_DECREF(zero);
+        }
     }
 
     Py_DECREF(type_counter);
