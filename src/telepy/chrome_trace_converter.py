@@ -521,7 +521,7 @@ def main():
                         f"[bold cyan]{svg_size:,}[/bold cyan] bytes"
                     )
 
-            except ImportError as e:
+            except ImportError as e:  # pragma: no cover
                 err_console.print(
                     f"[bold red]Warning:[/bold red] Could not import "
                     f"flamegraph module - {e}"
@@ -554,5 +554,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
