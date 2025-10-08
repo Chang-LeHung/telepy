@@ -22,7 +22,9 @@ class SamplerMiddleware(ABC):
         """
         pass
 
-    def on_after_start(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
+    def on_after_start(
+        self, sampler: "TelepySysAsyncSampler | TelepySysSampler"
+    ) -> None:  # pragma: no cover
         """Called after the sampler has started.
 
         Args:
@@ -30,7 +32,9 @@ class SamplerMiddleware(ABC):
         """
         pass
 
-    def on_before_stop(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
+    def on_before_stop(
+        self, sampler: "TelepySysAsyncSampler | TelepySysSampler"
+    ) -> None:  # pragma: no cover
         """Called before the sampler stops.
 
         Args:
@@ -38,7 +42,9 @@ class SamplerMiddleware(ABC):
         """
         pass
 
-    def on_after_stop(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
+    def on_after_stop(
+        self, sampler: "TelepySysAsyncSampler | TelepySysSampler"
+    ) -> None:  # pragma: no cover
         """Called after the sampler has stopped.
 
         Args:
