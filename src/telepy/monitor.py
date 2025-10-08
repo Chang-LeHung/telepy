@@ -34,26 +34,36 @@ def shutdown(req: TelePyRequest, resp: TelePyResponse) -> None:
 
 def stack(req: TelePyRequest, resp: TelePyResponse):
     """
-    Get the stack trace of all threads
-    Example:
-    {
-        "data": [
-            {
-                "stack": ["telepy.py", "<module>],
-                "name": "MainThread",
-                "id": 1234567890,
-                "daemon": true
-            }
-        ]
-    }
+    Get the stack trace of all threads and format it on the server side.
+
+    The response will be a formatted string showing each thread's information
+    and its complete stack trace with indentation for better readability.
     """
     system = cast(TelePySystem, req.app.lookup(TELEPY_SYSTEM))
+    thread_data = system.thread()
+
+    # Format the stack traces with simple indentation
+    lines = []
+    for idx, item in enumerate(thread_data):
+        if idx > 0:
+            lines.append("")  # Add blank line between threads
+
+        # Thread header
+        lines.append(f"Thread ({item['id']}, {item['name']}, daemon={item['daemon']})")
+
+        # Add indented stack frames
+        stack_lines = item["stack"].strip().split("\n")
+        for frame_line in stack_lines:
+            lines.append(f"  {frame_line}")
+
+    formatted_output = "\n".join(lines)
+
     resp.return_json(
         {
-            "data": system.thread(),
+            "data": formatted_output,
             "code": SUCCESS_CODE,
         }
-    )  # type: ignore
+    )
 
 
 def ping(req: TelePyRequest, resp: TelePyResponse):
