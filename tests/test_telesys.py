@@ -461,3 +461,291 @@ class TestVMRead(TestBase):
 
         with self.assertRaises(TypeError):
             _telepysys.vm_read(123, 456)  # name must be string
+
+
+class TestVMWrite(TestBase):
+    """Test cases for vm_write function.
+
+    Note: vm_write only supports modifying GLOBAL variables, not local variables.
+    This is due to Python's internal design where f_locals is a snapshot dict.
+    """
+
+    def test_vm_write_local_variable_not_supported(self):
+        """Test that writing local variable returns False (not supported)."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            local_var = "initial_value"  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Try to write to a local variable (should fail)
+        success = _telepysys.vm_write(worker_thread.ident, "local_var", "updated_value")
+        self.assertFalse(success)  # Local variables cannot be modified
+
+        # Verify the local was not modified
+        result = _telepysys.vm_read(worker_thread.ident, "local_var")
+        self.assertEqual(result, "initial_value")
+
+        worker_thread.join()
+
+    def test_vm_write_global_variable(self):
+        """Test writing global variable in a worker thread."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        # Create a unique global variable for this test
+        globals()["test_vm_write_global_var"] = "initial_global"
+
+        def worker():
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Write to the global variable
+        success = _telepysys.vm_write(
+            worker_thread.ident, "test_vm_write_global_var", "updated_global"
+        )
+        self.assertTrue(success)
+
+        # Verify the write was successful
+        result = _telepysys.vm_read(worker_thread.ident, "test_vm_write_global_var")
+        self.assertEqual(result, "updated_global")
+
+        worker_thread.join()
+
+        # Cleanup
+        del globals()["test_vm_write_global_var"]
+
+    def test_vm_write_nonexistent_variable(self):
+        """Test writing to nonexistent variable returns False."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Try to write to a variable that doesn't exist
+        success = _telepysys.vm_write(
+            worker_thread.ident, "nonexistent_global_var", "some_value"
+        )
+        self.assertFalse(success)
+
+        # Verify the nonexistent variable still doesn't exist
+        result = _telepysys.vm_read(worker_thread.ident, "nonexistent_global_var")
+        self.assertIsNone(result)
+
+        worker_thread.join()
+
+    def test_vm_write_nonexistent_thread(self):
+        """Test writing to nonexistent thread returns False."""
+        from telepy import _telepysys
+
+        # Use a thread ID that definitely doesn't exist
+        nonexistent_tid = 999999999
+        success = _telepysys.vm_write(nonexistent_tid, "some_var", "some_value")
+        self.assertFalse(success)
+
+    def test_vm_write_various_types(self):
+        """Test writing various Python types to global variables."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        # Create global variables for testing
+        globals()["test_int_var"] = 0
+        globals()["test_str_var"] = ""
+        globals()["test_list_var"] = []
+        globals()["test_dict_var"] = {}
+        globals()["test_none_var"] = None
+
+        def worker():
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Test int
+        success = _telepysys.vm_write(worker_thread.ident, "test_int_var", 42)
+        self.assertTrue(success)
+        result = _telepysys.vm_read(worker_thread.ident, "test_int_var")
+        self.assertEqual(result, 42)
+
+        # Test string
+        success = _telepysys.vm_write(worker_thread.ident, "test_str_var", "test string")
+        self.assertTrue(success)
+        result = _telepysys.vm_read(worker_thread.ident, "test_str_var")
+        self.assertEqual(result, "test string")
+
+        # Test list
+        success = _telepysys.vm_write(worker_thread.ident, "test_list_var", [1, 2, 3])
+        self.assertTrue(success)
+        result = _telepysys.vm_read(worker_thread.ident, "test_list_var")
+        self.assertEqual(result, [1, 2, 3])
+
+        # Test dict
+        success = _telepysys.vm_write(
+            worker_thread.ident, "test_dict_var", {"key": "value"}
+        )
+        self.assertTrue(success)
+        result = _telepysys.vm_read(worker_thread.ident, "test_dict_var")
+        self.assertEqual(result, {"key": "value"})
+
+        # Test None
+        success = _telepysys.vm_write(worker_thread.ident, "test_none_var", None)
+        self.assertTrue(success)
+        result = _telepysys.vm_read(worker_thread.ident, "test_none_var")
+        self.assertIsNone(result)
+
+        worker_thread.join()
+
+        # Cleanup
+        del globals()["test_int_var"]
+        del globals()["test_str_var"]
+        del globals()["test_list_var"]
+        del globals()["test_dict_var"]
+        del globals()["test_none_var"]
+
+    def test_vm_write_multiple_updates(self):
+        """Test multiple writes to the same global variable."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        # Create a global variable
+        globals()["test_counter_var"] = 0
+
+        def worker():
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Write multiple times
+        for i in range(1, 6):
+            success = _telepysys.vm_write(worker_thread.ident, "test_counter_var", i * 10)
+            self.assertTrue(success)
+            result = _telepysys.vm_read(worker_thread.ident, "test_counter_var")
+            self.assertEqual(result, i * 10)
+
+        worker_thread.join()
+
+        # Cleanup
+        del globals()["test_counter_var"]
+
+    def test_vm_write_global_when_local_shadows(self):
+        """Test that globals can be modified even when locals shadow them."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        # Create a global variable
+        globals()["test_shadowed_var"] = "global_value"
+
+        def worker():
+            test_shadowed_var = "local_value"  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Write to the global (will succeed - writes to f_globals, not f_locals)
+        success = _telepysys.vm_write(
+            worker_thread.ident, "test_shadowed_var", "updated_value"
+        )
+        self.assertTrue(success)  # Should succeed - writes to globals
+
+        # vm_read will return the local value (locals take priority in read)
+        result = _telepysys.vm_read(worker_thread.ident, "test_shadowed_var")
+        self.assertEqual(result, "local_value")
+
+        # But the global was actually updated
+        self.assertEqual(globals()["test_shadowed_var"], "updated_value")
+
+        worker_thread.join()
+
+        # Cleanup
+        del globals()["test_shadowed_var"]
+
+    def test_vm_write_parameter_validation(self):
+        """Test parameter validation."""
+        from telepy import _telepysys
+
+        # Test with wrong number of arguments
+        with self.assertRaises(TypeError):
+            _telepysys.vm_write(123, "var")  # Missing value argument
+
+        with self.assertRaises(TypeError):
+            _telepysys.vm_write(123, "var", "value", "extra")  # Too many arguments
+
+        # Test with wrong types
+        with self.assertRaises(TypeError):
+            _telepysys.vm_write("not_an_int", "var", "value")  # tid must be int
+
+        with self.assertRaises(TypeError):
+            _telepysys.vm_write(123, 456, "value")  # name must be string
+
+    def test_vm_write_read_roundtrip(self):
+        """Test write followed by read to verify data integrity for globals."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        # Create a global variable
+        globals()["test_roundtrip_data"] = None
+
+        def worker():
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Test various data structures
+        test_cases = [
+            42,
+            "hello world",
+            [1, 2, 3, 4, 5],
+            {"a": 1, "b": 2, "c": 3},
+            (1, 2, 3),
+            {1, 2, 3, 4},
+            True,
+            False,
+            None,
+        ]
+
+        for test_value in test_cases:
+            success = _telepysys.vm_write(
+                worker_thread.ident, "test_roundtrip_data", test_value
+            )
+            self.assertTrue(success, f"Failed to write {test_value}")
+            result = _telepysys.vm_read(worker_thread.ident, "test_roundtrip_data")
+            self.assertEqual(result, test_value, f"Roundtrip failed for {test_value}")
+
+        worker_thread.join()
+
+        # Cleanup
+        del globals()["test_roundtrip_data"]
