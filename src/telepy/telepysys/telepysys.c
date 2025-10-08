@@ -1540,6 +1540,114 @@ telepysys_yield(PyObject* Py_UNUSED(module), PyObject* Py_UNUSED(args)) {
 PyDoc_STRVAR(telepysys_yield_doc,
              "Yield the current thread to other threads.");
 
+PyDoc_STRVAR(telepysys_vm_read_doc,
+             "Read a variable from the specified thread's frame.\n\n"
+             "Args:\n"
+             "    tid: Thread ID\n"
+             "    name: Variable name to read\n\n"
+             "Returns:\n"
+             "    The value of the variable if found, None otherwise");
+
+static PyObject*
+telepysys_vm_read(PyObject* Py_UNUSED(module),
+                  PyObject* const* args,
+                  Py_ssize_t nargs) {
+    // Check argument count
+    if (nargs != 2) {
+        PyErr_Format(PyExc_TypeError,
+                     "vm_read() takes exactly 2 arguments (%zd given)",
+                     nargs);
+        return NULL;
+    }
+
+    // First argument: tid (should be an integer)
+    PyObject* tid_obj = args[0];
+    if (!PyLong_Check(tid_obj)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "vm_read() argument 1 must be an integer (thread ID)");
+        return NULL;
+    }
+    unsigned long tid = PyLong_AsUnsignedLong(tid_obj);
+    if (tid == (unsigned long)-1 && PyErr_Occurred()) {
+        return NULL;
+    }
+
+    // Second argument: name (should be a string)
+    PyObject* name_obj = args[1];
+    if (!PyUnicode_Check(name_obj)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "vm_read() argument 2 must be a string (variable name)");
+        return NULL;
+    }
+    const char* name = PyUnicode_AsUTF8(name_obj);
+    if (name == NULL) {
+        return NULL;
+    }
+
+    // Get all thread frames - _PyThread_CurrentFrames() returns a new reference
+    PyObject* frames_dict = _PyThread_CurrentFrames();
+    if (frames_dict == NULL) {
+        return NULL;
+    }
+
+    // Get the frame for this tid - PyDict_GetItem returns a borrowed reference
+    PyObject* frame = PyDict_GetItem(frames_dict, tid_obj);
+
+    if (frame == NULL) {
+        // Thread not found
+        Py_DECREF(frames_dict);
+        Py_RETURN_NONE;
+    }
+
+    // frame is a borrowed reference, so we need to incref it before releasing
+    // frames_dict
+    Py_INCREF(frame);
+    Py_DECREF(frames_dict);  // Done with frames_dict
+
+    PyObject* result = NULL;
+
+    // Try to get locals - PyObject_GetAttrString returns a new reference
+    PyObject* locals = PyObject_GetAttrString(frame, "f_locals");
+    if (locals != NULL) {
+        // PyDict_GetItemString returns a borrowed reference
+        PyObject* value = PyDict_GetItemString(locals, name);
+        if (value != NULL) {
+            Py_INCREF(value);  // Convert borrowed reference to new reference
+            result = value;
+            Py_DECREF(locals);
+            Py_DECREF(frame);
+            return result;
+        }
+        Py_DECREF(locals);
+    } else {
+        // Clear the error if f_locals doesn't exist
+        PyErr_Clear();
+    }
+
+    // Try to get globals - PyObject_GetAttrString returns a new reference
+    PyObject* globals = PyObject_GetAttrString(frame, "f_globals");
+    if (globals != NULL) {
+        // PyDict_GetItemString returns a borrowed reference
+        PyObject* value = PyDict_GetItemString(globals, name);
+        if (value != NULL) {
+            Py_INCREF(value);  // Convert borrowed reference to new reference
+            result = value;
+            Py_DECREF(globals);
+            Py_DECREF(frame);
+            return result;
+        }
+        Py_DECREF(globals);
+    } else {
+        // Clear the error if f_globals doesn't exist
+        PyErr_Clear();
+    }
+
+    // Variable not found in either locals or globals
+    Py_DECREF(frame);
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef telepysys_methods[] = {
     {
         "current_frames",
@@ -1564,6 +1672,12 @@ static PyMethodDef telepysys_methods[] = {
         (PyCFunction)telepysys_yield,
         METH_NOARGS,
         telepysys_yield_doc,
+    },
+    {
+        "vm_read",
+        _PyCFunction_CAST(telepysys_vm_read),
+        METH_FASTCALL,
+        telepysys_vm_read_doc,
     },
     {
         NULL,

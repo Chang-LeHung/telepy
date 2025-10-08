@@ -26,6 +26,31 @@ def sched_yield() -> None:
     Relax to call me, we handle the GIL properly.
     """
 
+def vm_read(tid: int, name: str) -> object | None:
+    """
+    Read a variable from the specified thread's frame.
+
+    Args:
+        tid: Thread ID (thread identifier)
+        name: Variable name to read
+
+    Returns:
+        The value of the variable if found in the thread's locals or globals,
+        None otherwise (including when the thread doesn't exist)
+
+    Example:
+        >>> import threading
+        >>> from telepy import _telepysys
+        >>> def worker():
+        ...     local_var = "Hello"
+        ...     time.sleep(2)
+        >>> thread = threading.Thread(target=worker)
+        >>> thread.start()
+        >>> value = _telepysys.vm_read(thread.ident, "local_var")
+        >>> print(value)  # "Hello"
+    """
+    ...
+
 class Sampler:
     def __init__(self) -> None:
         # sampling interval in microseconds
