@@ -749,3 +749,184 @@ class TestVMWrite(TestBase):
 
         # Cleanup
         del globals()["test_roundtrip_data"]
+
+
+class TestTopNamespace(TestBase):
+    """Test cases for top_namespace function."""
+
+    def test_top_namespace_get_locals(self):
+        """Test getting locals from a worker thread."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            local_var1 = "test"  # noqa: F841
+            local_var2 = 42  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Get locals (flag=0)
+        locals_dict = _telepysys.top_namespace(worker_thread.ident, 0)
+        self.assertIsNotNone(locals_dict)
+        self.assertIsInstance(locals_dict, dict)
+        self.assertIn("local_var1", locals_dict)
+        self.assertEqual(locals_dict["local_var1"], "test")
+        self.assertIn("local_var2", locals_dict)
+        self.assertEqual(locals_dict["local_var2"], 42)
+
+        worker_thread.join()
+
+    def test_top_namespace_get_globals(self):
+        """Test getting globals from a worker thread."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Get globals (flag=1)
+        globals_dict = _telepysys.top_namespace(worker_thread.ident, 1)
+        self.assertIsNotNone(globals_dict)
+        self.assertIsInstance(globals_dict, dict)
+        # Should have standard globals like __name__, __builtins__, etc.
+        self.assertIn("__name__", globals_dict)
+        self.assertIn("__builtins__", globals_dict)
+
+        worker_thread.join()
+
+    def test_top_namespace_nonexistent_thread(self):
+        """Test with nonexistent thread returns None."""
+        from telepy import _telepysys
+
+        nonexistent_tid = 999999999
+        result = _telepysys.top_namespace(nonexistent_tid, 0)
+        self.assertIsNone(result)
+
+        result = _telepysys.top_namespace(nonexistent_tid, 1)
+        self.assertIsNone(result)
+
+    def test_top_namespace_parameter_validation(self):
+        """Test parameter validation."""
+        from telepy import _telepysys
+
+        # Test with wrong number of arguments
+        with self.assertRaises(TypeError):
+            _telepysys.top_namespace(123)  # Missing flag argument
+
+        with self.assertRaises(TypeError):
+            _telepysys.top_namespace(123, 0, "extra")  # Too many arguments
+
+        # Test with wrong types
+        with self.assertRaises(TypeError):
+            _telepysys.top_namespace("not_an_int", 0)  # tid must be int
+
+        with self.assertRaises(TypeError):
+            _telepysys.top_namespace(123, "not_an_int")  # flag must be int
+
+        # Test with invalid flag value
+        with self.assertRaises(ValueError):
+            _telepysys.top_namespace(123, 2)  # flag must be 0 or 1
+
+        with self.assertRaises(ValueError):
+            _telepysys.top_namespace(123, -1)  # flag must be 0 or 1
+
+    def test_top_namespace_locals_vs_globals(self):
+        """Test that locals and globals are different."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            local_only = "local"  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        locals_dict = _telepysys.top_namespace(worker_thread.ident, 0)
+        globals_dict = _telepysys.top_namespace(worker_thread.ident, 1)
+
+        # Local variable should be in locals but not in globals
+        self.assertIn("local_only", locals_dict)
+        self.assertNotIn("local_only", globals_dict)
+
+        # Globals should have __name__ but locals shouldn't
+        self.assertNotIn("__name__", locals_dict)
+        self.assertIn("__name__", globals_dict)
+
+        worker_thread.join()
+
+    def test_top_namespace_modify_globals(self):
+        """Test that modifying returned globals affects the thread."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        # Create a global variable
+        globals()["test_top_namespace_var"] = "initial"
+
+        def worker():
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Get globals and modify it
+        globals_dict = _telepysys.top_namespace(worker_thread.ident, 1)
+        self.assertEqual(globals_dict["test_top_namespace_var"], "initial")
+
+        # Modify through the returned dict
+        globals_dict["test_top_namespace_var"] = "modified"
+
+        # Verify the modification took effect
+        result = _telepysys.vm_read(worker_thread.ident, "test_top_namespace_var")
+        self.assertEqual(result, "modified")
+
+        worker_thread.join()
+
+        # Cleanup
+        del globals()["test_top_namespace_var"]
+
+    def test_top_namespace_with_various_local_types(self):
+        """Test with various types of local variables."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            int_var = 42  # noqa: F841
+            str_var = "test"  # noqa: F841
+            list_var = [1, 2, 3]  # noqa: F841
+            dict_var = {"key": "value"}  # noqa: F841
+            none_var = None  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        locals_dict = _telepysys.top_namespace(worker_thread.ident, 0)
+
+        self.assertEqual(locals_dict["int_var"], 42)
+        self.assertEqual(locals_dict["str_var"], "test")
+        self.assertEqual(locals_dict["list_var"], [1, 2, 3])
+        self.assertEqual(locals_dict["dict_var"], {"key": "value"})
+        self.assertIsNone(locals_dict["none_var"])
+
+        worker_thread.join()
