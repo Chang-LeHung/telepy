@@ -38,9 +38,78 @@ def stack(req: TelePyRequest, resp: TelePyResponse):
 
     The response will be a formatted string showing each thread's information
     and its complete stack trace with indentation for better readability.
+
+    Args:
+        --strip-site-packages, -s: Remove sys.base_prefix from paths
+        --strip-cwd, -c: Remove current working directory prefix
+        --help, -h: Show help message
     """
+    import argparse
+    import os
+    import sys
+    from argparse import ArgumentError
+
+    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser.add_argument(
+        "--strip-site-packages",
+        "-s",
+        action="store_true",
+        default=False,
+        help="Remove sys.base_prefix from paths",
+    )
+    parser.add_argument(
+        "--strip-cwd",
+        "-c",
+        action="store_true",
+        default=False,
+        help="Remove current working directory prefix from stack traces",
+    )
+    parser.add_argument(
+        "--help",
+        "-h",
+        action="store_true",
+        default=False,
+        help="Show this help message and exit",
+    )
+
+    args_str = req.headers.get("args", "").strip()
+    args_list = args_str.split() if args_str else []
+
+    try:
+        parse_args = parser.parse_args(args_list)
+    except ArgumentError as e:
+        resp.return_json({"data": e.message, "code": ERROR_CODE})
+        return
+
+    if parse_args.help:
+        resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
+        return
+
     system = cast(TelePySystem, req.app.lookup(TELEPY_SYSTEM))
     thread_data = system.thread()
+
+    # Get sys.base_prefix for stripping
+    base_prefix = sys.base_prefix if parse_args.strip_site_packages else None
+
+    # Get current working directory for stripping
+    cwd = os.getcwd() if parse_args.strip_cwd else None
+
+    def strip_path(path: str) -> str:
+        """Strip common path prefixes from a file path.
+
+        Applies path stripping based on command-line flags:
+        - strip_site_packages: Remove sys.base_prefix from paths
+        - strip_cwd: Remove current working directory prefix
+        """
+        # Strip sys.base_prefix (if requested)
+        if base_prefix and path.startswith(base_prefix):
+            return path[len(base_prefix) :].lstrip("/")
+
+        # Strip current working directory (if requested)
+        if cwd and path.startswith(cwd):
+            return path[len(cwd) :].lstrip("/")
+
+        return path
 
     # Format the stack traces with simple indentation
     lines = []
@@ -51,9 +120,16 @@ def stack(req: TelePyRequest, resp: TelePyResponse):
         # Thread header
         lines.append(f"Thread ({item['id']}, {item['name']}, daemon={item['daemon']})")
 
-        # Add indented stack frames
+        # Add indented stack frames with path stripping
         stack_lines = item["stack"].strip().split("\n")
         for frame_line in stack_lines:
+            # Always strip standard lib paths, conditionally strip cwd
+            # Frame format: "path:line function_name"
+            if ":" in frame_line:
+                path_part, rest = frame_line.split(":", 1)
+                stripped_path = strip_path(path_part)
+                frame_line = f"{stripped_path}:{rest}"
+
             lines.append(f"  {frame_line}")
 
     formatted_output = "\n".join(lines)
