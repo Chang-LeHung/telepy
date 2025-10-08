@@ -664,3 +664,30 @@ class TestMonitor(TestBase):
         self.compound_template_command(
             "gc-monitor", ["-x"], expected_data=["unrecognized arguments"]
         )
+
+    def test_gc_objects_value_error_exception(self):
+        """Test gc-objects ValueError exception handling from analyzer."""
+        from unittest.mock import MagicMock, patch
+
+        from telepy.monitor import gc_objects
+
+        # Create mock request and response objects
+        req = MagicMock()
+        req.headers = {"args": ""}
+        resp = MagicMock()
+
+        # Mock the analyzer to raise ValueError
+        with patch("telepy.monitor.get_analyzer") as mock_get_analyzer:
+            mock_analyzer = mock_get_analyzer.return_value
+            mock_analyzer.get_object_stats_formatted.side_effect = ValueError(
+                "Test ValueError from analyzer"
+            )
+
+            # Call the function directly
+            gc_objects(req, resp)
+
+            # Verify error response was returned
+            resp.return_json.assert_called_once()
+            call_args = resp.return_json.call_args[0][0]
+            self.assertEqual(call_args["code"], -1)  # ERROR_CODE
+            self.assertIn("Test ValueError from analyzer", call_args["data"])
