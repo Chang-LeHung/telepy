@@ -1648,6 +1648,114 @@ telepysys_vm_read(PyObject* Py_UNUSED(module),
     Py_RETURN_NONE;
 }
 
+PyDoc_STRVAR(telepysys_vm_write_doc,
+             "Write a global variable in the specified thread's frame.\n\n"
+             "Args:\n"
+             "    tid: Thread ID\n"
+             "    name: Variable name to write (must be in f_globals)\n"
+             "    value: Value to write\n\n"
+             "Returns:\n"
+             "    True if write succeeded, False otherwise\n\n"
+             "Note:\n"
+             "    Only global variables can be modified. Local variables\n"
+             "    cannot be updated because f_locals is a snapshot dict.");
+
+static PyObject*
+telepysys_vm_write(PyObject* Py_UNUSED(module),
+                   PyObject* const* args,
+                   Py_ssize_t nargs) {
+    // Check argument count
+    if (nargs != 3) {
+        PyErr_Format(PyExc_TypeError,
+                     "vm_write() takes exactly 3 arguments (%zd given)",
+                     nargs);
+        return NULL;
+    }
+
+    // First argument: tid (should be an integer)
+    PyObject* tid_obj = args[0];
+    if (!PyLong_Check(tid_obj)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "vm_write() argument 1 must be an integer (thread ID)");
+        return NULL;
+    }
+    unsigned long tid = PyLong_AsUnsignedLong(tid_obj);
+    if (tid == (unsigned long)-1 && PyErr_Occurred()) {
+        return NULL;
+    }
+
+    // Second argument: name (should be a string)
+    PyObject* name_obj = args[1];
+    if (!PyUnicode_Check(name_obj)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "vm_write() argument 2 must be a string (variable name)");
+        return NULL;
+    }
+    const char* name = PyUnicode_AsUTF8(name_obj);
+    if (name == NULL) {
+        return NULL;
+    }
+
+    // Third argument: value (can be any Python object)
+    PyObject* value = args[2];
+
+    // Get all thread frames - _PyThread_CurrentFrames() returns a new reference
+    PyObject* frames_dict = _PyThread_CurrentFrames();
+    if (frames_dict == NULL) {
+        return NULL;
+    }
+
+    // Get the frame for this tid - PyDict_GetItem returns a borrowed reference
+    PyObject* frame = PyDict_GetItem(frames_dict, tid_obj);
+
+    if (frame == NULL) {
+        // Thread not found
+        Py_DECREF(frames_dict);
+        Py_RETURN_FALSE;
+    }
+
+    // frame is a borrowed reference, so we need to incref it before releasing
+    // frames_dict
+    Py_INCREF(frame);
+    Py_DECREF(frames_dict);  // Done with frames_dict
+
+    int result = 0;
+
+    // NOTE: We only support updating globals because frame locals (f_locals)
+    // is a snapshot dict and modifying it doesn't affect the actual frame's
+    // fast locals (C-level local variables). To modify locals, we would need
+    // to use PyFrame_LocalsToFast() which is not part of the stable ABI.
+
+    // Get globals - PyObject_GetAttrString returns a new reference
+    PyObject* globals = PyObject_GetAttrString(frame, "f_globals");
+    if (globals != NULL) {
+        // Check if variable exists in globals
+        PyObject* existing_value = PyDict_GetItemString(globals, name);
+        if (existing_value != NULL) {
+            // Variable exists in globals, update it
+            // PyDict_SetItemString increfs value, so we don't need to
+            result = PyDict_SetItemString(globals, name, value);
+            Py_DECREF(globals);
+            Py_DECREF(frame);
+            if (result == 0) {
+                Py_RETURN_TRUE;
+            } else {
+                return NULL;  // Error occurred
+            }
+        }
+        Py_DECREF(globals);
+    } else {
+        // Clear the error if f_globals doesn't exist
+        PyErr_Clear();
+    }
+
+    // Variable not found in globals
+    Py_DECREF(frame);
+    Py_RETURN_FALSE;
+}
+
 static PyMethodDef telepysys_methods[] = {
     {
         "current_frames",
@@ -1678,6 +1786,12 @@ static PyMethodDef telepysys_methods[] = {
         _PyCFunction_CAST(telepysys_vm_read),
         METH_FASTCALL,
         telepysys_vm_read_doc,
+    },
+    {
+        "vm_write",
+        _PyCFunction_CAST(telepysys_vm_write),
+        METH_FASTCALL,
+        telepysys_vm_write_doc,
     },
     {
         NULL,

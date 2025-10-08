@@ -51,6 +51,45 @@ def vm_read(tid: int, name: str) -> object | None:
     """
     ...
 
+def vm_write(tid: int, name: str, value: object) -> bool:
+    """
+    Write a variable to the specified thread's frame.
+
+    Args:
+        tid: Thread ID (thread identifier)
+        name: Variable name to write
+        value: Value to assign to the variable
+
+    Returns:
+        True if the variable was successfully updated,
+        False if the variable was not found or the thread doesn't exist
+
+    Note:
+        - This function can only UPDATE existing GLOBAL variables reliably
+        - Local variables in frames cannot be modified due to Python's design
+        - Frame locals are stored in fast locals (C-level) which are read-only
+        - Only variables in f_globals can be reliably updated
+
+    Limitations:
+        - Modifying local variables is not supported (f_locals is a snapshot)
+        - Only works for global variables in the thread's f_globals
+
+    Example:
+        >>> import threading
+        >>> from telepy import _telepysys
+        >>> global_counter = 0
+        >>> def worker():
+        ...     global global_counter
+        ...     time.sleep(5)
+        >>> thread = threading.Thread(target=worker)
+        >>> thread.start()
+        >>> success = _telepysys.vm_write(thread.ident, "global_counter", 42)
+        >>> print(success)  # True
+        >>> value = _telepysys.vm_read(thread.ident, "global_counter")
+        >>> print(value)  # 42
+    """
+    ...
+
 class Sampler:
     def __init__(self) -> None:
         # sampling interval in microseconds
