@@ -235,7 +235,7 @@ class Environment:
                     logger.log_success_panel(
                         "PyTorch profiler middleware registered successfully"
                     )
-            except ImportError:
+            except ImportError:  # pragma: no cover
                 if config.verbose:
                     logger.log_warning_panel(
                         "PyTorch not available. PyTorch profiler will be disabled."
