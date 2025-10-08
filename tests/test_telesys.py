@@ -836,10 +836,10 @@ class TestTopNamespace(TestBase):
 
         # Test with invalid flag value
         with self.assertRaises(ValueError):
-            _telepysys.top_namespace(123, 2)  # flag must be 0 or 1
+            _telepysys.top_namespace(123, 3)  # flag must be 0, 1, or 2
 
         with self.assertRaises(ValueError):
-            _telepysys.top_namespace(123, -1)  # flag must be 0 or 1
+            _telepysys.top_namespace(123, -1)  # flag must be 0, 1, or 2
 
     def test_top_namespace_locals_vs_globals(self):
         """Test that locals and globals are different."""
@@ -930,3 +930,159 @@ class TestTopNamespace(TestBase):
         self.assertIsNone(locals_dict["none_var"])
 
         worker_thread.join()
+
+    def test_top_namespace_get_both(self):
+        """Test getting both locals and globals from a worker thread (flag=2)."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        # Create a global variable for this test
+        globals()["test_both_global_var"] = "global_value"
+
+        def worker():
+            local_var1 = "local_test"  # noqa: F841
+            local_var2 = 99  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Get both locals and globals (flag=2)
+        result = _telepysys.top_namespace(worker_thread.ident, 2)
+        self.assertIsNotNone(result)
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 2)
+
+        locals_dict, globals_dict = result
+
+        # Verify locals
+        self.assertIsInstance(locals_dict, dict)
+        self.assertIn("local_var1", locals_dict)
+        self.assertEqual(locals_dict["local_var1"], "local_test")
+        self.assertIn("local_var2", locals_dict)
+        self.assertEqual(locals_dict["local_var2"], 99)
+
+        # Verify globals
+        self.assertIsInstance(globals_dict, dict)
+        self.assertIn("__name__", globals_dict)
+        self.assertIn("test_both_global_var", globals_dict)
+        self.assertEqual(globals_dict["test_both_global_var"], "global_value")
+
+        worker_thread.join()
+
+        # Cleanup
+        del globals()["test_both_global_var"]
+
+    def test_top_namespace_flag2_nonexistent_thread(self):
+        """Test flag=2 with nonexistent thread returns None."""
+        from telepy import _telepysys
+
+        nonexistent_tid = 999999999
+        result = _telepysys.top_namespace(nonexistent_tid, 2)
+        self.assertIsNone(result)
+
+    def test_top_namespace_flag2_locals_vs_globals(self):
+        """Test that flag=2 returns distinct locals and globals."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            local_only = "local_value"  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        result = _telepysys.top_namespace(worker_thread.ident, 2)
+        self.assertIsNotNone(result)
+        self.assertIsInstance(result, tuple)
+
+        locals_dict, globals_dict = result
+
+        # Local variable should be in locals but not in globals
+        self.assertIn("local_only", locals_dict)
+        self.assertNotIn("local_only", globals_dict)
+
+        # Globals should have __name__ but locals shouldn't
+        self.assertNotIn("__name__", locals_dict)
+        self.assertIn("__name__", globals_dict)
+
+        worker_thread.join()
+
+    def test_top_namespace_flag2_modify_globals(self):
+        """Test that modifying globals from flag=2 result affects the thread."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        # Create a global variable
+        globals()["test_flag2_modify_var"] = "initial"
+
+        def worker():
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Get both locals and globals
+        result = _telepysys.top_namespace(worker_thread.ident, 2)
+        locals_dict, globals_dict = result
+
+        self.assertEqual(globals_dict["test_flag2_modify_var"], "initial")
+
+        # Modify through the returned globals dict
+        globals_dict["test_flag2_modify_var"] = "modified"
+
+        # Verify the modification took effect
+        read_result = _telepysys.vm_read(worker_thread.ident, "test_flag2_modify_var")
+        self.assertEqual(read_result, "modified")
+
+        worker_thread.join()
+
+        # Cleanup
+        del globals()["test_flag2_modify_var"]
+
+    def test_top_namespace_flag2_all_flags_consistency(self):
+        """Test that flag=2 returns the same data as flag=0 and flag=1 separately."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        # Create a global variable
+        globals()["test_consistency_var"] = "consistent"
+
+        def worker():
+            local_var = "local_data"  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Get locals only (flag=0)
+        locals_only = _telepysys.top_namespace(worker_thread.ident, 0)
+
+        # Get globals only (flag=1)
+        globals_only = _telepysys.top_namespace(worker_thread.ident, 1)
+
+        # Get both (flag=2)
+        both = _telepysys.top_namespace(worker_thread.ident, 2)
+        locals_from_both, globals_from_both = both
+
+        # Verify consistency
+        self.assertEqual(locals_only, locals_from_both)
+        self.assertEqual(globals_only, globals_from_both)
+
+        worker_thread.join()
+
+        # Cleanup
+        del globals()["test_consistency_var"]
