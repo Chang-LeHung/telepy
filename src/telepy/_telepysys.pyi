@@ -90,6 +90,41 @@ def vm_write(tid: int, name: str, value: object) -> bool:
     """
     ...
 
+def top_namespace(tid: int, flag: int) -> dict[str, object] | None:
+    """
+    Get the top frame's namespace (locals or globals) for a thread.
+
+    Args:
+        tid: Thread ID (thread identifier)
+        flag: 0 for locals, 1 for globals
+
+    Returns:
+        The namespace dictionary (f_locals or f_globals), or None if the
+        thread doesn't exist
+
+    Note:
+        - flag=0 returns f_locals (a snapshot of local variables)
+        - flag=1 returns f_globals (the actual global namespace)
+        - The returned dict is the actual namespace object, modifications
+          to f_globals will affect the thread's global variables
+        - Modifications to f_locals won't affect actual local variables
+
+    Example:
+        >>> import threading
+        >>> from telepy import _telepysys
+        >>> def worker():
+        ...     local_var = "test"
+        ...     global_var = "global"
+        ...     time.sleep(5)
+        >>> thread = threading.Thread(target=worker)
+        >>> thread.start()
+        >>> locals_dict = _telepysys.top_namespace(thread.ident, 0)
+        >>> globals_dict = _telepysys.top_namespace(thread.ident, 1)
+        >>> print(locals_dict.get('local_var'))  # "test"
+        >>> print(globals_dict.get('__name__'))  # "__main__"
+    """
+    ...
+
 class Sampler:
     def __init__(self) -> None:
         # sampling interval in microseconds

@@ -1756,6 +1756,93 @@ telepysys_vm_write(PyObject* Py_UNUSED(module),
     Py_RETURN_FALSE;
 }
 
+PyDoc_STRVAR(
+    telepysys_top_namespace_doc,
+    "Get the top frame's namespace (locals or globals) for a thread.\n\n"
+    "Args:\n"
+    "    tid: Thread ID\n"
+    "    flag: 0 for locals, 1 for globals\n\n"
+    "Returns:\n"
+    "    dict: The namespace dictionary, or None if thread not found");
+
+static PyObject*
+telepysys_top_namespace(PyObject* Py_UNUSED(module),
+                        PyObject* const* args,
+                        Py_ssize_t nargs) {
+    // Check argument count
+    if (nargs != 2) {
+        PyErr_Format(PyExc_TypeError,
+                     "top_namespace() takes exactly 2 arguments (%zd given)",
+                     nargs);
+        return NULL;
+    }
+
+    // First argument: tid (should be an integer)
+    PyObject* tid_obj = args[0];
+    if (!PyLong_Check(tid_obj)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "top_namespace() argument 1 must be an integer (thread ID)");
+        return NULL;
+    }
+
+    // Second argument: flag (should be an integer, 0 or 1)
+    PyObject* flag_obj = args[1];
+    if (!PyLong_Check(flag_obj)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "top_namespace() argument 2 must be an integer (0 or 1)");
+        return NULL;
+    }
+    long flag = PyLong_AsLong(flag_obj);
+    if (flag != 0 && flag != 1) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "top_namespace() argument 2 must be 0 (locals) or 1 (globals)");
+        return NULL;
+    }
+
+    // Get all thread frames - _PyThread_CurrentFrames() returns a new reference
+    PyObject* frames_dict = _PyThread_CurrentFrames();
+    if (frames_dict == NULL) {
+        return NULL;
+    }
+
+    // Get the frame for this tid - PyDict_GetItem returns a borrowed reference
+    PyObject* frame = PyDict_GetItem(frames_dict, tid_obj);
+
+    if (frame == NULL) {
+        // Thread not found
+        Py_DECREF(frames_dict);
+        Py_RETURN_NONE;
+    }
+
+    // frame is a borrowed reference, so we need to incref it before releasing
+    // frames_dict
+    Py_INCREF(frame);
+    Py_DECREF(frames_dict);  // Done with frames_dict
+
+    PyObject* result = NULL;
+
+    if (flag == 0) {
+        // Return f_locals - PyObject_GetAttrString returns a new reference
+        result = PyObject_GetAttrString(frame, "f_locals");
+    } else {
+        // Return f_globals - PyObject_GetAttrString returns a new reference
+        result = PyObject_GetAttrString(frame, "f_globals");
+    }
+
+    Py_DECREF(frame);
+
+    if (result == NULL) {
+        // Clear the error if attribute doesn't exist
+        PyErr_Clear();
+        Py_RETURN_NONE;
+    }
+
+    return result;  // result is already a new reference
+}
+
 static PyMethodDef telepysys_methods[] = {
     {
         "current_frames",
@@ -1792,6 +1879,12 @@ static PyMethodDef telepysys_methods[] = {
         _PyCFunction_CAST(telepysys_vm_write),
         METH_FASTCALL,
         telepysys_vm_write_doc,
+    },
+    {
+        "top_namespace",
+        _PyCFunction_CAST(telepysys_top_namespace),
+        METH_FASTCALL,
+        telepysys_top_namespace_doc,
     },
     {
         NULL,
