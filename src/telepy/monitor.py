@@ -33,6 +33,9 @@ def register_endpoint(path: str):
     Args:
         path: The endpoint path (e.g., "/shutdown", "/stack")
 
+    Raises:
+        ValueError: If the path is already registered
+
     Example:
         @register_endpoint("/my-endpoint")
         def my_handler(req: TelePyRequest, resp: TelePyResponse):
@@ -42,6 +45,11 @@ def register_endpoint(path: str):
     def decorator(
         func: Callable[[TelePyRequest, TelePyResponse], None],
     ) -> Callable[[TelePyRequest, TelePyResponse], None]:
+        if path in ENDPOINT_REGISTRY:
+            raise ValueError(
+                f"Endpoint path '{path}' is already registered. "
+                f"Cannot overwrite existing endpoint."
+            )
         ENDPOINT_REGISTRY[path] = func
         return func
 
