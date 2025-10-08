@@ -162,6 +162,11 @@ gc_stats_calculate_stats(PyObject* Py_UNUSED(self),
                         Py_DECREF(size_long);
                     } else {
                         long current_mem = PyLong_AsLong(mem);
+                        if (current_mem == -1 && PyErr_Occurred()) {
+                            Py_DECREF(size_obj);
+                            Py_DECREF(py_type_name);
+                            goto error;
+                        }
                         PyObject* new_mem =
                             PyLong_FromLong(current_mem + size);
                         if (new_mem == NULL) {
