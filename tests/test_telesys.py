@@ -444,6 +444,97 @@ class TestVMRead(TestBase):
 
         worker_thread.join()
 
+    def test_vm_read_with_level(self):
+        """Test reading from different frame levels."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def inner_function():
+            inner_var = "inner_value"  # noqa: F841
+            time.sleep(1)
+
+        def outer_function():
+            outer_var = "outer_value"  # noqa: F841
+            inner_function()
+
+        worker_thread = threading.Thread(target=outer_function)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Read from top frame (level=0, inside inner_function)
+        result = _telepysys.vm_read(worker_thread.ident, "inner_var", 0)
+        self.assertEqual(result, "inner_value")
+
+        # Read from previous frame (level=1, inside outer_function)
+        result = _telepysys.vm_read(worker_thread.ident, "outer_var", 1)
+        self.assertEqual(result, "outer_value")
+
+        # inner_var should not be accessible from level=1
+        result = _telepysys.vm_read(worker_thread.ident, "inner_var", 1)
+        self.assertIsNone(result)
+
+        worker_thread.join()
+
+    def test_vm_read_level_default(self):
+        """Test that level defaults to 0 when not specified."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            test_var = "test_value"  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Call without level argument (should default to 0)
+        result1 = _telepysys.vm_read(worker_thread.ident, "test_var")
+        # Call with explicit level=0
+        result2 = _telepysys.vm_read(worker_thread.ident, "test_var", 0)
+
+        self.assertEqual(result1, result2)
+        self.assertEqual(result1, "test_value")
+
+        worker_thread.join()
+
+    def test_vm_read_level_too_deep(self):
+        """Test that reading from a level that's too deep returns None."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            local_var = "value"  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Try to read from a very deep level (should return None)
+        result = _telepysys.vm_read(worker_thread.ident, "local_var", 100)
+        self.assertIsNone(result)
+
+        worker_thread.join()
+
+    def test_vm_read_level_validation(self):
+        """Test level parameter validation."""
+        from telepy import _telepysys
+
+        # Test with negative level
+        with self.assertRaises(ValueError):
+            _telepysys.vm_read(123, "var", -1)
+
+        # Test with non-integer level
+        with self.assertRaises(TypeError):
+            _telepysys.vm_read(123, "var", "not_an_int")
+
     def test_vm_read_parameter_validation(self):
         """Test parameter validation."""
         from telepy import _telepysys
@@ -453,7 +544,7 @@ class TestVMRead(TestBase):
             _telepysys.vm_read(123)  # Missing name argument
 
         with self.assertRaises(TypeError):
-            _telepysys.vm_read(123, "var", "extra")  # Too many arguments
+            _telepysys.vm_read(123, "var", 0, "extra")  # Too many arguments
 
         # Test with wrong types
         with self.assertRaises(TypeError):
