@@ -90,21 +90,26 @@ def vm_write(tid: int, name: str, value: object) -> bool:
     """
     ...
 
-def top_namespace(tid: int, flag: int) -> dict[str, object] | None:
+def top_namespace(
+    tid: int, flag: int
+) -> dict[str, object] | tuple[dict[str, object], dict[str, object]] | None:
     """
     Get the top frame's namespace (locals or globals) for a thread.
 
     Args:
         tid: Thread ID (thread identifier)
-        flag: 0 for locals, 1 for globals
+        flag: 0 for locals, 1 for globals, 2 for both
 
     Returns:
-        The namespace dictionary (f_locals or f_globals), or None if the
-        thread doesn't exist
+        - When flag=0: dict containing f_locals
+        - When flag=1: dict containing f_globals
+        - When flag=2: tuple of (f_locals, f_globals)
+        - None if the thread doesn't exist
 
     Note:
         - flag=0 returns f_locals (a snapshot of local variables)
         - flag=1 returns f_globals (the actual global namespace)
+        - flag=2 returns both as a tuple: (f_locals, f_globals)
         - The returned dict is the actual namespace object, modifications
           to f_globals will affect the thread's global variables
         - Modifications to f_locals won't affect actual local variables
@@ -120,8 +125,11 @@ def top_namespace(tid: int, flag: int) -> dict[str, object] | None:
         >>> thread.start()
         >>> locals_dict = _telepysys.top_namespace(thread.ident, 0)
         >>> globals_dict = _telepysys.top_namespace(thread.ident, 1)
+        >>> both = _telepysys.top_namespace(thread.ident, 2)
         >>> print(locals_dict.get('local_var'))  # "test"
         >>> print(globals_dict.get('__name__'))  # "__main__"
+        >>> print(both[0].get('local_var'))  # "test" (locals)
+        >>> print(both[1].get('__name__'))  # "__main__" (globals)
     """
     ...
 

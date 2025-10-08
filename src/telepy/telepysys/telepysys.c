@@ -1761,9 +1761,11 @@ PyDoc_STRVAR(
     "Get the top frame's namespace (locals or globals) for a thread.\n\n"
     "Args:\n"
     "    tid: Thread ID\n"
-    "    flag: 0 for locals, 1 for globals\n\n"
+    "    flag: 0 for locals, 1 for globals, 2 for both\n\n"
     "Returns:\n"
-    "    dict: The namespace dictionary, or None if thread not found");
+    "    dict: The namespace dictionary when flag is 0 or 1\n"
+    "    tuple: A tuple of (locals, globals) when flag is 2\n"
+    "    None: If thread not found");
 
 static PyObject*
 telepysys_top_namespace(PyObject* Py_UNUSED(module),
@@ -1786,19 +1788,19 @@ telepysys_top_namespace(PyObject* Py_UNUSED(module),
         return NULL;
     }
 
-    // Second argument: flag (should be an integer, 0 or 1)
+    // Second argument: flag (should be an integer, 0, 1, or 2)
     PyObject* flag_obj = args[1];
     if (!PyLong_Check(flag_obj)) {
         PyErr_SetString(
             PyExc_TypeError,
-            "top_namespace() argument 2 must be an integer (0 or 1)");
+            "top_namespace() argument 2 must be an integer (0, 1, or 2)");
         return NULL;
     }
     long flag = PyLong_AsLong(flag_obj);
-    if (flag != 0 && flag != 1) {
-        PyErr_SetString(
-            PyExc_ValueError,
-            "top_namespace() argument 2 must be 0 (locals) or 1 (globals)");
+    if (flag != 0 && flag != 1 && flag != 2) {
+        PyErr_SetString(PyExc_ValueError,
+                        "top_namespace() argument 2 must be 0 (locals), 1 "
+                        "(globals), or 2 (both)");
         return NULL;
     }
 
@@ -1827,20 +1829,48 @@ telepysys_top_namespace(PyObject* Py_UNUSED(module),
     if (flag == 0) {
         // Return f_locals - PyObject_GetAttrString returns a new reference
         result = PyObject_GetAttrString(frame, "f_locals");
-    } else {
+        Py_DECREF(frame);
+        if (result == NULL) {
+            // Clear the error if attribute doesn't exist
+            PyErr_Clear();
+            Py_RETURN_NONE;
+        }
+        return result;  // result is already a new reference
+    } else if (flag == 1) {
         // Return f_globals - PyObject_GetAttrString returns a new reference
         result = PyObject_GetAttrString(frame, "f_globals");
+        Py_DECREF(frame);
+        if (result == NULL) {
+            // Clear the error if attribute doesn't exist
+            PyErr_Clear();
+            Py_RETURN_NONE;
+        }
+        return result;  // result is already a new reference
+    } else {
+        // flag == 2: Return both locals and globals as a tuple
+        PyObject* locals = PyObject_GetAttrString(frame, "f_locals");
+        PyObject* globals = PyObject_GetAttrString(frame, "f_globals");
+        Py_DECREF(frame);
+
+        if (locals == NULL || globals == NULL) {
+            // Clear the error if attribute doesn't exist
+            PyErr_Clear();
+            Py_XDECREF(locals);
+            Py_XDECREF(globals);
+            Py_RETURN_NONE;
+        }
+
+        // Create a tuple containing (locals, globals)
+        result = PyTuple_Pack(2, locals, globals);
+        Py_DECREF(locals);
+        Py_DECREF(globals);
+
+        if (result == NULL) {
+            return NULL;
+        }
+
+        return result;
     }
-
-    Py_DECREF(frame);
-
-    if (result == NULL) {
-        // Clear the error if attribute doesn't exist
-        PyErr_Clear();
-        Py_RETURN_NONE;
-    }
-
-    return result;  // result is already a new reference
 }
 
 static PyMethodDef telepysys_methods[] = {
