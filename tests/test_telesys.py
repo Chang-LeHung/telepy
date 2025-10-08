@@ -288,3 +288,176 @@ class TelepyMainThread(TestBase):
         t = threading.Thread(target=test)
         t.start()
         t.join()
+
+
+class TestVMRead(TestBase):
+    """Test cases for vm_read function."""
+
+    def test_vm_read_local_variable(self):
+        """Test reading local variable from a worker thread."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            local_var = "I am a local variable"  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        result = _telepysys.vm_read(worker_thread.ident, "local_var")
+        self.assertEqual(result, "I am a local variable")
+
+        worker_thread.join()
+
+    def test_vm_read_global_variable(self):
+        """Test reading global variable from a worker thread."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        global test_global_var
+        test_global_var = "I am a global variable"
+
+        def worker():
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        result = _telepysys.vm_read(worker_thread.ident, "test_global_var")
+        self.assertEqual(result, "I am a global variable")
+
+        worker_thread.join()
+
+    def test_vm_read_nonexistent_variable(self):
+        """Test reading non-existent variable returns None."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        result = _telepysys.vm_read(worker_thread.ident, "nonexistent_var")
+        self.assertIsNone(result)
+
+        worker_thread.join()
+
+    def test_vm_read_nonexistent_thread(self):
+        """Test reading from non-existent thread returns None."""
+        from telepy import _telepysys
+
+        result = _telepysys.vm_read(99999, "some_var")
+        self.assertIsNone(result)
+
+    def test_vm_read_module(self):
+        """Test reading module from worker thread."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            # Reference threading module so it's in the frame's globals
+            _ = threading
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        result = _telepysys.vm_read(worker_thread.ident, "threading")
+        self.assertIsNotNone(result)
+
+        worker_thread.join()
+
+    def test_vm_read_various_types(self):
+        """Test reading different data types."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            int_var = 42  # noqa: F841
+            str_var = "test string"  # noqa: F841
+            list_var = [1, 2, 3]  # noqa: F841
+            dict_var = {"key": "value"}  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Test int
+        result = _telepysys.vm_read(worker_thread.ident, "int_var")
+        self.assertEqual(result, 42)
+
+        # Test string
+        result = _telepysys.vm_read(worker_thread.ident, "str_var")
+        self.assertEqual(result, "test string")
+
+        # Test list
+        result = _telepysys.vm_read(worker_thread.ident, "list_var")
+        self.assertEqual(result, [1, 2, 3])
+
+        # Test dict
+        result = _telepysys.vm_read(worker_thread.ident, "dict_var")
+        self.assertEqual(result, {"key": "value"})
+
+        worker_thread.join()
+
+    def test_vm_read_multiple_calls_same_object(self):
+        """Test multiple reads return the same object."""
+        import threading
+        import time
+
+        from telepy import _telepysys
+
+        def worker():
+            test_obj = [1, 2, 3]  # noqa: F841
+            time.sleep(1)
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        time.sleep(0.3)
+
+        # Read the same variable multiple times
+        result1 = _telepysys.vm_read(worker_thread.ident, "test_obj")
+        result2 = _telepysys.vm_read(worker_thread.ident, "test_obj")
+        result3 = _telepysys.vm_read(worker_thread.ident, "test_obj")
+
+        # All should be the same object
+        self.assertIs(result1, result2)
+        self.assertIs(result2, result3)
+
+        worker_thread.join()
+
+    def test_vm_read_parameter_validation(self):
+        """Test parameter validation."""
+        from telepy import _telepysys
+
+        # Test with wrong number of arguments
+        with self.assertRaises(TypeError):
+            _telepysys.vm_read(123)  # Missing name argument
+
+        with self.assertRaises(TypeError):
+            _telepysys.vm_read(123, "var", "extra")  # Too many arguments
+
+        # Test with wrong types
+        with self.assertRaises(TypeError):
+            _telepysys.vm_read("not_an_int", "var")  # tid must be int
+
+        with self.assertRaises(TypeError):
+            _telepysys.vm_read(123, 456)  # name must be string
