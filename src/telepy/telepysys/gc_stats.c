@@ -127,6 +127,10 @@ gc_stats_calculate_stats(PyObject* Py_UNUSED(self),
         } else {
             // Increment existing count
             long current_count = PyLong_AsLong(count);
+            if (current_count == -1 && PyErr_Occurred()) {
+                Py_DECREF(py_type_name);
+                goto error;
+            }
             PyObject* new_count = PyLong_FromLong(current_count + 1);
             if (new_count == NULL) {
                 Py_DECREF(py_type_name);
