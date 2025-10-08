@@ -745,3 +745,100 @@ class TestMonitor(TestBase):
             call_args = resp.return_json.call_args[0][0]
             self.assertEqual(call_args["code"], -1)  # ERROR_CODE
             self.assertIn("Test ValueError from analyzer", call_args["data"])
+
+
+class TestRegisterEndpoint(TestBase):
+    """Test cases for register_endpoint decorator."""
+
+    def setUp(self):
+        """Save the current endpoint registry state."""
+        super().setUp()
+        from telepy.monitor import ENDPOINT_REGISTRY
+
+        # Save current registry state
+        self.original_registry = ENDPOINT_REGISTRY.copy()
+
+    def tearDown(self):
+        """Restore the original endpoint registry state."""
+        from telepy.monitor import ENDPOINT_REGISTRY
+
+        # Restore original registry
+        ENDPOINT_REGISTRY.clear()
+        ENDPOINT_REGISTRY.update(self.original_registry)
+        super().tearDown()
+
+    def test_register_endpoint_success(self):
+        """Test successfully registering a new endpoint."""
+        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+
+        @register_endpoint("/test-endpoint")
+        def test_handler(req, resp):
+            resp.return_json({"data": "test"})
+
+        # Verify endpoint was registered
+        self.assertIn("/test-endpoint", ENDPOINT_REGISTRY)
+        self.assertEqual(ENDPOINT_REGISTRY["/test-endpoint"], test_handler)
+
+    def test_register_endpoint_duplicate_raises_error(self):
+        """Test that registering duplicate endpoint raises ValueError."""
+        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+
+        # Clear the registry to avoid conflicts with module-level registrations
+        ENDPOINT_REGISTRY.clear()
+
+        @register_endpoint("/duplicate-endpoint")
+        def handler1(req, resp):
+            resp.return_json({"data": "handler1"})
+
+        # Try to register the same path again
+        with self.assertRaises(ValueError) as context:
+
+            @register_endpoint("/duplicate-endpoint")
+            def handler2(req, resp):
+                resp.return_json({"data": "handler2"})
+
+        # Verify error message
+        self.assertIn("/duplicate-endpoint", str(context.exception))
+        self.assertIn("already registered", str(context.exception))
+
+    def test_register_endpoint_different_paths_success(self):
+        """Test registering multiple endpoints with different paths."""
+        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+
+        @register_endpoint("/endpoint-1")
+        def handler1(req, resp):
+            resp.return_json({"data": "1"})
+
+        @register_endpoint("/endpoint-2")
+        def handler2(req, resp):
+            resp.return_json({"data": "2"})
+
+        # Verify both endpoints were registered
+        self.assertIn("/endpoint-1", ENDPOINT_REGISTRY)
+        self.assertIn("/endpoint-2", ENDPOINT_REGISTRY)
+        self.assertEqual(ENDPOINT_REGISTRY["/endpoint-1"], handler1)
+        self.assertEqual(ENDPOINT_REGISTRY["/endpoint-2"], handler2)
+
+    def test_register_endpoint_prevents_overwrite_existing(self):
+        """Test that existing endpoints cannot be overwritten."""
+        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+
+        # Clear the registry to avoid conflicts with module-level registrations
+        ENDPOINT_REGISTRY.clear()
+
+        # Register an endpoint
+        @register_endpoint("/protected-endpoint")
+        def original_handler(req, resp):
+            resp.return_json({"data": "original"})
+
+        original_handler_ref = ENDPOINT_REGISTRY["/protected-endpoint"]
+
+        # Try to overwrite it
+        with self.assertRaises(ValueError):
+
+            @register_endpoint("/protected-endpoint")
+            def new_handler(req, resp):
+                resp.return_json({"data": "new"})
+
+        # Verify original handler is still registered
+        self.assertEqual(ENDPOINT_REGISTRY["/protected-endpoint"], original_handler_ref)
