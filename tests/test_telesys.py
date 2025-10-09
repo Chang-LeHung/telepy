@@ -847,6 +847,7 @@ class TestTopNamespace(TestBase):
 
     def test_top_namespace_get_locals(self):
         """Test getting locals from a worker thread."""
+        import sys
         import threading
         import time
 
@@ -864,7 +865,8 @@ class TestTopNamespace(TestBase):
         # Get locals (flag=0)
         locals_dict = _telepysys.top_namespace(worker_thread.ident, 0)
         self.assertIsNotNone(locals_dict)
-        self.assertIsInstance(locals_dict, dict)
+        if sys.version < "3.13":
+            self.assertIsInstance(locals_dict, dict)
         self.assertIn("local_var1", locals_dict)
         self.assertEqual(locals_dict["local_var1"], "test")
         self.assertIn("local_var2", locals_dict)
@@ -1024,6 +1026,7 @@ class TestTopNamespace(TestBase):
 
     def test_top_namespace_get_both(self):
         """Test getting both locals and globals from a worker thread (flag=2)."""
+        import sys
         import threading
         import time
 
@@ -1049,8 +1052,8 @@ class TestTopNamespace(TestBase):
 
         locals_dict, globals_dict = result
 
-        # Verify locals
-        self.assertIsInstance(locals_dict, dict)
+        if sys.version < "3.13":
+            self.assertIsInstance(locals_dict, dict)
         self.assertIn("local_var1", locals_dict)
         self.assertEqual(locals_dict["local_var1"], "local_test")
         self.assertIn("local_var2", locals_dict)
