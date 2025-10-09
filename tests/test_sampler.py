@@ -55,7 +55,7 @@ class TestAsyncSampler(TestBase):
             adjusted = sampler.adjust()
             self.assertTrue(adjusted)
             sampler.start()
-            t = threading.Thread(target=fib, args=(20,))
+            t = threading.Thread(target=fib, args=(33,))
             t.start()
             t.join()
             sampler.stop()
