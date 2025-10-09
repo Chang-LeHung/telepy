@@ -269,10 +269,13 @@ class TestMonitor(TestBase):
         )
         with request.urlopen(req) as response:
             data = json.loads(response.read().decode())
-            self.assertIn("--help, -h", data["data"])
-            self.assertIn("-f FILENAME, --filename FILENAME", data["data"])
+            # Check for options presence (format may vary across argparse versions)
+            self.assertIn("--help", data["data"])
+            self.assertIn("-h", data["data"])
+            self.assertIn("-f", data["data"])
+            self.assertIn("--filename", data["data"])
             self.assertIn("--save-folded", data["data"])
-            self.assertIn("--folded-filename FOLDED_FILENAME", data["data"])
+            self.assertIn("--folded-filename", data["data"])
             self.assertIn("--inverted", data["data"])
 
         req = request.Request(f"http://127.0.0.1:{port}/shutdown")
@@ -339,10 +342,13 @@ class TestMonitor(TestBase):
             )
             with request.urlopen(req) as response:
                 data = json.loads(response.read().decode())
-                self.assertIn("--help, -h", data["data"])
-                self.assertIn("-f FILENAME, --filename FILENAME", data["data"])
+                # Check for options presence (format may vary across argparse versions)
+                self.assertIn("--help", data["data"])
+                self.assertIn("-h", data["data"])
+                self.assertIn("-f", data["data"])
+                self.assertIn("--filename", data["data"])
                 self.assertIn("--save-folded", data["data"])
-                self.assertIn("--folded-filename FOLDED_FILENAME", data["data"])
+                self.assertIn("--folded-filename", data["data"])
 
             req = request.Request(f"http://127.0.0.1:{port}/shutdown")
             with request.urlopen(req) as response:
