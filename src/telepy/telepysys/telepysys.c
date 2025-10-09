@@ -2014,7 +2014,8 @@ telepysys_traverse(PyObject* module, visitproc visit, void* arg) {
 
 static void
 telepysys_free(void* module) {
-
+    // Shutdown the background delete worker thread before cleaning up
+    ShutdownDeleteWorker();
     telepysys_clear(module);
 }
 

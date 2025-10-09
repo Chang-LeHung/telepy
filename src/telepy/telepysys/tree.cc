@@ -21,6 +21,7 @@ std::mutex queue_mtx;
 std::condition_variable queue_cv;
 std::queue<StackTree*> delete_queue;
 std::atomic<bool> thread_initialized{false};
+std::atomic<bool> thread_should_exit{false};
 std::thread* delete_thread = nullptr;
 
 
@@ -157,23 +158,56 @@ void
 DeleteWorker() {
     while (true) {
         std::unique_lock<std::mutex> lock(queue_mtx);
-        queue_cv.wait(lock, [] { return !delete_queue.empty(); });
+        queue_cv.wait(lock, [] {
+            return !delete_queue.empty() || thread_should_exit.load();
+        });
 
-        StackTree* tree = delete_queue.front();
-        delete_queue.pop();
-        lock.unlock();
+        // Check if we should exit
+        if (thread_should_exit.load() && delete_queue.empty()) {
+            break;
+        }
 
-        delete tree;
+        if (!delete_queue.empty()) {
+            StackTree* tree = delete_queue.front();
+            delete_queue.pop();
+            lock.unlock();
+
+            delete tree;
+        }
     }
 }
 
+
+void
+ShutdownDeleteWorker() {
+    if (thread_initialized.load()) {
+        thread_should_exit.store(true);
+        queue_cv.notify_one();  // Wake up the worker thread
+
+        if (delete_thread != nullptr && delete_thread->joinable()) {
+            delete_thread->join();
+        }
+
+        delete delete_thread;
+        delete_thread = nullptr;
+
+        // Clean up any remaining trees in the queue
+        std::lock_guard<std::mutex> lock(queue_mtx);
+        while (!delete_queue.empty()) {
+            delete delete_queue.front();
+            delete_queue.pop();
+        }
+    }
+}
 
 void
 FreeTree(StackTree* tree) {
     if (!thread_initialized.exchange(true)) {
         // Initialize the background thread only once
         delete_thread = new std::thread(DeleteWorker);
-        delete_thread->detach();  // Run in background
+        // Don't detach - we need to join it on shutdown
+        // Register cleanup function
+        std::atexit(ShutdownDeleteWorker);
     }
 
     // Add the tree to the deletion queue

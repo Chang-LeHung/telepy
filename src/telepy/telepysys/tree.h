@@ -15,6 +15,9 @@ void
 FreeTree(struct StackTree* tree);
 
 void
+ShutdownDeleteWorker();
+
+void
 AddCallStack(struct StackTree* tree, const char* callstack);
 
 void
