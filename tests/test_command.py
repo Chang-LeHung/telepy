@@ -70,8 +70,7 @@ class CommandTemplate(TestBase):
         # Use fork + exec to replace subprocess.run
         output = self._run_with_fork_exec(cmd_line, timeout)
 
-        # TODO: why exits with -10 sometimes?
-        self.assertIn(output.returncode, [exit_code, -10])
+        self.assertIn(output.returncode, [exit_code])
         stdout = output.stdout.decode("utf-8", errors="replace")
         if debug:
             logging.debug(stdout)
