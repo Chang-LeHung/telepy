@@ -228,6 +228,7 @@ class Environment:
                     with_stack=config.torch_with_stack,
                     export_chrome_trace=config.torch_export_chrome_trace,
                     sort_by=config.torch_sort_by,
+                    row_limit=config.torch_row_limit,
                     verbose=config.verbose,
                 )
                 sampler.register_middleware(torch_middleware)

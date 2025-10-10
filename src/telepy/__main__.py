@@ -516,6 +516,13 @@ def main():
         "cpu_memory_usage, cuda_memory_usage, self_cpu_memory_usage, "
         "self_cuda_memory_usage, count.",
     )
+    parser.add_argument(
+        "--torch-row-limit",
+        type=int,
+        default=10,
+        help="Maximum number of rows in PyTorch profiler statistics table "
+        "(default: 10). Set to -1 for unlimited rows (may cause OOM for large profiles).",
+    )
 
     args = parser.parse_args(arguments)
     _pre_checks(args, parser)
