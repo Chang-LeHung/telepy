@@ -6,7 +6,7 @@ def compute_heavy_task():
     """A compute-intensive task"""
     result = 0
     for i in range(100000):
-        result += i * i
+        result += sum(range(1000))
     return result
 
 

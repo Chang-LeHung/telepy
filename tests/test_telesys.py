@@ -1,4 +1,6 @@
 import os
+import sys
+import unittest
 
 from .base import TestBase  # type: ignore
 
@@ -290,6 +292,7 @@ class TelepyMainThread(TestBase):
         t.join()
 
 
+@unittest.skipIf(sys.version_info >= (3, 13), "vm_read not supported on Python 3.13+")
 class TestVMRead(TestBase):
     """Test cases for vm_read function."""
 
@@ -554,6 +557,7 @@ class TestVMRead(TestBase):
             _telepysys.vm_read(123, 456)  # name must be string
 
 
+@unittest.skipIf(sys.version_info >= (3, 13), "vm_write not supported on Python 3.13+")
 class TestVMWrite(TestBase):
     """Test cases for vm_write function.
 
@@ -842,6 +846,9 @@ class TestVMWrite(TestBase):
         del globals()["test_roundtrip_data"]
 
 
+@unittest.skipIf(
+    sys.version_info >= (3, 13), "top_namespace not supported on Python 3.13+"
+)
 class TestTopNamespace(TestBase):
     """Test cases for top_namespace function."""
 

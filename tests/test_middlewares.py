@@ -827,9 +827,10 @@ class TestPyTorchProfilerCLI(CommandTemplate):
     def setUp(self):
         super().setUp()
         self.temp_dirs = []
-        # Check if PyTorch is available
+        # Check if PyTorch and numpy are available
         try:
             import torch  # noqa: F401
+            import numpy  # noqa: F401
 
             self.torch_available = True
         except ImportError:
