@@ -692,7 +692,7 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
 # PyTorch Profiler Middleware
 
 
-class PyTorchProfilerMiddleware(SamplerMiddleware):
+class PyTorchProfilerMiddleware(SamplerMiddleware):  # pragma: no cover
     """Middleware that integrates PyTorch profiler with TelePy sampler.
 
     This middleware starts PyTorch profiler when the sampler starts and
