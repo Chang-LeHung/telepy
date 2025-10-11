@@ -10,4 +10,4 @@ def fib(n):
 if __name__ == "__main__":
     os.fork()
 
-    print(fib(30))
+    print(fib(35))
