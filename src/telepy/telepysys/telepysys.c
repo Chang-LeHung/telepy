@@ -253,6 +253,14 @@ call_stack(SamplerObject* self,
            PyFrameObject* frame,
            char* buf,
            size_t buf_size) {
+    // CRITICAL: Check BEFORE touching any Python objects
+    // If sampler is disabled, residual SIGPROF signal arrived during shutdown
+    // Python frames may already be destroyed -> accessing them causes SIGSEGV
+    // This fixes coredump with frame=0x726f (invalid pointer)
+    if (!Sample_Enabled(self)) {
+        return 0;  // Skip this sample silently
+    }
+    
     size_t pos = 0;
     Py_INCREF(frame);
     PyObject* list = PyList_New(0);
@@ -261,6 +269,13 @@ call_stack(SamplerObject* self,
         return 1;
     }
     while (frame) {
+        // Check if sampler has been stopped during frame traversal
+        // This prevents SIGSEGV when residual SIGPROF arrives during shutdown
+        if (!Sample_Enabled(self)) {
+            Py_DECREF(list);
+            Py_DECREF(frame);
+            return 0;  // Return success but skip this sample
+        }
         PyList_Append(list, (PyObject*)frame);
         frame = PyFrame_GetBack(frame);  // return a new reference
     }
@@ -1188,10 +1203,25 @@ static PyObject*
 AsyncSampler_async_routine(AsyncSamplerObject* self,
                            PyObject* const* args,
                            Py_ssize_t nargs) {
-    if (SAMPLING_ENABLED((SamplerObject*)self)) {
+    SamplerObject* base = (SamplerObject*)self;
+    
+    // Check for re-entrance first - if already sampling, return immediately
+    if (SAMPLING_ENABLED(base)) {
         Py_RETURN_NONE;
     }
-    ENABLE_SAMPLING((SamplerObject*)self);
+    
+    // Critical: Check if sampler is still enabled before processing
+    // This handles the race condition where:
+    // 1. stop() is called to disable sampling
+    // 2. But pending SIGPROF signals still arrive after stop()
+    // 3. This signal handler gets invoked on a shutting-down Python interpreter
+    // 4. Accessing frames during shutdown causes SIGSEGV
+    if (!Sample_Enabled(base)) {
+        // Sampler has been stopped, ignore this residual signal
+        Py_RETURN_NONE;
+    }
+    
+    ENABLE_SAMPLING(base);
     if (nargs != 2) {
         PyErr_Format(
             PyExc_TypeError,
@@ -1199,7 +1229,6 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
             nargs);
         return NULL;
     }
-    SamplerObject* base = (SamplerObject*)self;
     if (base->sampling_tid == 0) {
         PyErr_SetString(PyExc_RuntimeError, "AsyncSampler's tid is not set");
         return NULL;
@@ -1217,12 +1246,27 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
 
     Telepy_time sampling_start = unix_micro_time();
 
+    // Check again before accessing frames - sampler might have been stopped
+    if (!Sample_Enabled(base)) {
+        DISABLE_SAMPLING(base);
+        Py_RETURN_NONE;
+    }
+
     PyObject* frames = _PyThread_CurrentFrames();  // New reference
     if (frames == NULL) {
+        DISABLE_SAMPLING(base);
         PyErr_Format(PyExc_RuntimeError,
                      "telepysys: _PyThread_CurrentFrames() failed");
         return NULL;
     }
+    
+    // Check again after _PyThread_CurrentFrames
+    if (!Sample_Enabled(base)) {
+        DISABLE_SAMPLING(base);
+        Py_DECREF(frames);
+        Py_RETURN_NONE;
+    }
+    
     if (main_frame) {
         Py_ssize_t size = snprintf(buf, buf_size, "%s;", "MainThread");
         int overflow = call_stack(
@@ -1248,6 +1292,14 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     PyObject* value = NULL;
     Py_ssize_t pos = 0;
     while (PyDict_Next(frames, &pos, &key, &value)) {
+        // Double-check: sampler might have been stopped during iteration
+        if (!Sample_Enabled(base)) {
+            DISABLE_SAMPLING(base);
+            Py_DECREF(frames);
+            Py_DECREF(threads);
+            Py_RETURN_NONE;
+        }
+        
         // key is a thread id
         // value is a frame object
         unsigned long tid = PyLong_AsUnsignedLong(key);
@@ -1264,6 +1316,16 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
                          "telepysys: failed to get thread name");
             goto error;
         }
+        
+        // Check again before processing this frame
+        if (!Sample_Enabled(base)) {
+            Py_DECREF(name);
+            DISABLE_SAMPLING(base);
+            Py_DECREF(frames);
+            Py_DECREF(threads);
+            Py_RETURN_NONE;
+        }
+        
         Py_ssize_t size =
             snprintf(buf, buf_size, "%s;", PyUnicode_AsUTF8(name));
         Py_DECREF(name);
@@ -1991,7 +2053,6 @@ telepysys_exec(PyObject* m) {
         Py_DECREF(async_sampler_type);
         return -1;
     }
-    PyModule_AddObjectRef(m, "async_sampler", Py_None);  // singleton
     return 0;
 }
 
@@ -2014,8 +2075,6 @@ telepysys_traverse(PyObject* module, visitproc visit, void* arg) {
 
 static void
 telepysys_free(void* module) {
-    // Shutdown the background delete worker thread before cleaning up
-    ShutdownDeleteWorker();
     telepysys_clear(module);
 }
 

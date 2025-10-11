@@ -1,28 +1,16 @@
 
 #include "tree.h"
-#include <atomic>
 #include <cassert>
-#include <condition_variable>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <functional>
 #include <iostream>
-#include <mutex>
-#include <queue>
 #include <sstream>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
-
-std::mutex queue_mtx;
-std::condition_variable queue_cv;
-std::queue<StackTree*> delete_queue;
-std::atomic<bool> thread_initialized{false};
-std::atomic<bool> thread_should_exit{false};
-std::thread* delete_thread = nullptr;
 
 
 struct Node {
@@ -145,7 +133,13 @@ struct StackTree {
         f(root);
     }
 
-    virtual ~StackTree() { delete root; }
+    virtual ~StackTree() {
+        // Use iterative deletion to avoid stack overflow
+        if (root != nullptr) {
+            delete root;
+            root = nullptr;
+        }
+    }
 };
 
 StackTree*
@@ -153,69 +147,13 @@ NewTree() {
     return new StackTree();
 }
 
-
-void
-DeleteWorker() {
-    while (true) {
-        std::unique_lock<std::mutex> lock(queue_mtx);
-        queue_cv.wait(lock, [] {
-            return !delete_queue.empty() || thread_should_exit.load();
-        });
-
-        // Check if we should exit
-        if (thread_should_exit.load() && delete_queue.empty()) {
-            break;
-        }
-
-        if (!delete_queue.empty()) {
-            StackTree* tree = delete_queue.front();
-            delete_queue.pop();
-            lock.unlock();
-
-            delete tree;
-        }
-    }
-}
-
-
-void
-ShutdownDeleteWorker() {
-    if (thread_initialized.load()) {
-        thread_should_exit.store(true);
-        queue_cv.notify_one();  // Wake up the worker thread
-
-        if (delete_thread != nullptr && delete_thread->joinable()) {
-            delete_thread->join();
-        }
-
-        delete delete_thread;
-        delete_thread = nullptr;
-
-        // Clean up any remaining trees in the queue
-        std::lock_guard<std::mutex> lock(queue_mtx);
-        while (!delete_queue.empty()) {
-            delete delete_queue.front();
-            delete_queue.pop();
-        }
-    }
-}
-
 void
 FreeTree(StackTree* tree) {
-    if (!thread_initialized.exchange(true)) {
-        // Initialize the background thread only once
-        delete_thread = new std::thread(DeleteWorker);
-        // Don't detach - we need to join it on shutdown
-        // Register cleanup function
-        std::atexit(ShutdownDeleteWorker);
+    // Synchronously delete the tree in the calling thread
+    // This is simpler and avoids all fork-related issues with background threads
+    if (tree != nullptr) {
+        delete tree;
     }
-
-    // Add the tree to the deletion queue
-    {
-        std::lock_guard<std::mutex> lock(queue_mtx);
-        delete_queue.push(tree);
-    }
-    queue_cv.notify_one();  // Notify the worker thread
 }
 
 void
