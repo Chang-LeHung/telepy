@@ -7,7 +7,17 @@ import heapq
 import os
 import sys
 from abc import ABC, abstractmethod
-from typing import override
+
+try:
+    from typing import override
+except ImportError:
+    try:
+        from typing_extensions import override
+    except ImportError:
+
+        def override(func):
+            return func
+
 
 from rich import print
 from rich.panel import Panel

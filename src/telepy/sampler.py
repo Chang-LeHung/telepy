@@ -3,7 +3,18 @@ import signal
 import sys
 import threading
 from abc import ABC, abstractmethod
-from typing import Literal, cast, override
+from typing import Literal, cast
+
+try:
+    from typing import override
+except ImportError:
+    try:
+        from typing_extensions import override
+    except ImportError:
+
+        def override(func):
+            return func
+
 
 from . import _telepysys
 from .thread import in_main_thread

@@ -7,8 +7,20 @@ from collections import defaultdict
 from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Final, override
+from typing import Any, Final
 from urllib.parse import parse_qs, urlparse
+
+try:
+    from typing import override
+except ImportError:
+    # For Python < 3.12, use typing_extensions or create a no-op decorator
+    try:
+        from typing_extensions import override  # type: ignore # noqa: UP035
+    except ImportError:
+        # If typing_extensions is not available, create a no-op decorator
+        def override(func):
+            return func
+
 
 from ._telepysys import __version__
 
