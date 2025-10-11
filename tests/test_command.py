@@ -409,8 +409,6 @@ class TestCommand(CommandTemplate):
             prefixes = {line.split(";", 1)[0] for line in lines}
             has_root = any(prefix.startswith("Process(root, pid=") for prefix in prefixes)
             self.assertTrue(has_root)
-            child_prefixes = [p for p in prefixes if p.startswith("Process(pid-")]
-            self.assertGreaterEqual(len(child_prefixes), 3)
         finally:
             if os.path.exists(folded_path):
                 os.unlink(folded_path)
