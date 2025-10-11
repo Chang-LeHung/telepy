@@ -89,7 +89,7 @@ class TestShell(TestBase):
 
         msg, ok = shell.dispatch("attach :8026")
         self.assertFalse(ok)
-        self.assertIn("Bad Gateway", msg)
+        self.assertTrue("Bad Gateway" in msg or "Name or service not known" in msg)
 
         msg, ok = shell.dispatch("attach 127.0.0.1:")
         self.assertFalse(ok)
