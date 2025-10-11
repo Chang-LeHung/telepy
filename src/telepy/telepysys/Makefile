@@ -1,7 +1,7 @@
 
 
 CXX ?= $(if $(shell which g++),g++)
-CXXFLAGS = -Wall -Wextra -std=c++11 -DTELEPY_TEST -g
+CXXFLAGS = -Wall -Wextra -std=c++11 -DTELEPY_TEST -g -pthread
 
 TEST_SRC = tree.cc
 

@@ -6,7 +6,6 @@ import argparse
 import heapq
 import os
 import sys
-import weakref
 from abc import ABC, abstractmethod
 from typing import override
 
@@ -164,11 +163,9 @@ class PythonFileProfilingHandler(ArgsHandler):
             code = args.input[0].read()
             pyc = compile(code, os.path.abspath(filename), "exec")
             sampler.start()
-            if not in_coverage:
-                weakref.finalize(sampler, telepy_finalize)  # pragma: no cover
             exec(pyc, global_dict)
-        if in_coverage:
-            telepy_finalize()
+        # Always call finalize after exec completes
+        telepy_finalize()
         return True
 
 
@@ -194,11 +191,9 @@ class PyCommandStringProfilingHandler(ArgsHandler):
             # see the enviroment.py:patch_multiprocesssing and patch_os_fork_in_child
             if not config.fork_server:
                 sampler.start()
-            if not in_coverage:
-                weakref.finalize(sampler, telepy_finalize)  # pragma: no cover
             exec(pyc, global_dict)
-        if in_coverage:
-            telepy_finalize()
+        # Always call finalize after exec completes
+        telepy_finalize()
         return True
 
 
@@ -230,13 +225,10 @@ class PyCommandModuleProfilingHandler(ArgsHandler):
             pyc = compile(code, "<string>", "exec")
             if not config.fork_server:
                 sampler.start()
-            if not in_coverage:  # pragma: no cover
-                weakref.finalize(sampler, telepy_finalize)
             exec(pyc, global_dict)
-        # coverage do not cover this line, god knows why
-        if in_coverage:  # pragma: no cover
-            telepy_finalize()
-        return True  # pragma: no cover
+        # Always call finalize after exec completes
+        telepy_finalize()
+        return True
 
 
 @register_handler
@@ -515,6 +507,13 @@ def main():
         "Options: cpu_time, cuda_time, cpu_time_total, cuda_time_total, "
         "cpu_memory_usage, cuda_memory_usage, self_cpu_memory_usage, "
         "self_cuda_memory_usage, count.",
+    )
+    parser.add_argument(
+        "--torch-row-limit",
+        type=int,
+        default=10,
+        help="Maximum number of rows in PyTorch profiler statistics table "
+        "(default: 10). Set to -1 for unlimited rows (may cause OOM for large profiles).",
     )
 
     args = parser.parse_args(arguments)

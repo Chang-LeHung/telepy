@@ -220,6 +220,7 @@ class TelePySamplerConfig:
         torch_with_stack: bool = True,
         torch_export_chrome_trace: bool = True,
         torch_sort_by: str = "cpu_time_total",
+        torch_row_limit: int = 10,
     ) -> None:
         """Initialize TelePySamplerConfig with keyword-only arguments.
 
@@ -310,6 +311,9 @@ class TelePySamplerConfig:
                 Default: True.
             torch_sort_by: Sort key for PyTorch profiler statistics.
                 Default: "cpu_time_total".
+            torch_row_limit: Maximum number of rows in PyTorch profiler statistics.
+                Set to -1 for unlimited rows (may cause OOM).
+                Default: 10.
         """
         # Sampler configuration
         self.interval = interval
@@ -363,6 +367,7 @@ class TelePySamplerConfig:
         self.torch_with_stack = torch_with_stack
         self.torch_export_chrome_trace = torch_export_chrome_trace
         self.torch_sort_by = torch_sort_by
+        self.torch_row_limit = torch_row_limit
 
     @classmethod
     def from_namespace(cls, args_namespace) -> "TelePySamplerConfig":
@@ -415,6 +420,7 @@ class TelePySamplerConfig:
                 args_namespace, "torch_export_chrome_trace", True
             ),
             torch_sort_by=getattr(args_namespace, "torch_sort_by", "cpu_time_total"),
+            torch_row_limit=getattr(args_namespace, "torch_row_limit", 10),
         )
 
     def to_cli_args(self) -> list[str]:
@@ -487,6 +493,9 @@ class TelePySamplerConfig:
         if self.torch_sort_by != "cpu_time_total":
             res.append("--torch-sort-by")
             res.append(self.torch_sort_by)
+        if self.torch_row_limit != 10:
+            res.append("--torch-row-limit")
+            res.append(str(self.torch_row_limit))
         return res
 
 

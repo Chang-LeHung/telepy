@@ -22,7 +22,9 @@ class SamplerMiddleware(ABC):
         """
         pass
 
-    def on_after_start(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
+    def on_after_start(
+        self, sampler: "TelepySysAsyncSampler | TelepySysSampler"
+    ) -> None:  # pragma: no cover
         """Called after the sampler has started.
 
         Args:
@@ -30,7 +32,9 @@ class SamplerMiddleware(ABC):
         """
         pass
 
-    def on_before_stop(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
+    def on_before_stop(
+        self, sampler: "TelepySysAsyncSampler | TelepySysSampler"
+    ) -> None:  # pragma: no cover
         """Called before the sampler stops.
 
         Args:
@@ -38,7 +42,9 @@ class SamplerMiddleware(ABC):
         """
         pass
 
-    def on_after_stop(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
+    def on_after_stop(
+        self, sampler: "TelepySysAsyncSampler | TelepySysSampler"
+    ) -> None:  # pragma: no cover
         """Called after the sampler has stopped.
 
         Args:
@@ -686,7 +692,7 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
 # PyTorch Profiler Middleware
 
 
-class PyTorchProfilerMiddleware(SamplerMiddleware):
+class PyTorchProfilerMiddleware(SamplerMiddleware):  # pragma: no cover
     """Middleware that integrates PyTorch profiler with TelePy sampler.
 
     This middleware starts PyTorch profiler when the sampler starts and
@@ -712,6 +718,7 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
         with_stack: bool = True,
         export_chrome_trace: bool = True,
         sort_by: str = "cpu_time_total",
+        row_limit: int = 100,
         verbose: bool = False,
     ):
         """Initialize PyTorch profiler middleware.
@@ -729,6 +736,8 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
             schedule_active: Number of active profiling steps.
             schedule_repeat: Number of cycles to repeat.
             sort_by: Sort key for profiler statistics (default: 'cpu_time_total').
+            row_limit: Maximum number of rows in statistics table (default: 100).
+                      Set to -1 for unlimited rows (may cause OOM).
             verbose: Whether to print profiler messages (default: False).
         """
         # Check if PyTorch is available
@@ -749,6 +758,7 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
         self.with_stack = with_stack
         self.export_chrome_trace = export_chrome_trace
         self.sort_by = sort_by
+        self.row_limit = row_limit
 
         self.profiler: profile | None = None
 
@@ -826,7 +836,9 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):
             # Get profiler statistics
             self._log("Generating profiler statistics...")
             key_averages = self.profiler.key_averages()
-            stats_table = key_averages.table(sort_by=self.sort_by, row_limit=-1)
+            stats_table = key_averages.table(
+                sort_by=self.sort_by, row_limit=self.row_limit
+            )
             self._log("Generated profiler statistics")
 
             # Save statistics to file

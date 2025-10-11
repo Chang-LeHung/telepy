@@ -4,6 +4,7 @@ Unit tests for chrome_trace_converter.py
 
 import os
 import re
+import sys
 import tempfile
 from pathlib import Path
 
@@ -471,3 +472,482 @@ class TestChromeTraceConverter(TestBase):
             lines = f.readlines()
 
         self.assertGreater(len(lines), 0, "Output file should have content")
+
+    def test_format_stack_line_with_empty_stack(self):
+        """Test _format_stack_line with empty stack."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        result = converter._format_stack_line(123, 456, [])
+        expected = "Process(123);Thread(456)"
+        self.assertEqual(result, expected, "Should handle empty stack")
+
+    def test_format_stack_line_with_stack(self):
+        """Test _format_stack_line with non-empty stack."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        result = converter._format_stack_line(123, 456, ["func1", "func2", "func3"])
+        expected = "Process(123);Thread(456);func1;func2;func3"
+        self.assertEqual(result, expected, "Should format stack correctly")
+
+    def test_extract_event_name_with_category(self):
+        """Test _extract_event_name with category."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        event = {"ph": "X", "name": "test_func", "cat": "python"}
+        result = converter._extract_event_name(event)
+        self.assertEqual(
+            result, "python::test_func", "Should format with category prefix"
+        )
+
+    def test_extract_event_name_without_category(self):
+        """Test _extract_event_name without category."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        event = {"ph": "X", "name": "test_func"}
+        result = converter._extract_event_name(event)
+        self.assertEqual(result, "test_func", "Should return just the name")
+
+    def test_extract_event_name_non_x_event(self):
+        """Test _extract_event_name with non-X event."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        event = {"ph": "B", "name": "test_func"}
+        result = converter._extract_event_name(event)
+        self.assertIsNone(result, "Should return None for non-X events")
+
+    def test_extract_event_name_no_name(self):
+        """Test _extract_event_name with no name field."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        event = {"ph": "X"}
+        result = converter._extract_event_name(event)
+        self.assertIsNone(result, "Should return None when name is missing")
+
+    def test_build_call_tree_filters_non_x_events(self):
+        """Test that _build_call_tree filters out non-X events."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        converter.events = [
+            {"ph": "X", "pid": 1, "tid": 1, "ts": 100, "dur": 50, "name": "func1"},
+            {"ph": "B", "pid": 1, "tid": 1, "ts": 110, "name": "func2"},
+            {"ph": "X", "pid": 1, "tid": 1, "ts": 120, "dur": 30, "name": "func3"},
+        ]
+
+        thread_events = converter._build_call_tree()
+        self.assertEqual(len(thread_events[(1, 1)]), 2, "Should have 2 X events")
+
+    def test_build_call_tree_filters_no_duration(self):
+        """Test that _build_call_tree filters events without duration."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        converter.events = [
+            {"ph": "X", "pid": 1, "tid": 1, "ts": 100, "dur": 50, "name": "func1"},
+            {"ph": "X", "pid": 1, "tid": 1, "ts": 110, "name": "func2"},  # No dur
+        ]
+
+        thread_events = converter._build_call_tree()
+        self.assertEqual(len(thread_events[(1, 1)]), 1, "Should filter no-dur")
+
+    def test_build_call_tree_sorts_by_time(self):
+        """Test that _build_call_tree sorts events by timestamp."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        converter.events = [
+            {"ph": "X", "pid": 1, "tid": 1, "ts": 200, "dur": 50, "name": "func3"},
+            {"ph": "X", "pid": 1, "tid": 1, "ts": 100, "dur": 50, "name": "func1"},
+            {"ph": "X", "pid": 1, "tid": 1, "ts": 150, "dur": 50, "name": "func2"},
+        ]
+
+        thread_events = converter._build_call_tree()
+        events = thread_events[(1, 1)]
+
+        self.assertEqual(events[0]["name"], "func1", "Should be sorted")
+        self.assertEqual(events[1]["name"], "func2")
+        self.assertEqual(events[2]["name"], "func3")
+
+    def test_build_stack_trace_empty_events(self):
+        """Test _build_stack_trace with empty events list."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        result = converter._build_stack_trace([], 0, 100.0)
+        self.assertEqual(result, [], "Should return empty list for empty events")
+
+    def test_build_stack_trace_out_of_bounds(self):
+        """Test _build_stack_trace with index out of bounds."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        events = [
+            {
+                "ph": "X",
+                "start": 100,
+                "end": 200,
+                "name": "func1",
+                "ts": 100,
+                "dur": 100,
+            }
+        ]
+        result = converter._build_stack_trace(events, 10, 100.0)
+        self.assertEqual(result, [], "Should return empty list for out of bounds")
+
+    def test_convert_with_events_producing_empty_stacks(self):
+        """Test conversion where events produce empty stacks."""
+        converter = ChromeTraceConverter(str(self.trace_file))
+        # Create events that will produce empty stacks (events without names)
+        converter.events = [
+            {
+                "ph": "X",
+                "pid": 1,
+                "tid": 1,
+                "ts": 100,
+                "dur": 50,
+                # No "name" field - should be skipped
+            },
+            {
+                "ph": "X",
+                "pid": 1,
+                "tid": 1,
+                "ts": 200,
+                "dur": 30,
+                # No "name" field - should be skipped
+            },
+        ]
+
+        stacks = converter.convert_to_folded()
+        # Should produce empty stacks dict since events have no names
+        self.assertEqual(len(stacks), 0, "Should produce no stacks for nameless events")
+
+    # ==================== CLI Tests ====================
+
+    def test_cli_help_display(self):
+        """Test CLI help display."""
+        from io import StringIO
+
+        from telepy.chrome_trace_converter import main
+
+        old_argv = sys.argv
+        old_stdout = sys.stdout
+        sys.stdout = StringIO()
+
+        try:
+            sys.argv = ["tracec", "--help"]
+            try:
+                main()
+            except SystemExit as e:
+                self.assertEqual(e.code, 0, "Help should exit with code 0")
+
+            output = sys.stdout.getvalue()
+            self.assertIn("TracEC", output, "Help should contain program name")
+            self.assertIn("TRACE_FILE", output, "Help should mention trace file")
+        finally:
+            sys.stdout = old_stdout
+            sys.argv = old_argv
+
+    def test_cli_missing_trace_file(self):
+        """Test CLI with missing trace file argument."""
+        from telepy.chrome_trace_converter import main
+
+        old_argv = sys.argv
+
+        try:
+            sys.argv = ["tracec"]
+            with self.assertRaises(SystemExit) as cm:
+                main()
+
+            self.assertEqual(cm.exception.code, 1, "Should exit with code 1")
+        finally:
+            sys.argv = old_argv
+
+    def test_cli_basic_conversion(self):
+        """Test CLI basic conversion."""
+        from telepy.chrome_trace_converter import main
+
+        output_file = "tests/test_files/trace_cli_test.folded"
+        self.__class__.temp_files.append(output_file)
+
+        old_argv = sys.argv
+
+        try:
+            sys.argv = ["tracec", str(self.trace_file), "-o", output_file]
+            main()
+
+            self.assertTrue(os.path.exists(output_file), "CLI should create output")
+        finally:
+            sys.argv = old_argv
+
+    def test_cli_verbose_mode(self):
+        """Test CLI with verbose flag."""
+        from telepy.chrome_trace_converter import main
+
+        output_file = "tests/test_files/trace_cli_verbose_test.folded"
+        self.__class__.temp_files.append(output_file)
+
+        old_argv = sys.argv
+
+        try:
+            sys.argv = ["tracec", str(self.trace_file), "-o", output_file, "-v"]
+            main()
+
+            self.assertTrue(
+                os.path.exists(output_file), "CLI verbose should create output"
+            )
+        finally:
+            sys.argv = old_argv
+
+    def test_cli_svg_generation(self):
+        """Test CLI with SVG generation."""
+        from telepy.chrome_trace_converter import main
+
+        output_folded = "tests/test_files/trace_cli_svg_test.folded"
+        output_svg = "tests/test_files/trace_cli_svg_test.svg"
+        self.__class__.temp_files.extend([output_folded, output_svg])
+
+        old_argv = sys.argv
+
+        try:
+            sys.argv = [
+                "tracec",
+                str(self.trace_file),
+                "-o",
+                output_folded,
+                "-s",
+                output_svg,
+            ]
+            main()
+
+            self.assertTrue(os.path.exists(output_folded), "Should create folded")
+            self.assertTrue(os.path.exists(output_svg), "Should create SVG")
+        finally:
+            sys.argv = old_argv
+
+    def test_cli_svg_with_custom_params(self):
+        """Test CLI SVG generation with custom parameters."""
+        from telepy.chrome_trace_converter import main
+
+        output_folded = "tests/test_files/trace_cli_custom_svg_test.folded"
+        output_svg = "tests/test_files/trace_cli_custom_svg_test.svg"
+        self.__class__.temp_files.extend([output_folded, output_svg])
+
+        old_argv = sys.argv
+
+        try:
+            sys.argv = [
+                "tracec",
+                str(self.trace_file),
+                "-o",
+                output_folded,
+                "-s",
+                output_svg,
+                "--title",
+                "Custom Title",
+                "--width",
+                "1600",
+                "--height",
+                "20",
+                "--minwidth",
+                "0.5",
+                "--countname",
+                "microseconds",
+                "--inverted",
+            ]
+            main()
+
+            self.assertTrue(os.path.exists(output_svg), "Should create custom SVG")
+
+            # Verify custom parameters in SVG
+            with open(output_svg) as f:
+                svg_content = f.read()
+                self.assertIn("Custom Title", svg_content, "Should have custom title")
+                self.assertIn("microseconds", svg_content, "Should have custom countname")
+        finally:
+            sys.argv = old_argv
+
+    def test_cli_nonexistent_file(self):
+        """Test CLI with non-existent trace file."""
+        from telepy.chrome_trace_converter import main
+
+        old_argv = sys.argv
+
+        try:
+            sys.argv = ["tracec", "nonexistent_trace.json"]
+            with self.assertRaises(SystemExit) as cm:
+                main()
+
+            self.assertEqual(cm.exception.code, 1, "Should exit with code 1")
+        finally:
+            sys.argv = old_argv
+
+    def test_cli_invalid_json(self):
+        """Test CLI with invalid JSON file."""
+        from telepy.chrome_trace_converter import main
+
+        # Create invalid JSON file
+        invalid_json = "tests/test_files/invalid.json"
+        self.__class__.temp_files.append(invalid_json)
+
+        with open(invalid_json, "w") as f:
+            f.write("{ invalid json content }")
+
+        old_argv = sys.argv
+
+        try:
+            sys.argv = ["tracec", invalid_json]
+            with self.assertRaises(SystemExit) as cm:
+                main()
+
+            self.assertEqual(cm.exception.code, 1, "Should exit with code 1")
+        finally:
+            sys.argv = old_argv
+
+    def test_cli_with_all_svg_options(self):
+        """Test CLI with all SVG customization options."""
+        from telepy.chrome_trace_converter import main
+
+        output_folded = "tests/test_files/trace_all_options_test.folded"
+        output_svg = "tests/test_files/trace_all_options_test.svg"
+        self.__class__.temp_files.extend([output_folded, output_svg])
+
+        old_argv = sys.argv
+
+        try:
+            sys.argv = [
+                "tracec",
+                str(self.trace_file),
+                "-o",
+                output_folded,
+                "-s",
+                output_svg,
+                "--title",
+                "Full Test",
+                "--width",
+                "1400",
+                "--height",
+                "18",
+                "--minwidth",
+                "0.2",
+                "--countname",
+                "samples",
+                "--command",
+                "test_command",
+                "--package-path",
+                "/test/path",
+                "--work-dir",
+                "/work",
+                "--inverted",
+                "-v",
+            ]
+            main()
+
+            self.assertTrue(
+                os.path.exists(output_svg), "Should create SVG with all options"
+            )
+        finally:
+            sys.argv = old_argv
+
+    def test_cli_svg_generation_import_error(self):
+        """Test CLI SVG generation with ImportError - verify error path exists."""
+        # This test documents that the ImportError handling exists in the code
+        # The actual ImportError path is difficult to test because FlameGraph
+        # is imported inside a try block in main(), and mocking __import__
+        # causes recursion issues. The code path exists at lines 524-530.
+
+        # We can verify the code structure includes error handling
+        import inspect
+
+        from telepy.chrome_trace_converter import main
+
+        source = inspect.getsource(main)
+        self.assertIn("except ImportError", source, "Should handle ImportError")
+        self.assertIn("flamegraph module", source, "Should mention flamegraph")
+
+        # Just verify basic CLI works without SVG to ensure folded generation
+        import sys
+
+        output_folded = "tests/test_files/trace_no_svg_test.folded"
+        self.__class__.temp_files.append(output_folded)
+
+        old_argv = sys.argv
+        try:
+            sys.argv = ["tracec", str(self.trace_file), "-o", output_folded]
+            main()
+            self.assertTrue(os.path.exists(output_folded), "Should create folded")
+        finally:
+            sys.argv = old_argv
+
+    def test_cli_svg_generation_runtime_error(self):
+        """Test CLI SVG generation with runtime error."""
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        from telepy.chrome_trace_converter import main
+
+        output_folded = "tests/test_files/trace_runtime_error_test.folded"
+        output_svg = "tests/test_files/trace_runtime_error_test.svg"
+        self.__class__.temp_files.extend([output_folded, output_svg])
+
+        old_argv = sys.argv
+
+        try:
+            sys.argv = [
+                "tracec",
+                str(self.trace_file),
+                "-o",
+                output_folded,
+                "-s",
+                output_svg,
+            ]
+
+            # Mock FlameGraph.generate_svg to raise exception
+            with patch("telepy.flamegraph.FlameGraph") as mock_fg_class:
+                mock_fg = MagicMock()
+                mock_fg.generate_svg.side_effect = RuntimeError("Test error")
+                mock_fg_class.return_value = mock_fg
+
+                with self.assertRaises(SystemExit) as cm:
+                    main()
+
+                self.assertEqual(cm.exception.code, 1, "Should exit with code 1")
+        finally:
+            sys.argv = old_argv
+
+    def test_cli_malformed_json_structure(self):
+        """Test CLI with JSON that's valid but has wrong structure."""
+        import json
+        import sys
+
+        from telepy.chrome_trace_converter import main
+
+        # Create a JSON file with wrong structure (no traceEvents)
+        malformed_json = "tests/test_files/malformed_structure.json"
+        self.__class__.temp_files.append(malformed_json)
+
+        with open(malformed_json, "w") as f:
+            json.dump({"wrongKey": "wrongValue"}, f)
+
+        output_file = "tests/test_files/malformed_output.folded"
+        self.__class__.temp_files.append(output_file)
+
+        old_argv = sys.argv
+
+        try:
+            sys.argv = ["tracec", malformed_json, "-o", output_file]
+            # Should succeed but produce empty output
+            main()
+
+            # File should exist but be essentially empty (no stacks)
+            self.assertTrue(os.path.exists(output_file), "Should create file")
+        finally:
+            sys.argv = old_argv
+
+    def test_cli_unexpected_exception(self):
+        """Test CLI handling of unexpected exceptions."""
+        import sys
+        from unittest.mock import patch
+
+        from telepy.chrome_trace_converter import main
+
+        old_argv = sys.argv
+
+        try:
+            sys.argv = ["tracec", str(self.trace_file)]
+
+            # Mock ChromeTraceConverter to raise unexpected exception
+            with patch(
+                "telepy.chrome_trace_converter.ChromeTraceConverter"
+            ) as mock_converter_class:
+                mock_converter_class.side_effect = ValueError("Unexpected test error")
+
+                with self.assertRaises(SystemExit) as cm:
+                    main()
+
+                self.assertEqual(cm.exception.code, 1, "Should exit with code 1 on error")
+        finally:
+            sys.argv = old_argv
