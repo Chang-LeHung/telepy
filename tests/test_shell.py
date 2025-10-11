@@ -42,6 +42,8 @@ class TestShell(TestBase):
                 ipt.send_text("stack\n")
                 ipt.send_text("shutdown\n")
                 ipt.send_text("exit\n")
+                # Close the input pipe to send EOF after all commands
+                ipt.close()
                 shell = TelePyShell(input=ipt)
                 shell.run()
         t.join()
