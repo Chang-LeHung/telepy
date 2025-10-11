@@ -1035,7 +1035,7 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
         # Support both formats: "choose from cpu, wall" and "(choose from 'cpu', 'wall')"
         self.assertTrue(
             "choose from cpu, wall" in stderr or "choose from 'cpu', 'wall'" in stderr,
-            f"Expected 'choose from' error message not found in: {stderr}"
+            f"Expected 'choose from' error message not found in: {stderr}",
         )
 
     def test_time_default_behavior(self):
