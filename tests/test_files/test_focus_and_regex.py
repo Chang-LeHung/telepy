@@ -5,7 +5,7 @@ import time
 def compute_heavy_task():
     """A compute-intensive task"""
     result = 0
-    for i in range(100):
+    for i in range(10000):
         result += sum(range(1000))
     return result
 
