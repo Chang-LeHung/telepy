@@ -1,11 +1,9 @@
 import logging
 import os
 import re
-import signal
 import subprocess
 import sys
 import tempfile
-import time
 from typing import NamedTuple
 
 from .base import TestBase  # type: ignore
@@ -83,7 +81,7 @@ class CommandTemplate(TestBase):
 
     def _run_with_fork_exec(self, cmd_line: list[str], timeout: int) -> CompletedProcess:
         """
-        Execute command using fork + exec instead of subprocess.run.
+        Execute command using subprocess.
 
         Args:
             cmd_line: Command and arguments to execute
@@ -95,127 +93,22 @@ class CommandTemplate(TestBase):
         Raises:
             TimeoutError: If the command execution exceeds timeout
         """
-        # Create pipes for stdout and stderr
-        stdout_read, stdout_write = os.pipe()
-        stderr_read, stderr_write = os.pipe()
-
-        # Fork the process
-        pid = os.fork()
-
-        if pid == 0:
-            # Child process
-            try:
-                # Close read ends in child
-                os.close(stdout_read)
-                os.close(stderr_read)
-
-                # Redirect stdout and stderr to pipes
-                os.dup2(stdout_write, sys.stdout.fileno())
-                os.dup2(stderr_write, sys.stderr.fileno())
-
-                # Close the original write descriptors
-                os.close(stdout_write)
-                os.close(stderr_write)
-
-                # Execute the command
-                os.execvp(cmd_line[0], cmd_line)
-            except Exception as e:
-                # If exec fails, write error and exit
-                sys.stderr.write(f"exec failed: {e}\n")
-                sys.stderr.flush()
-                os._exit(127)
-        else:
-            # Parent process
-            # Close write ends in parent
-            os.close(stdout_write)
-            os.close(stderr_write)
-
-            # Set pipes to non-blocking mode
-            import fcntl
-
-            fcntl.fcntl(stdout_read, fcntl.F_SETFL, os.O_NONBLOCK)
-            fcntl.fcntl(stderr_read, fcntl.F_SETFL, os.O_NONBLOCK)
-
-            # Read output with timeout
-            stdout_data = b""
-            stderr_data = b""
-            start_time = time.time()
-
-            while True:
-                # Check timeout
-                elapsed = time.time() - start_time
-                if elapsed > timeout:
-                    # Kill the child process
-                    try:
-                        os.kill(pid, signal.SIGKILL)
-                        os.waitpid(pid, 0)
-                    except Exception:
-                        pass
-                    os.close(stdout_read)
-                    os.close(stderr_read)
-                    raise TimeoutError(
-                        f"Command '{cmd_line[0]}' timed out after {timeout} seconds"
-                    )
-
-                # Try to read from stdout
-                try:
-                    chunk = os.read(stdout_read, 4096)
-                    if chunk:
-                        stdout_data += chunk
-                except (OSError, BlockingIOError):
-                    pass
-
-                # Try to read from stderr
-                try:
-                    chunk = os.read(stderr_read, 4096)
-                    if chunk:
-                        stderr_data += chunk
-                except (OSError, BlockingIOError):
-                    pass
-
-                # Check if child has exited
-                result = os.waitpid(pid, os.WNOHANG)
-                if result[0] == pid:
-                    # Child has exited, read remaining data
-                    while True:
-                        try:
-                            chunk = os.read(stdout_read, 4096)
-                            if not chunk:
-                                break
-                            stdout_data += chunk
-                        except Exception:
-                            break
-
-                    while True:
-                        try:
-                            chunk = os.read(stderr_read, 4096)
-                            if not chunk:
-                                break
-                            stderr_data += chunk
-                        except Exception:
-                            break
-
-                    # Get return code
-                    status = result[1]
-                    if os.WIFEXITED(status):
-                        returncode = os.WEXITSTATUS(status)
-                    elif os.WIFSIGNALED(status):
-                        returncode = -os.WTERMSIG(status)
-                    else:
-                        returncode = status
-
-                    os.close(stdout_read)
-                    os.close(stderr_read)
-
-                    return CompletedProcess(
-                        args=cmd_line,
-                        returncode=returncode,
-                        stdout=stdout_data,
-                        stderr=stderr_data,
-                    )
-
-                # Small sleep to avoid busy waiting
-                time.sleep(0.01)
+        try:
+            result = subprocess.run(
+                cmd_line,
+                capture_output=True,
+                timeout=timeout,
+            )
+            return CompletedProcess(
+                args=cmd_line,
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
+            )
+        except subprocess.TimeoutExpired:
+            raise TimeoutError(
+                f"Command '{cmd_line[0]}' timed out after {timeout} seconds"
+            )
 
     def run_command(
         self,
