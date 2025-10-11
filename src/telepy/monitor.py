@@ -11,6 +11,8 @@ If code is 0, the data represents the successful msg, otherwise it represent err
 """
 
 import argparse
+import io
+import sys
 from collections.abc import Callable
 from typing import Final, cast
 
@@ -24,6 +26,49 @@ SUCCESS_CODE: Final = 0
 
 # Global registry for endpoints
 ENDPOINT_REGISTRY: dict[str, Callable[[TelePyRequest, TelePyResponse], None]] = {}
+
+
+def safe_parse_args(parser: argparse.ArgumentParser, args: list[str]):
+    """
+    Safely parse arguments handling both ArgumentError and SystemExit exceptions.
+
+    Args:
+        parser: The ArgumentParser instance
+        args: List of arguments to parse
+
+    Returns:
+        tuple: (success: bool, result: Namespace or error_message: str)
+    """
+    # Capture stderr to get error messages
+    old_stderr = sys.stderr
+    sys.stderr = io.StringIO()
+
+    try:
+        parsed_args = parser.parse_args(args)
+        return True, parsed_args
+    except (argparse.ArgumentError, SystemExit) as e:
+        error_output = sys.stderr.getvalue()
+
+        # Extract the error message from stderr or exception
+        if error_output:
+            # Remove 'usage:' line and keep only the error
+            lines = error_output.strip().split("\n")
+            error_msg = "\n".join(
+                line for line in lines if line and not line.startswith("usage:")
+            )
+            # Remove the program name prefix from error line
+            if ":" in error_msg:
+                error_msg = error_msg.split(":", 1)[1].strip()
+                if error_msg.startswith("error:"):
+                    error_msg = error_msg[6:].strip()
+        elif isinstance(e, argparse.ArgumentError):
+            error_msg = e.message
+        else:
+            error_msg = str(e)
+
+        return False, error_msg
+    finally:
+        sys.stderr = old_stderr
 
 
 def register_endpoint(path: str):
@@ -80,10 +125,8 @@ def stack(req: TelePyRequest, resp: TelePyResponse):
         --strip-cwd, -c: Remove current working directory prefix
         --help, -h: Show help message
     """
-    import argparse
     import os
     import sys
-    from argparse import ArgumentError
 
     parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
     parser.add_argument(
@@ -111,12 +154,12 @@ def stack(req: TelePyRequest, resp: TelePyResponse):
     args_str = req.headers.get("args", "").strip()
     args_list = args_str.split() if args_str else []
 
-    try:
-        parse_args = parser.parse_args(args_list)
-    except ArgumentError as e:
-        resp.return_json({"data": e.message, "code": ERROR_CODE})
+    success, result = safe_parse_args(parser, args_list)
+    if not success:
+        resp.return_json({"data": result, "code": ERROR_CODE})
         return
 
+    parse_args = result
     if parse_args.help:
         resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
         return
@@ -191,8 +234,6 @@ def ping(req: TelePyRequest, resp: TelePyResponse):
 
 @register_endpoint("/profile")
 def profile(req: TelePyRequest, resp: TelePyResponse):
-    from argparse import ArgumentError
-
     def create_start_parser():
         parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
         parser.add_argument(
@@ -269,11 +310,11 @@ def profile(req: TelePyRequest, resp: TelePyResponse):
         return
     if args[0] == "start":
         parser = create_start_parser()
-        try:
-            parse_args = parser.parse_args(args[1:])
-        except ArgumentError as e:
-            resp.return_json({"data": e.message, "code": ERROR_CODE})
+        success, result = safe_parse_args(parser, args[1:])
+        if not success:
+            resp.return_json({"data": result, "code": ERROR_CODE})
             return
+        parse_args = result
         if parse_args.help:
             resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
             return
@@ -289,11 +330,11 @@ def profile(req: TelePyRequest, resp: TelePyResponse):
             resp.return_json({"data": "Profiler already started", "code": SUCCESS_CODE})
     elif args[0] == "stop":
         parser = create_stop_parser()
-        try:
-            parse_args = parser.parse_args(args[1:])
-        except ArgumentError as e:
-            resp.return_json({"data": e.message, "code": ERROR_CODE})
+        success, result = safe_parse_args(parser, args[1:])
+        if not success:
+            resp.return_json({"data": result, "code": ERROR_CODE})
             return
+        parse_args = result
         if parse_args.help:
             resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
             return
@@ -324,8 +365,6 @@ def profile(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-status")
 def gc_status(req: TelePyRequest, resp: TelePyResponse):
     """Get Python garbage collection status."""
-    from argparse import ArgumentError
-
     parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
     parser.add_argument(
         "--help",
@@ -336,12 +375,12 @@ def gc_status(req: TelePyRequest, resp: TelePyResponse):
     )
 
     args = req.headers.get("args", "").strip().split()
-    try:
-        parse_args = parser.parse_args(args)
-    except ArgumentError as e:
-        resp.return_json({"data": e.message, "code": ERROR_CODE})
+    success, result = safe_parse_args(parser, args)
+    if not success:
+        resp.return_json({"data": result, "code": ERROR_CODE})
         return
 
+    parse_args = result
     if parse_args.help:
         resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
         return
@@ -354,8 +393,6 @@ def gc_status(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-stats")
 def gc_stats(req: TelePyRequest, resp: TelePyResponse):
     """Get detailed garbage collection statistics."""
-    from argparse import ArgumentError
-
     parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
     parser.add_argument(
         "--help",
@@ -366,12 +403,12 @@ def gc_stats(req: TelePyRequest, resp: TelePyResponse):
     )
 
     args = req.headers.get("args", "").strip().split()
-    try:
-        parse_args = parser.parse_args(args)
-    except ArgumentError as e:
-        resp.return_json({"data": e.message, "code": ERROR_CODE})
+    success, result = safe_parse_args(parser, args)
+    if not success:
+        resp.return_json({"data": result, "code": ERROR_CODE})
         return
 
+    parse_args = result
     if parse_args.help:
         resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
         return
@@ -384,8 +421,6 @@ def gc_stats(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-objects")
 def gc_objects(req: TelePyRequest, resp: TelePyResponse):
     """Get statistics about tracked objects by type."""
-    from argparse import ArgumentError
-
     parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
     parser.add_argument(
         "--limit",
@@ -427,12 +462,12 @@ def gc_objects(req: TelePyRequest, resp: TelePyResponse):
     )
 
     args = req.headers.get("args", "").strip().split()
-    try:
-        parse_args = parser.parse_args(args)
-    except ArgumentError as e:
-        resp.return_json({"data": e.message, "code": ERROR_CODE})
+    success, result = safe_parse_args(parser, args)
+    if not success:
+        resp.return_json({"data": result, "code": ERROR_CODE})
         return
 
+    parse_args = result
     if parse_args.help:
         resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
         return
@@ -464,8 +499,6 @@ def gc_objects(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-garbage")
 def gc_garbage(req: TelePyRequest, resp: TelePyResponse):
     """Get information about uncollectable garbage objects."""
-    from argparse import ArgumentError
-
     parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
     parser.add_argument(
         "--help",
@@ -476,12 +509,12 @@ def gc_garbage(req: TelePyRequest, resp: TelePyResponse):
     )
 
     args = req.headers.get("args", "").strip().split()
-    try:
-        parse_args = parser.parse_args(args)
-    except ArgumentError as e:
-        resp.return_json({"data": e.message, "code": ERROR_CODE})
+    success, result = safe_parse_args(parser, args)
+    if not success:
+        resp.return_json({"data": result, "code": ERROR_CODE})
         return
 
+    parse_args = result
     if parse_args.help:
         resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
         return
@@ -494,8 +527,6 @@ def gc_garbage(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-collect")
 def gc_collect(req: TelePyRequest, resp: TelePyResponse):
     """Manually trigger garbage collection."""
-    from argparse import ArgumentError
-
     parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
     parser.add_argument(
         "--generation",
@@ -514,12 +545,12 @@ def gc_collect(req: TelePyRequest, resp: TelePyResponse):
     )
 
     args = req.headers.get("args", "").strip().split()
-    try:
-        parse_args = parser.parse_args(args)
-    except ArgumentError as e:
-        resp.return_json({"data": e.message, "code": ERROR_CODE})
+    success, result = safe_parse_args(parser, args)
+    if not success:
+        resp.return_json({"data": result, "code": ERROR_CODE})
         return
 
+    parse_args = result
     if parse_args.help:
         resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
         return
@@ -532,8 +563,6 @@ def gc_collect(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-monitor")
 def gc_monitor(req: TelePyRequest, resp: TelePyResponse):
     """Monitor garbage collection activity since last check."""
-    from argparse import ArgumentError
-
     parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
     parser.add_argument(
         "--help",
@@ -544,12 +573,12 @@ def gc_monitor(req: TelePyRequest, resp: TelePyResponse):
     )
 
     args = req.headers.get("args", "").strip().split()
-    try:
-        parse_args = parser.parse_args(args)
-    except ArgumentError as e:
-        resp.return_json({"data": e.message, "code": ERROR_CODE})
+    success, result = safe_parse_args(parser, args)
+    if not success:
+        resp.return_json({"data": result, "code": ERROR_CODE})
         return
 
+    parse_args = result
     if parse_args.help:
         resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
         return
