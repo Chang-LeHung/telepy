@@ -596,7 +596,7 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
             stderr_check_list=[
                 "ZeroDivisionError: division by zero",
             ],
-            exit_code=-27 if "coverage" in sys.modules else 1,
+            exit_code=1,
         )
 
     def test_py_error_raw(self):
@@ -605,7 +605,7 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
             stderr_check_list=[
                 "division by zero",
             ],
-            exit_code=-27 if "coverage" in sys.modules else 1,
+            exit_code=1,
         )
 
     def test_not_python_file(self):

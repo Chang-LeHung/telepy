@@ -420,10 +420,13 @@ def telepy_env(config: TelePySamplerConfig, code_mode: CodeMode = CodeMode.PyFil
         remains. Explicitly call `Environment.clear_instances` (or the helper `clear_resources`)
         when you no longer need the sampler to fully release TelePy resources.
     """  # noqa: E501
+    global_dict = Environment.init_telepy_environment(config, code_mode)
+    current_sampler = Environment.get_sampler()
     try:
-        global_dict = Environment.init_telepy_environment(config, code_mode)
-        current_sampler = Environment.get_sampler()
         yield global_dict, current_sampler
+    except Exception:
+        telepy_finalize()
+        raise
     finally:
         Environment.destory_telepy_enviroment()
 
@@ -692,12 +695,9 @@ def telepy_finalize(save: bool = True) -> None:
         raise RuntimeError(ERROR_ENV_NOT_INITIALIZED)
 
     current_sampler = Environment.get_sampler()
-    current_args = Environment.get_args()
 
-    assert current_sampler is not None
-    assert current_args is not None
     # forserver mode will not start the sampler.
-    if current_sampler.started:
+    if current_sampler is not None and current_sampler.started:
         current_sampler.stop()
         if save:
             _do_save()
