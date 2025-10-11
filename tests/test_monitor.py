@@ -61,7 +61,8 @@ class TestMonitor(TestBase):
     ) -> None:
         import json
         import threading
-        from urllib import request
+        import time
+        from urllib import error, request
 
         from telepy import install_monitor
 
@@ -73,6 +74,37 @@ class TestMonitor(TestBase):
 
         t = threading.Thread(target=server)
         t.start()
+
+        # Wait for server to be ready with retry logic
+        max_retries = 50  # 5 seconds total (50 * 0.1s)
+        retry_count = 0
+        server_ready = False
+
+        while retry_count < max_retries:
+            try:
+                # Try to ping the server
+                ping_url = f"http://127.0.0.1:{port}/ping"
+                ping_req = request.Request(ping_url)
+                with request.urlopen(ping_req, timeout=1) as response:
+                    if response.status == 200:
+                        server_ready = True
+                        break
+            except (error.URLError, ConnectionRefusedError, OSError):
+                retry_count += 1
+                time.sleep(0.1)
+
+        if not server_ready:
+            # Try to shutdown gracefully even if server didn't respond
+            try:
+                url = f"http://127.0.0.1:{port}/shutdown"
+                req = request.Request(url)
+                with request.urlopen(req, timeout=1) as response:
+                    pass
+            except Exception:
+                pass
+            t.join(timeout=5)
+            wait_time = max_retries * 0.1
+            self.fail(f"Server failed to start on port {port} after {wait_time} seconds")
 
         url = f"http://127.0.0.1:{port}/{command}"
         headers = {
@@ -105,12 +137,35 @@ class TestMonitor(TestBase):
         import json
         import threading
         import time
-        from urllib import request
+        from urllib import error, request
 
         from telepy import install_monitor
 
         def client():
-            time.sleep(0.5)
+            # Wait for server to be ready with retry logic
+            max_retries = 50  # 5 seconds total (50 * 0.1s)
+            retry_count = 0
+            server_ready = False
+
+            while retry_count < max_retries:
+                try:
+                    # Try to ping the server
+                    ping_url = f"http://127.0.0.1:{port}/ping"
+                    ping_req = request.Request(ping_url)
+                    with request.urlopen(ping_req, timeout=1) as response:
+                        if response.status == 200:
+                            server_ready = True
+                            break
+                except (error.URLError, ConnectionRefusedError, OSError):
+                    retry_count += 1
+                    time.sleep(0.1)
+
+            if not server_ready:
+                wait_time = max_retries * 0.1
+                self.fail(
+                    f"Server failed to start on port {port} after {wait_time} seconds"
+                )
+
             url = f"http://127.0.0.1:{port}/{command}"
             headers = {
                 "args": " ".join(args),

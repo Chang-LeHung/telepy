@@ -255,8 +255,7 @@ class CommandTemplate(TestBase):
         else:
             cmd_line = ["telepy", *options]
         output = subprocess.run(cmd_line, capture_output=True, timeout=timeout)  # type: ignore
-        # TODO: why exits with -10 sometimes?
-        self.assertIn(output.returncode, [exit_code, -10])
+        self.assertIn(output.returncode, [exit_code])
         stdout = output.stdout.decode("utf-8")
         for check in stdout_check_list:
             self.assertRegex(stdout, check)
