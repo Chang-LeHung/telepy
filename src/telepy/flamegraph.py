@@ -14,6 +14,8 @@ Input format:
     func_a;func_d 50
 """  # noqa: E501
 
+from __future__ import annotations
+
 import collections
 import hashlib
 import html
@@ -21,6 +23,19 @@ import os
 import sys
 import textwrap
 from collections import defaultdict
+
+
+# Python 3.8 compatibility helper
+def _removeprefix(text: str, prefix: str) -> str:
+    """Remove prefix from string (compatible with Python 3.8)."""
+    if sys.version_info >= (3, 9):  # noqa: UP036
+        # Python 3.9+: use built-in str.removeprefix
+        return text.removeprefix(prefix)
+    else:
+        # Python 3.8: manual implementation
+        if text.startswith(prefix):
+            return text[len(prefix) :]
+        return text
 
 
 class FlameGraph:
@@ -392,11 +407,12 @@ def process_stack_trace(lines: list[str], site_path: str, work_dir: str) -> list
             continue
         t = []
         for item in line.split(";"):
-            item = item.removeprefix(site_path)
-            item = item.removeprefix(work_dir)
-            item = item.removeprefix(base_dir)
-            if item[0] == "/":
-                item = item[1:]
+            # Use version-aware removeprefix helper
+            item = _removeprefix(item, site_path)
+            item = _removeprefix(item, work_dir)
+            item = _removeprefix(item, base_dir)
+            # Remove leading slash if present
+            item = _removeprefix(item, "/")
             t.append(item)
         res.append(";".join(t))
     return res

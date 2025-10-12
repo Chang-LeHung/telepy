@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from typing import Any, Final
 from urllib import request
@@ -8,7 +10,7 @@ ERROR_CODE: Final = -1
 SUCCESS_CODE: Final = 0
 
 # Global registry for commands
-COMMAND_REGISTRY: dict[str, type["CommandProcessor"]] = {}
+COMMAND_REGISTRY: dict[str, type[CommandProcessor]] = {}
 
 
 def register_command(name: str, help_text: str):
@@ -20,7 +22,7 @@ def register_command(name: str, help_text: str):
         help_text: Help text for this command
     """
 
-    def decorator(cls: type["CommandProcessor"]) -> type["CommandProcessor"]:
+    def decorator(cls: type[CommandProcessor]) -> type[CommandProcessor]:
         cls._command_name = name  # type: ignore
         cls._help_text = help_text  # type: ignore
         COMMAND_REGISTRY[name] = cls

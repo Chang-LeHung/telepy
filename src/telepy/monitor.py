@@ -10,6 +10,8 @@ If code is 0, the data represents the successful msg, otherwise it represent err
 ```
 """
 
+from __future__ import annotations
+
 import argparse
 import io
 import sys
@@ -128,7 +130,7 @@ def stack(req: TelePyRequest, resp: TelePyResponse):
     import os
     import sys
 
-    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--strip-site-packages",
         "-s",
@@ -235,7 +237,7 @@ def ping(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/profile")
 def profile(req: TelePyRequest, resp: TelePyResponse):
     def create_start_parser():
-        parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+        parser = argparse.ArgumentParser(add_help=False)
         parser.add_argument(
             "--interval",
             type=int,
@@ -265,7 +267,7 @@ def profile(req: TelePyRequest, resp: TelePyResponse):
         return parser
 
     def create_stop_parser():
-        parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+        parser = argparse.ArgumentParser(add_help=False)
         parser.add_argument(
             "-f",
             "--filename",
@@ -365,7 +367,7 @@ def profile(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-status")
 def gc_status(req: TelePyRequest, resp: TelePyResponse):
     """Get Python garbage collection status."""
-    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--help",
         "-h",
@@ -393,7 +395,7 @@ def gc_status(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-stats")
 def gc_stats(req: TelePyRequest, resp: TelePyResponse):
     """Get detailed garbage collection statistics."""
-    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--help",
         "-h",
@@ -421,7 +423,7 @@ def gc_stats(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-objects")
 def gc_objects(req: TelePyRequest, resp: TelePyResponse):
     """Get statistics about tracked objects by type."""
-    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--limit",
         "-l",
@@ -499,7 +501,7 @@ def gc_objects(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-garbage")
 def gc_garbage(req: TelePyRequest, resp: TelePyResponse):
     """Get information about uncollectable garbage objects."""
-    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--help",
         "-h",
@@ -527,7 +529,7 @@ def gc_garbage(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-collect")
 def gc_collect(req: TelePyRequest, resp: TelePyResponse):
     """Manually trigger garbage collection."""
-    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--generation",
         "-g",
@@ -563,7 +565,7 @@ def gc_collect(req: TelePyRequest, resp: TelePyResponse):
 @register_endpoint("/gc-monitor")
 def gc_monitor(req: TelePyRequest, resp: TelePyResponse):
     """Monitor garbage collection activity since last check."""
-    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--help",
         "-h",

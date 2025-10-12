@@ -2,6 +2,8 @@
 TelePy command entry point.
 """
 
+from __future__ import annotations
+
 import argparse
 import heapq
 import os
@@ -34,6 +36,62 @@ from .shell import TelePyShell
 
 console = logger.console
 err_console = logger.err_console
+
+# Python 3.8 compatibility: BooleanOptionalAction was added in Python 3.9
+# For Python 3.8, we need to manually add both --flag and --no-flag options
+_BOOLEAN_OPTIONAL_ACTION = getattr(argparse, "BooleanOptionalAction", None)
+
+
+def add_boolean_argument(
+    parser: argparse.ArgumentParser,
+    *flags: str,
+    default: bool | None = None,
+    help: str = "",
+    **kwargs,
+) -> None:
+    """
+    Add a boolean argument with --flag/--no-flag support.
+
+    Uses argparse.BooleanOptionalAction on Python 3.9+,
+    falls back to manual implementation on Python 3.8.
+    """
+    if _BOOLEAN_OPTIONAL_ACTION is not None:
+        # Python 3.9+: Use BooleanOptionalAction
+        parser.add_argument(
+            *flags,
+            action=_BOOLEAN_OPTIONAL_ACTION,
+            default=default,
+            help=help,
+            **kwargs,
+        )
+    else:
+        # Python 3.8: Simply add both positive and negative flags
+        # Extract the main flag (longest one with --)
+        main_flag = None
+        for flag in flags:
+            if flag.startswith("--"):
+                main_flag = flag
+                break
+
+        if main_flag is None:
+            raise ValueError("At least one long flag (--flag) is required")
+
+        # Generate the destination name from the main flag
+        dest = main_flag.lstrip("-").replace("-", "_")
+
+        # Add positive flag
+        positive_flags = list(flags)
+        parser.add_argument(
+            *positive_flags, action="store_true", dest=dest, help=help, **kwargs
+        )
+
+        # Add negative flag (only for long options)
+        no_flag = f"--no-{main_flag[2:]}"
+        parser.add_argument(no_flag, action="store_false", dest=dest, **kwargs)
+
+        # Set default value
+        if default is not None:
+            parser.set_defaults(**{dest: default})
 
 
 in_coverage = "coverage" in sys.modules
@@ -71,10 +129,10 @@ class ArgsHandler(ABC):
 
     @classmethod
     @abstractmethod
-    def build(cls) -> "ArgsHandler":
+    def build(cls) -> ArgsHandler:
         pass  # pragma: no cover
 
-    def __lt__(self, other: "ArgsHandler") -> bool:
+    def __lt__(self, other: ArgsHandler) -> bool:
         return self.weight > other.weight  # big heap
 
 
@@ -321,9 +379,9 @@ def main():
     parser.add_argument(
         "-v", "--version", action="store_true", help="Show version information and exit."
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--verbose",
-        action=argparse.BooleanOptionalAction,
         default=True,
         help="Enable verbose mode (default: True).",
     )
@@ -412,9 +470,9 @@ def main():
         default=1200,
         help="SVG width in pixels for generated flamegraphs (default: 1200).",
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--merge",
-        action=argparse.BooleanOptionalAction,
         default=True,
         help="Merge multiple flamegraph files in multiprocess environment (default: "
         "True). If not merge them, the child flamegraphs and foldeds will be named in "
@@ -484,27 +542,27 @@ def main():
         help="PyTorch profiler activities to profile. Can be specified multiple times. "
         "Options: cpu, cuda, xpu. Default: ['cpu'].",
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--torch-record-shapes",
-        action=argparse.BooleanOptionalAction,
         default=True,
         help="Whether to record tensor shapes in PyTorch profiler (default: True).",
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--torch-profile-memory",
-        action=argparse.BooleanOptionalAction,
         default=True,
         help="Whether to profile memory usage in PyTorch profiler (default: True).",
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--torch-with-stack",
-        action=argparse.BooleanOptionalAction,
         default=False,
         help="Whether to record call stack in PyTorch profiler (default: False).",
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--torch-export-chrome-trace",
-        action=argparse.BooleanOptionalAction,
         default=False,
         help="Whether to export Chrome trace format from PyTorch profiler "
         "(default: False).",

@@ -63,6 +63,9 @@ _RESERVED_GLOBAL_KEYS = {
     "__annotations__",
 }
 
+# Python 3.8 compatibility: BooleanOptionalAction was added in Python 3.9
+_BOOLEAN_OPTIONAL_ACTION = getattr(argparse, "BooleanOptionalAction", None)
+
 
 def _positive_int(value: str) -> int:
     ivalue = int(value)
@@ -76,7 +79,14 @@ def _build_parser() -> argparse.ArgumentParser:
     # Sampler and environment options (aligned with CLI behaviour)
     parser.add_argument("-i", "--interval", type=_positive_int, default=8000)
     parser.add_argument("--timeout", type=float, default=10)
-    parser.add_argument("--verbose", action=argparse.BooleanOptionalAction, default=None)
+    # Python 3.8 compatibility: handle BooleanOptionalAction manually
+    if _BOOLEAN_OPTIONAL_ACTION is not None:
+        parser.add_argument("--verbose", action=_BOOLEAN_OPTIONAL_ACTION, default=None)
+    else:
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument("--verbose", action="store_true", dest="verbose")
+        group.add_argument("--no-verbose", action="store_false", dest="verbose")
+        parser.set_defaults(verbose=None)
     parser.add_argument("--ignore-frozen", action="store_true", default=False)
     parser.add_argument("--include-telepy", action="store_true", default=False)
     parser.add_argument("--focus-mode", action="store_true", default=False)
