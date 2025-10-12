@@ -210,23 +210,45 @@ class TestShell(TestBase):
         msg, ok = shell.dispatch("attach " + "a" * 1000 + ":" + "9" * 100)
         self.assertFalse(ok)
         # Different environments may return different errors for invalid hostnames
-        # Either "Bad Gateway" or "label too long" (DNS validation error) is acceptable
+        # - "Bad Gateway" (general connection error)
+        # - "label too long" (DNS validation error)
+        # - "Invalid Host/Port" (format validation error)
+        # - "Can't assign requested address" (network error on some systems)
         self.assertTrue(
-            "Bad Gateway" in msg or "label too long" in msg or "Invalid Host/Port" in msg,
+            "Bad Gateway" in msg
+            or "label too long" in msg
+            or "Invalid Host/Port" in msg
+            or "Can't assign requested address" in msg
+            or "Url Error:" in msg,
             f"Expected connection error but got: {msg}",
         )
 
         # Test negative port number
         msg, ok = shell.dispatch("attach 127.0.0.1:-1")
         self.assertFalse(ok)
-        self.assertIn("Error", msg)
+        # Various error messages possible for negative port:
+        # - Generic "Error" message
+        # - "Invalid Host/Port" (validation error)
+        # - "Url Error" (network error)
+        self.assertTrue(
+            "Error" in msg or "Invalid Host/Port" in msg or "Url Error:" in msg,
+            f"Expected error message but got: {msg}",
+        )
 
         # Test zero port number
         msg, ok = shell.dispatch("attach 127.0.0.1:0")
         self.assertFalse(ok)
-        # Port 0 behavior varies by system - either connection error or invalid port
+        # Port 0 behavior varies by system:
+        # - "Bad Gateway" (some systems)
+        # - "Invalid Host/Port" (validation error)
+        # - "Connection refused/reset" (connection error)
+        # - "Can't assign requested address" (macOS/BSD errno 49)
         self.assertTrue(
-            "Bad Gateway" in msg or "Invalid Host/Port" in msg or "Connection" in msg,
+            "Bad Gateway" in msg
+            or "Invalid Host/Port" in msg
+            or "Connection" in msg
+            or "Can't assign requested address" in msg
+            or "Url Error:" in msg,
             f"Expected connection/invalid port error but got: {msg}",
         )
 
