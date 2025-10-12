@@ -104,7 +104,19 @@ class TestShell(TestBase):
 
         msg, ok = shell.dispatch("attach :8026")
         self.assertFalse(ok)
-        self.assertTrue("Bad Gateway" in msg or "Name or service not known" in msg)
+        # Various error messages depending on OS/Python version:
+        # - "Bad Gateway" (some systems)
+        # - "Name or service not known" (Linux)
+        # - "nodename nor servname provided, or not known" (macOS)
+        # - "Connection refused" (some systems)
+        # Just check that there's an error message and connection failed
+        self.assertTrue(
+            "Url Error:" in msg
+            or "Bad Gateway" in msg
+            or "Name or service not known" in msg
+            or "nodename nor servname" in msg
+            or "Connection refused" in msg
+        )
 
         msg, ok = shell.dispatch("attach 127.0.0.1:")
         self.assertFalse(ok)
