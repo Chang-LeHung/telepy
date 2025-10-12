@@ -12,6 +12,7 @@ jobs:
   test:
     name: Test on ${{ matrix.os }} - Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -63,6 +64,7 @@ jobs:
   coverage:
     name: Coverage Report on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     needs: test
     strategy:
       fail-fast: false
