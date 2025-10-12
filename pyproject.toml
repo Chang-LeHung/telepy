@@ -36,8 +36,8 @@ benchmark = ["torch>=2.0.0", "torchvision>=0.15.0", "numpy>=1.24.0"]
 dev = [
     "build>=1.2.0",
     "coverage>=6.5.0",    # 6.x for Python 3.8 compatibility
-    "setuptools>=80.0.0",
-    "wheel>=0.45.0",
+    "setuptools>=65.0.0",
+    "wheel>=0.40.0",
     "ruff>=0.14.0",
 ]
 all = [
@@ -47,8 +47,8 @@ all = [
     "torchvision>=0.15.0",
     "build>=1.2.0",
     "coverage>=6.5.0",     # 6.x for Python 3.8 compatibility
-    "setuptools>=80.0.0",
-    "wheel>=0.45.0",
+    "setuptools>=65.0.0",
+    "wheel>=0.40.0",
     "ruff>=0.14.0",
 ]
 
