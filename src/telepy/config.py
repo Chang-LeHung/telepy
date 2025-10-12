@@ -2,6 +2,8 @@
 Configuration file handling for TelePy.
 """
 
+from __future__ import annotations
+
 import json
 import os
 from pathlib import Path
@@ -370,7 +372,7 @@ class TelePySamplerConfig:
         self.torch_row_limit = torch_row_limit
 
     @classmethod
-    def from_namespace(cls, args_namespace) -> "TelePySamplerConfig":
+    def from_namespace(cls, args_namespace) -> TelePySamplerConfig:
         """Create TelePySamplerConfig from argparse.Namespace.
 
         Args:

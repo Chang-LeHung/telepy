@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 import signal
 import sys
@@ -24,7 +26,7 @@ class SamplerMiddleware(ABC):
     """Abstract base class for sampler middleware."""
 
     def on_before_start(
-        self, sampler: "TelepySysAsyncSampler | TelepySysSampler"
+        self, sampler: TelepySysAsyncSampler | TelepySysSampler
     ) -> None:
         """Called before the sampler starts.
 
@@ -34,7 +36,7 @@ class SamplerMiddleware(ABC):
         pass
 
     def on_after_start(
-        self, sampler: "TelepySysAsyncSampler | TelepySysSampler"
+        self, sampler: TelepySysAsyncSampler | TelepySysSampler
     ) -> None:  # pragma: no cover
         """Called after the sampler has started.
 
@@ -44,7 +46,7 @@ class SamplerMiddleware(ABC):
         pass
 
     def on_before_stop(
-        self, sampler: "TelepySysAsyncSampler | TelepySysSampler"
+        self, sampler: TelepySysAsyncSampler | TelepySysSampler
     ) -> None:  # pragma: no cover
         """Called before the sampler stops.
 
@@ -54,7 +56,7 @@ class SamplerMiddleware(ABC):
         pass
 
     def on_after_stop(
-        self, sampler: "TelepySysAsyncSampler | TelepySysSampler"
+        self, sampler: TelepySysAsyncSampler | TelepySysSampler
     ) -> None:  # pragma: no cover
         """Called after the sampler has stopped.
 
@@ -64,7 +66,7 @@ class SamplerMiddleware(ABC):
         pass
 
     def process_dump(
-        self, sampler: "TelepySysAsyncSampler | TelepySysSampler", dump_str: str
+        self, sampler: TelepySysAsyncSampler | TelepySysSampler, dump_str: str
     ) -> str | None:
         """Process the dump string before it's returned.
 
@@ -783,7 +785,7 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):  # pragma: no cover
 
         return datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")[:-3]
 
-    def on_after_start(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
+    def on_after_start(self, sampler: TelepySysAsyncSampler | TelepySysSampler) -> None:
         """Called after the sampler starts - start PyTorch profiler."""
         if not self.torch_available:
             return
@@ -824,7 +826,7 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):  # pragma: no cover
             self._log(f"Error starting profiler: {e}")
             self.profiler = None
 
-    def on_before_stop(self, sampler: "TelepySysAsyncSampler | TelepySysSampler") -> None:
+    def on_before_stop(self, sampler: TelepySysAsyncSampler | TelepySysSampler) -> None:
         """Called after the sampler stops - stop profiler and export results."""
         if not self.torch_available or self.profiler is None:
             return

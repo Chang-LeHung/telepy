@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import json
 import logging
@@ -34,7 +36,7 @@ class TelePyHandler(BaseHTTPRequestHandler):
     """
 
     routers: dict[str, dict[str, Callable[..., Any]]]
-    app: "TelePyApp"
+    app: TelePyApp
     server: HTTPServer
 
     def __init__(self, request, client_address, server) -> None:
@@ -214,7 +216,7 @@ class TelePyException(Exception):
 class TelePyRequest:
     def __init__(
         self,
-        app: "TelePyApp",
+        app: TelePyApp,
         headers: dict[str, str],
         body: bytes | None = None,
         url: str = "/",
