@@ -6,6 +6,8 @@ to the folded stack format used by TelePy for flame graph generation.
 Each trace line starts with Process(pid);Thread(tid); followed by the stack trace.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from collections import defaultdict
