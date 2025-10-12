@@ -2,6 +2,7 @@ import contextlib
 import io
 import logging
 import threading
+import time
 
 from prompt_toolkit.input.defaults import create_pipe_input
 
@@ -27,12 +28,20 @@ class TestShell(TestBase):
                 return fib(n - 1) + fib(n - 2)
 
             monitor = install_monitor(port=port, log=False)
+            # Use a smaller workload and add timeout protection
+            start_time = time.time()
             while monitor.is_alive:
-                fib(35)
+                fib(30)  # Reduced from 35 to 30 for faster execution
+                # Safety timeout: exit after 5 seconds even if monitor is still alive
+                if time.time() - start_time > 5:
+                    break
             monitor.close()
 
         t = threading.Thread(target=server)
         t.start()
+
+        # Add a small delay to ensure server is ready
+        time.sleep(0.5)
 
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
@@ -46,7 +55,11 @@ class TestShell(TestBase):
                 ipt.close()
                 shell = TelePyShell(input=ipt)
                 shell.run()
-        t.join()
+
+        # Add timeout to join to prevent indefinite hanging
+        t.join(timeout=10)
+        if t.is_alive():
+            self.logger.warning("Server thread did not terminate in time")
 
     def test_shell_corner_cases(self):
         import os

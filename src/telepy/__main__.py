@@ -12,7 +12,7 @@ try:
     from typing import override
 except ImportError:
     try:
-        from typing_extensions import override
+        from typing_extensions import override  # noqa: UP035
     except ImportError:
 
         def override(func):
