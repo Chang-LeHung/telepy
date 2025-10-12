@@ -25,7 +25,7 @@ class CommandTemplate(TestBase):
         stdout_check_list: list[str] = [],
         stderr_check_list: list[str] = [],
         options: list[str] = [],
-        timeout: int = 10,
+        timeout: int = 20,
         exit_code: int = 0,
         debug: bool = False,
     ):

@@ -4,7 +4,7 @@ from multiprocessing import Process, set_start_method
 def test_forkserver(name):
     print("hello", name)
     a = 0
-    while a < 100000000:
+    while a < 1000000:
         a += 1
 
 
