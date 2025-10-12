@@ -382,7 +382,7 @@ get_thread_name(PyObject* threads, PyObject* thread_id) {
 
 // microsecond
 static Telepy_time
-unix_micro_time() {
+unix_micro_time(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (Telepy_time)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;

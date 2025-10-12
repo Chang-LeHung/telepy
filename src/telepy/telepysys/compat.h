@@ -14,13 +14,37 @@
  * in newer Python versions.
  */
 
-// Python 3.9+ compatibility
-#if PY_VERSION_HEX < 0x03090000
-#error "Python 3.9 or newer is required"
+// Python 3.8+ compatibility
+#if PY_VERSION_HEX < 0x03080000
+#error "Python 3.8 or newer is required"
 #endif
 
-// Python 3.9 compatibility
+// Python 3.8 and 3.9 compatibility
 #if PY_VERSION_HEX < 0x030A0000  // Python < 3.10
+
+/*
+ * PyFrame_GetBack() was added in Python 3.9
+ * Returns the previous frame in the call stack
+ */
+#if PY_VERSION_HEX < 0x03090000  // Python 3.8
+static inline PyFrameObject*
+PyFrame_GetBack(PyFrameObject* frame) {
+    PyFrameObject* back = frame->f_back;
+    Py_XINCREF(back);
+    return back;
+}
+
+/*
+ * PyFrame_GetCode() was added in Python 3.9
+ * Returns the code object for a frame
+ */
+static inline PyCodeObject*
+PyFrame_GetCode(PyFrameObject* frame) {
+    PyCodeObject* code = frame->f_code;
+    Py_INCREF(code);
+    return code;
+}
+#endif  // Python < 3.9
 
 /*
  * Py_NewRef() was added in Python 3.10
