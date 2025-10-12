@@ -1,15 +1,17 @@
 
-#include "inject.h"
-#include "object.h"
-#include "telepysys.h"
-#include "tree.h"
-#include "tupleobject.h"
 #include <Python.h>
 #include <assert.h>
 #include <sched.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#include "compat.h"
+#include "inject.h"
+#include "object.h"
+#include "telepysys.h"
+#include "tree.h"
+#include "tupleobject.h"
 
 
 #define TELEPYSYS_VERSION "0.1.0"
@@ -260,7 +262,7 @@ call_stack(SamplerObject* self,
     if (!Sample_Enabled(self)) {
         return 0;  // Skip this sample silently
     }
-    
+
     size_t pos = 0;
     Py_INCREF(frame);
     PyObject* list = PyList_New(0);
@@ -1204,12 +1206,12 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
                            PyObject* const* args,
                            Py_ssize_t nargs) {
     SamplerObject* base = (SamplerObject*)self;
-    
+
     // Check for re-entrance first - if already sampling, return immediately
     if (SAMPLING_ENABLED(base)) {
         Py_RETURN_NONE;
     }
-    
+
     // Critical: Check if sampler is still enabled before processing
     // This handles the race condition where:
     // 1. stop() is called to disable sampling
@@ -1220,7 +1222,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
         // Sampler has been stopped, ignore this residual signal
         Py_RETURN_NONE;
     }
-    
+
     ENABLE_SAMPLING(base);
     if (nargs != 2) {
         PyErr_Format(
@@ -1259,14 +1261,14 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
                      "telepysys: _PyThread_CurrentFrames() failed");
         return NULL;
     }
-    
+
     // Check again after _PyThread_CurrentFrames
     if (!Sample_Enabled(base)) {
         DISABLE_SAMPLING(base);
         Py_DECREF(frames);
         Py_RETURN_NONE;
     }
-    
+
     if (main_frame) {
         Py_ssize_t size = snprintf(buf, buf_size, "%s;", "MainThread");
         int overflow = call_stack(
@@ -1299,7 +1301,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
             Py_DECREF(threads);
             Py_RETURN_NONE;
         }
-        
+
         // key is a thread id
         // value is a frame object
         unsigned long tid = PyLong_AsUnsignedLong(key);
@@ -1316,7 +1318,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
                          "telepysys: failed to get thread name");
             goto error;
         }
-        
+
         // Check again before processing this frame
         if (!Sample_Enabled(base)) {
             Py_DECREF(name);
@@ -1325,7 +1327,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
             Py_DECREF(threads);
             Py_RETURN_NONE;
         }
-        
+
         Py_ssize_t size =
             snprintf(buf, buf_size, "%s;", PyUnicode_AsUTF8(name));
         Py_DECREF(name);
