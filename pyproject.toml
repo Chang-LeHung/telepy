@@ -6,7 +6,12 @@ authors = [{ name = "changlehung", email = "changlehung@gmail.com" }]
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "rich>=14.0.0",
+    "rich-argparse>=1.7.0",
+    "prompt-toolkit>=3.0.43",
+    "Pygments>=2.19.0",
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3.13",
@@ -19,6 +24,29 @@ classifiers = [
     "Topic :: System :: Logging",
 ]
 license-files = ["LICENSE"]
+
+[project.optional-dependencies]
+torch = ["torch>=2.0.0", "numpy>=1.24.0"]
+jupyter = ["ipython>=8.0.0"]
+benchmark = ["torch>=2.0.0", "torchvision>=0.15.0", "numpy>=1.24.0"]
+dev = [
+    "build>=1.2.0",
+    "coverage>=7.9.0",
+    "setuptools>=80.0.0",
+    "wheel>=0.45.0",
+    "ruff>=0.14.0",
+]
+all = [
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+    "ipython>=8.0.0",
+    "torchvision>=0.15.0",
+    "build>=1.2.0",
+    "coverage>=7.9.0",
+    "setuptools>=80.0.0",
+    "wheel>=0.45.0",
+    "ruff>=0.14.0",
+]
 
 
 [build-system]
