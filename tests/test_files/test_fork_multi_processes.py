@@ -14,4 +14,4 @@ if __name__ == "__main__":
     pid = os.fork()
     os.fork()
 
-    fib(33)
+    fib(35)

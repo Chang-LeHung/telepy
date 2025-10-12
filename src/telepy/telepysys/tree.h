@@ -9,7 +9,7 @@ extern "C" {
 struct StackTree;
 
 struct StackTree*
-NewTree();
+NewTree(void);
 
 void
 FreeTree(struct StackTree* tree);

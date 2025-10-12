@@ -447,7 +447,7 @@ class TestGCAnalyzer(unittest.TestCase):
         test_objects = [UnsizedObject(), UnsizedObject(), 1, 2, "test"]
 
         # Should not raise an exception
-        type_counter, type_memory, total, total_memory = (
+        type_counter, type_memory, _total, _total_memory = (
             self.analyzer._calculate_stats_python(test_objects, calculate_memory=True)
         )
 

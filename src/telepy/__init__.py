@@ -1,5 +1,7 @@
 """."""
 
+from __future__ import annotations
+
 import threading
 from enum import Enum
 from types import FrameType
@@ -58,7 +60,8 @@ def current_stacks() -> dict[int, list[str]]:
             co = frame.f_code
             filename = co.co_filename
             lineno = frame.f_lineno
-            qualname = co.co_qualname
+            # co_qualname was added in Python 3.11
+            qualname = getattr(co, "co_qualname", co.co_name)
 
             stack.append(f"{filename}:{lineno} {qualname}")
             if frame.f_back is None:

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import enum
 import functools
@@ -105,12 +107,15 @@ def patch_multiprocesssing():
                 # forkserver mode, we need to inject telepy code to profile.
                 # we do not launch telepy in the server process, but we will
                 # hack the fork syscall to sample its child processes.
-                new_args = (
-                    args[:idx]
-                    + ["-m", "telepy", "--fork-server", "--no-merge"]
-                    + get_child_process_args()
-                    + args[idx : idx + 2]
-                )
+                new_args = [
+                    *args[:idx],
+                    "-m",
+                    "telepy",
+                    "--fork-server",
+                    "--no-merge",
+                    *get_child_process_args(),
+                    *args[idx : idx + 2],
+                ]
                 if parser_args.verbose:
                     logger.log_warning_panel(MESSAGE_FORKSERVER_NO_MERGE)
                 rest = args[idx + 2 :]
@@ -119,12 +124,14 @@ def patch_multiprocesssing():
                 args = new_args
             elif "resource_tracker" not in cmd:
                 # spawn mode
-                new_args = (
-                    args[:idx]
-                    + ["-m", "telepy", "--mp"]
-                    + get_child_process_args()
-                    + args[idx : idx + 2]
-                )
+                new_args = [
+                    *args[:idx],
+                    "-m",
+                    "telepy",
+                    "--mp",
+                    *get_child_process_args(),
+                    *args[idx : idx + 2],
+                ]
                 rest = args[idx + 2 :]
                 if rest:
                     new_args += [CMD_SEPARATOR, *rest]
@@ -228,6 +235,7 @@ class Environment:
                     with_stack=config.torch_with_stack,
                     export_chrome_trace=config.torch_export_chrome_trace,
                     sort_by=config.torch_sort_by,
+                    row_limit=config.torch_row_limit,
                     verbose=config.verbose,
                 )
                 sampler.register_middleware(torch_middleware)
@@ -235,7 +243,7 @@ class Environment:
                     logger.log_success_panel(
                         "PyTorch profiler middleware registered successfully"
                     )
-            except ImportError:
+            except ImportError:  # pragma: no cover
                 if config.verbose:
                     logger.log_warning_panel(
                         "PyTorch not available. PyTorch profiler will be disabled."
@@ -335,7 +343,7 @@ class Environment:
                 setattr(sys, INTERNAL_ARGV, old_arg)
                 if CMD_SEPARATOR in old_arg:
                     idx = old_arg.index(CMD_SEPARATOR)
-                    sys.argv = [file_name] + old_arg[idx + 1 :]
+                    sys.argv = [file_name, *old_arg[idx + 1 :]]
                 else:
                     sys.argv = [file_name]
                 sys.path.append(os.getcwd())
@@ -350,7 +358,7 @@ class Environment:
                 setattr(sys, INTERNAL_ARGV, old_arg)
                 if CMD_SEPARATOR in old_arg:
                     idx = old_arg.index(CMD_SEPARATOR)
-                    sys.argv = ["-c"] + old_arg[idx + 1 :]
+                    sys.argv = ["-c", *old_arg[idx + 1 :]]
                 else:
                     sys.argv = ["-c"]
                 sys.path.append(os.getcwd())
@@ -360,7 +368,7 @@ class Environment:
                 setattr(sys, INTERNAL_ARGV, old_arg)
                 if CMD_SEPARATOR in old_arg:
                     idx = old_arg.index(CMD_SEPARATOR)
-                    sys.argv = [old_arg[0]] + old_arg[idx + 1 :]
+                    sys.argv = [old_arg[0], *old_arg[idx + 1 :]]
                 else:
                     sys.argv = [old_arg[0]]
                 sys.path.append(os.getcwd())
@@ -419,10 +427,13 @@ def telepy_env(config: TelePySamplerConfig, code_mode: CodeMode = CodeMode.PyFil
         remains. Explicitly call `Environment.clear_instances` (or the helper `clear_resources`)
         when you no longer need the sampler to fully release TelePy resources.
     """  # noqa: E501
+    global_dict = Environment.init_telepy_environment(config, code_mode)
+    current_sampler = Environment.get_sampler()
     try:
-        global_dict = Environment.init_telepy_environment(config, code_mode)
-        current_sampler = Environment.get_sampler()
         yield global_dict, current_sampler
+    except Exception:
+        telepy_finalize()
+        raise
     finally:
         Environment.destory_telepy_enviroment()
 
@@ -691,12 +702,9 @@ def telepy_finalize(save: bool = True) -> None:
         raise RuntimeError(ERROR_ENV_NOT_INITIALIZED)
 
     current_sampler = Environment.get_sampler()
-    current_args = Environment.get_args()
 
-    assert current_sampler is not None
-    assert current_args is not None
     # forserver mode will not start the sampler.
-    if current_sampler.started:
+    if current_sampler is not None and current_sampler.started:
         current_sampler.stop()
         if save:
             _do_save()

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from telepy import TelePyMonitor
 
 from .base import TestBase
@@ -61,7 +63,8 @@ class TestMonitor(TestBase):
     ) -> None:
         import json
         import threading
-        from urllib import request
+        import time
+        from urllib import error, request
 
         from telepy import install_monitor
 
@@ -73,6 +76,37 @@ class TestMonitor(TestBase):
 
         t = threading.Thread(target=server)
         t.start()
+
+        # Wait for server to be ready with retry logic
+        max_retries = 50  # 5 seconds total (50 * 0.1s)
+        retry_count = 0
+        server_ready = False
+
+        while retry_count < max_retries:
+            try:
+                # Try to ping the server
+                ping_url = f"http://127.0.0.1:{port}/ping"
+                ping_req = request.Request(ping_url)
+                with request.urlopen(ping_req, timeout=1) as response:
+                    if response.status == 200:
+                        server_ready = True
+                        break
+            except (error.URLError, ConnectionRefusedError, OSError):
+                retry_count += 1
+                time.sleep(0.1)
+
+        if not server_ready:
+            # Try to shutdown gracefully even if server didn't respond
+            try:
+                url = f"http://127.0.0.1:{port}/shutdown"
+                req = request.Request(url)
+                with request.urlopen(req, timeout=1) as response:
+                    pass
+            except Exception:
+                pass
+            t.join(timeout=5)
+            wait_time = max_retries * 0.1
+            self.fail(f"Server failed to start on port {port} after {wait_time} seconds")
 
         url = f"http://127.0.0.1:{port}/{command}"
         headers = {
@@ -105,12 +139,35 @@ class TestMonitor(TestBase):
         import json
         import threading
         import time
-        from urllib import request
+        from urllib import error, request
 
         from telepy import install_monitor
 
         def client():
-            time.sleep(0.5)
+            # Wait for server to be ready with retry logic
+            max_retries = 50  # 5 seconds total (50 * 0.1s)
+            retry_count = 0
+            server_ready = False
+
+            while retry_count < max_retries:
+                try:
+                    # Try to ping the server
+                    ping_url = f"http://127.0.0.1:{port}/ping"
+                    ping_req = request.Request(ping_url)
+                    with request.urlopen(ping_req, timeout=1) as response:
+                        if response.status == 200:
+                            server_ready = True
+                            break
+                except (error.URLError, ConnectionRefusedError, OSError):
+                    retry_count += 1
+                    time.sleep(0.1)
+
+            if not server_ready:
+                wait_time = max_retries * 0.1
+                self.fail(
+                    f"Server failed to start on port {port} after {wait_time} seconds"
+                )
+
             url = f"http://127.0.0.1:{port}/{command}"
             headers = {
                 "args": " ".join(args),
@@ -142,8 +199,62 @@ class TestMonitor(TestBase):
         self.compound_template_command("ping", expected_data=["pong"])
 
     def test_stack(self):
+        """Test stack command basic functionality."""
         self.compound_template_command(
             "stack", expected_data=["MainThread", "daemon", "telepy"]
+        )
+
+    def test_stack_help(self):
+        """Test stack command help output."""
+        self.compound_template_command(
+            "stack",
+            args=["-h"],
+            expected_data=[
+                "usage",
+                "--strip-site-packages",
+                "--strip-cwd",
+                "--help",
+            ],
+        )
+
+    def test_stack_strip_site_packages(self):
+        """Test stack command with --strip-site-packages flag."""
+        self.compound_template_command(
+            "stack",
+            args=["--strip-site-packages"],
+            expected_data=["MainThread", "daemon", "telepy"],
+        )
+
+    def test_stack_strip_site_packages_short(self):
+        """Test stack command with -s short flag."""
+        self.compound_template_command(
+            "stack",
+            args=["-s"],
+            expected_data=["MainThread", "daemon", "telepy"],
+        )
+
+    def test_stack_strip_cwd(self):
+        """Test stack command with --strip-cwd flag."""
+        self.compound_template_command(
+            "stack",
+            args=["--strip-cwd"],
+            expected_data=["MainThread", "daemon", "telepy"],
+        )
+
+    def test_stack_strip_cwd_short(self):
+        """Test stack command with -c short flag."""
+        self.compound_template_command(
+            "stack",
+            args=["-c"],
+            expected_data=["MainThread", "daemon", "telepy"],
+        )
+
+    def test_stack_combined_flags(self):
+        """Test stack command with combined flags."""
+        self.compound_template_command(
+            "stack",
+            args=["-s", "-c"],
+            expected_data=["MainThread", "daemon", "telepy"],
         )
 
     def launch_server(self, port: int = 6666, in_thread: bool = False) -> None:
@@ -215,10 +326,13 @@ class TestMonitor(TestBase):
         )
         with request.urlopen(req) as response:
             data = json.loads(response.read().decode())
-            self.assertIn("--help, -h", data["data"])
-            self.assertIn("-f FILENAME, --filename FILENAME", data["data"])
+            # Check for options presence (format may vary across argparse versions)
+            self.assertIn("--help", data["data"])
+            self.assertIn("-h", data["data"])
+            self.assertIn("-f", data["data"])
+            self.assertIn("--filename", data["data"])
             self.assertIn("--save-folded", data["data"])
-            self.assertIn("--folded-filename FOLDED_FILENAME", data["data"])
+            self.assertIn("--folded-filename", data["data"])
             self.assertIn("--inverted", data["data"])
 
         req = request.Request(f"http://127.0.0.1:{port}/shutdown")
@@ -285,10 +399,13 @@ class TestMonitor(TestBase):
             )
             with request.urlopen(req) as response:
                 data = json.loads(response.read().decode())
-                self.assertIn("--help, -h", data["data"])
-                self.assertIn("-f FILENAME, --filename FILENAME", data["data"])
+                # Check for options presence (format may vary across argparse versions)
+                self.assertIn("--help", data["data"])
+                self.assertIn("-h", data["data"])
+                self.assertIn("-f", data["data"])
+                self.assertIn("--filename", data["data"])
                 self.assertIn("--save-folded", data["data"])
-                self.assertIn("--folded-filename FOLDED_FILENAME", data["data"])
+                self.assertIn("--folded-filename", data["data"])
 
             req = request.Request(f"http://127.0.0.1:{port}/shutdown")
             with request.urlopen(req) as response:
@@ -318,12 +435,14 @@ class TestMonitor(TestBase):
         )
 
     def test_shutdown(self):
+        import time
         from urllib import request
 
         from telepy import install_monitor
 
         port = 4533
         monitor = install_monitor(port=port)
+        time.sleep(0.5)  # Wait for the server to start
 
         req = request.Request(f"http://127.0.0.1:{port}/shutdown")
 
@@ -691,3 +810,100 @@ class TestMonitor(TestBase):
             call_args = resp.return_json.call_args[0][0]
             self.assertEqual(call_args["code"], -1)  # ERROR_CODE
             self.assertIn("Test ValueError from analyzer", call_args["data"])
+
+
+class TestRegisterEndpoint(TestBase):
+    """Test cases for register_endpoint decorator."""
+
+    def setUp(self):
+        """Save the current endpoint registry state."""
+        super().setUp()
+        from telepy.monitor import ENDPOINT_REGISTRY
+
+        # Save current registry state
+        self.original_registry = ENDPOINT_REGISTRY.copy()
+
+    def tearDown(self):
+        """Restore the original endpoint registry state."""
+        from telepy.monitor import ENDPOINT_REGISTRY
+
+        # Restore original registry
+        ENDPOINT_REGISTRY.clear()
+        ENDPOINT_REGISTRY.update(self.original_registry)
+        super().tearDown()
+
+    def test_register_endpoint_success(self):
+        """Test successfully registering a new endpoint."""
+        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+
+        @register_endpoint("/test-endpoint")
+        def test_handler(req, resp):
+            resp.return_json({"data": "test"})
+
+        # Verify endpoint was registered
+        self.assertIn("/test-endpoint", ENDPOINT_REGISTRY)
+        self.assertEqual(ENDPOINT_REGISTRY["/test-endpoint"], test_handler)
+
+    def test_register_endpoint_duplicate_raises_error(self):
+        """Test that registering duplicate endpoint raises ValueError."""
+        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+
+        # Clear the registry to avoid conflicts with module-level registrations
+        ENDPOINT_REGISTRY.clear()
+
+        @register_endpoint("/duplicate-endpoint")
+        def handler1(req, resp):
+            resp.return_json({"data": "handler1"})
+
+        # Try to register the same path again
+        with self.assertRaises(ValueError) as context:
+
+            @register_endpoint("/duplicate-endpoint")
+            def handler2(req, resp):
+                resp.return_json({"data": "handler2"})
+
+        # Verify error message
+        self.assertIn("/duplicate-endpoint", str(context.exception))
+        self.assertIn("already registered", str(context.exception))
+
+    def test_register_endpoint_different_paths_success(self):
+        """Test registering multiple endpoints with different paths."""
+        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+
+        @register_endpoint("/endpoint-1")
+        def handler1(req, resp):
+            resp.return_json({"data": "1"})
+
+        @register_endpoint("/endpoint-2")
+        def handler2(req, resp):
+            resp.return_json({"data": "2"})
+
+        # Verify both endpoints were registered
+        self.assertIn("/endpoint-1", ENDPOINT_REGISTRY)
+        self.assertIn("/endpoint-2", ENDPOINT_REGISTRY)
+        self.assertEqual(ENDPOINT_REGISTRY["/endpoint-1"], handler1)
+        self.assertEqual(ENDPOINT_REGISTRY["/endpoint-2"], handler2)
+
+    def test_register_endpoint_prevents_overwrite_existing(self):
+        """Test that existing endpoints cannot be overwritten."""
+        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+
+        # Clear the registry to avoid conflicts with module-level registrations
+        ENDPOINT_REGISTRY.clear()
+
+        # Register an endpoint
+        @register_endpoint("/protected-endpoint")
+        def original_handler(req, resp):
+            resp.return_json({"data": "original"})
+
+        original_handler_ref = ENDPOINT_REGISTRY["/protected-endpoint"]
+
+        # Try to overwrite it
+        with self.assertRaises(ValueError):
+
+            @register_endpoint("/protected-endpoint")
+            def new_handler(req, resp):
+                resp.return_json({"data": "new"})
+
+        # Verify original handler is still registered
+        self.assertEqual(ENDPOINT_REGISTRY["/protected-endpoint"], original_handler_ref)

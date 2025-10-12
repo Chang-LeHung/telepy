@@ -1,15 +1,17 @@
 
-#include "inject.h"
-#include "object.h"
-#include "telepysys.h"
-#include "tree.h"
-#include "tupleobject.h"
 #include <Python.h>
 #include <assert.h>
 #include <sched.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#include "compat.h"
+#include "inject.h"
+#include "object.h"
+#include "telepysys.h"
+#include "tree.h"
+#include "tupleobject.h"
 
 
 #define TELEPYSYS_VERSION "0.1.0"
@@ -253,6 +255,14 @@ call_stack(SamplerObject* self,
            PyFrameObject* frame,
            char* buf,
            size_t buf_size) {
+    // CRITICAL: Check BEFORE touching any Python objects
+    // If sampler is disabled, residual SIGPROF signal arrived during shutdown
+    // Python frames may already be destroyed -> accessing them causes SIGSEGV
+    // This fixes coredump with frame=0x726f (invalid pointer)
+    if (!Sample_Enabled(self)) {
+        return 0;  // Skip this sample silently
+    }
+
     size_t pos = 0;
     Py_INCREF(frame);
     PyObject* list = PyList_New(0);
@@ -261,6 +271,13 @@ call_stack(SamplerObject* self,
         return 1;
     }
     while (frame) {
+        // Check if sampler has been stopped during frame traversal
+        // This prevents SIGSEGV when residual SIGPROF arrives during shutdown
+        if (!Sample_Enabled(self)) {
+            Py_DECREF(list);
+            Py_DECREF(frame);
+            return 0;  // Return success but skip this sample
+        }
         PyList_Append(list, (PyObject*)frame);
         frame = PyFrame_GetBack(frame);  // return a new reference
     }
@@ -365,7 +382,7 @@ get_thread_name(PyObject* threads, PyObject* thread_id) {
 
 // microsecond
 static Telepy_time
-unix_micro_time() {
+unix_micro_time(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (Telepy_time)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
@@ -1188,10 +1205,25 @@ static PyObject*
 AsyncSampler_async_routine(AsyncSamplerObject* self,
                            PyObject* const* args,
                            Py_ssize_t nargs) {
-    if (SAMPLING_ENABLED((SamplerObject*)self)) {
+    SamplerObject* base = (SamplerObject*)self;
+
+    // Check for re-entrance first - if already sampling, return immediately
+    if (SAMPLING_ENABLED(base)) {
         Py_RETURN_NONE;
     }
-    ENABLE_SAMPLING((SamplerObject*)self);
+
+    // Critical: Check if sampler is still enabled before processing
+    // This handles the race condition where:
+    // 1. stop() is called to disable sampling
+    // 2. But pending SIGPROF signals still arrive after stop()
+    // 3. This signal handler gets invoked on a shutting-down Python interpreter
+    // 4. Accessing frames during shutdown causes SIGSEGV
+    if (!Sample_Enabled(base)) {
+        // Sampler has been stopped, ignore this residual signal
+        Py_RETURN_NONE;
+    }
+
+    ENABLE_SAMPLING(base);
     if (nargs != 2) {
         PyErr_Format(
             PyExc_TypeError,
@@ -1199,7 +1231,6 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
             nargs);
         return NULL;
     }
-    SamplerObject* base = (SamplerObject*)self;
     if (base->sampling_tid == 0) {
         PyErr_SetString(PyExc_RuntimeError, "AsyncSampler's tid is not set");
         return NULL;
@@ -1217,12 +1248,27 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
 
     Telepy_time sampling_start = unix_micro_time();
 
+    // Check again before accessing frames - sampler might have been stopped
+    if (!Sample_Enabled(base)) {
+        DISABLE_SAMPLING(base);
+        Py_RETURN_NONE;
+    }
+
     PyObject* frames = _PyThread_CurrentFrames();  // New reference
     if (frames == NULL) {
+        DISABLE_SAMPLING(base);
         PyErr_Format(PyExc_RuntimeError,
                      "telepysys: _PyThread_CurrentFrames() failed");
         return NULL;
     }
+
+    // Check again after _PyThread_CurrentFrames
+    if (!Sample_Enabled(base)) {
+        DISABLE_SAMPLING(base);
+        Py_DECREF(frames);
+        Py_RETURN_NONE;
+    }
+
     if (main_frame) {
         Py_ssize_t size = snprintf(buf, buf_size, "%s;", "MainThread");
         int overflow = call_stack(
@@ -1248,6 +1294,14 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     PyObject* value = NULL;
     Py_ssize_t pos = 0;
     while (PyDict_Next(frames, &pos, &key, &value)) {
+        // Double-check: sampler might have been stopped during iteration
+        if (!Sample_Enabled(base)) {
+            DISABLE_SAMPLING(base);
+            Py_DECREF(frames);
+            Py_DECREF(threads);
+            Py_RETURN_NONE;
+        }
+
         // key is a thread id
         // value is a frame object
         unsigned long tid = PyLong_AsUnsignedLong(key);
@@ -1264,6 +1318,16 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
                          "telepysys: failed to get thread name");
             goto error;
         }
+
+        // Check again before processing this frame
+        if (!Sample_Enabled(base)) {
+            Py_DECREF(name);
+            DISABLE_SAMPLING(base);
+            Py_DECREF(frames);
+            Py_DECREF(threads);
+            Py_RETURN_NONE;
+        }
+
         Py_ssize_t size =
             snprintf(buf, buf_size, "%s;", PyUnicode_AsUTF8(name));
         Py_DECREF(name);
@@ -1540,6 +1604,380 @@ telepysys_yield(PyObject* Py_UNUSED(module), PyObject* Py_UNUSED(args)) {
 PyDoc_STRVAR(telepysys_yield_doc,
              "Yield the current thread to other threads.");
 
+PyDoc_STRVAR(telepysys_vm_read_doc,
+             "Read a variable from the specified thread's frame.\n\n"
+             "Args:\n"
+             "    tid: Thread ID\n"
+             "    name: Variable name to read\n"
+             "    level: Frame level (default 0). 0 is top frame, 1 is second "
+             "from top, etc.\n\n"
+             "Returns:\n"
+             "    The value of the variable if found, None otherwise "
+             "(including when level is too deep)");
+
+static PyObject*
+telepysys_vm_read(PyObject* Py_UNUSED(module),
+                  PyObject* const* args,
+                  Py_ssize_t nargs) {
+    // Check argument count (2 or 3 arguments)
+    if (nargs < 2 || nargs > 3) {
+        PyErr_Format(PyExc_TypeError,
+                     "vm_read() takes 2 or 3 arguments (%zd given)",
+                     nargs);
+        return NULL;
+    }
+
+    // First argument: tid (should be an integer)
+    PyObject* tid_obj = args[0];
+    if (!PyLong_Check(tid_obj)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "vm_read() argument 1 must be an integer (thread ID)");
+        return NULL;
+    }
+    unsigned long tid = PyLong_AsUnsignedLong(tid_obj);
+    if (tid == (unsigned long)-1 && PyErr_Occurred()) {
+        return NULL;
+    }
+
+    // Second argument: name (should be a string)
+    PyObject* name_obj = args[1];
+    if (!PyUnicode_Check(name_obj)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "vm_read() argument 2 must be a string (variable name)");
+        return NULL;
+    }
+    const char* name = PyUnicode_AsUTF8(name_obj);
+    if (name == NULL) {
+        return NULL;
+    }
+
+    // Third argument: level (optional, default 0)
+    long level = 0;
+    if (nargs == 3) {
+        PyObject* level_obj = args[2];
+        if (!PyLong_Check(level_obj)) {
+            PyErr_SetString(
+                PyExc_TypeError,
+                "vm_read() argument 3 must be an integer (frame level)");
+            return NULL;
+        }
+        level = PyLong_AsLong(level_obj);
+        if (level == -1 && PyErr_Occurred()) {
+            return NULL;
+        }
+        if (level < 0) {
+            PyErr_SetString(
+                PyExc_ValueError,
+                "vm_read() argument 3 (level) must be non-negative");
+            return NULL;
+        }
+    }
+
+    // Get all thread frames - _PyThread_CurrentFrames() returns a new reference
+    PyObject* frames_dict = _PyThread_CurrentFrames();
+    if (frames_dict == NULL) {
+        return NULL;
+    }
+
+    // Get the frame for this tid - PyDict_GetItem returns a borrowed reference
+    PyObject* frame = PyDict_GetItem(frames_dict, tid_obj);
+
+    if (frame == NULL) {
+        // Thread not found
+        Py_DECREF(frames_dict);
+        Py_RETURN_NONE;
+    }
+
+    // frame is a borrowed reference, so we need to incref it before releasing
+    // frames_dict
+    Py_INCREF(frame);
+    Py_DECREF(frames_dict);  // Done with frames_dict
+
+    // Navigate to the specified frame level
+    // level=0 means top frame (current frame), level=1 means f_back, etc.
+    for (long i = 0; i < level; i++) {
+        PyObject* back_frame = PyObject_GetAttrString(frame, "f_back");
+        Py_DECREF(frame);
+
+        if (back_frame == NULL || back_frame == Py_None) {
+            // Level is too deep, reached end of stack
+            Py_XDECREF(back_frame);
+            PyErr_Clear();  // Clear any attribute error
+            Py_RETURN_NONE;
+        }
+
+        frame = back_frame;  // Move to the previous frame
+    }
+
+    PyObject* result = NULL;
+
+    // Try to get locals - PyObject_GetAttrString returns a new reference
+    PyObject* locals = PyObject_GetAttrString(frame, "f_locals");
+    if (locals != NULL) {
+        // PyDict_GetItemString returns a borrowed reference
+        PyObject* value = PyDict_GetItemString(locals, name);
+        if (value != NULL) {
+            Py_INCREF(value);  // Convert borrowed reference to new reference
+            result = value;
+            Py_DECREF(locals);
+            Py_DECREF(frame);
+            return result;
+        }
+        Py_DECREF(locals);
+    } else {
+        // Clear the error if f_locals doesn't exist
+        PyErr_Clear();
+    }
+
+    // Try to get globals - PyObject_GetAttrString returns a new reference
+    PyObject* globals = PyObject_GetAttrString(frame, "f_globals");
+    if (globals != NULL) {
+        // PyDict_GetItemString returns a borrowed reference
+        PyObject* value = PyDict_GetItemString(globals, name);
+        if (value != NULL) {
+            Py_INCREF(value);  // Convert borrowed reference to new reference
+            result = value;
+            Py_DECREF(globals);
+            Py_DECREF(frame);
+            return result;
+        }
+        Py_DECREF(globals);
+    } else {
+        // Clear the error if f_globals doesn't exist
+        PyErr_Clear();
+    }
+
+    // Variable not found in either locals or globals
+    Py_DECREF(frame);
+    Py_RETURN_NONE;
+}
+
+PyDoc_STRVAR(telepysys_vm_write_doc,
+             "Write a global variable in the specified thread's frame.\n\n"
+             "Args:\n"
+             "    tid: Thread ID\n"
+             "    name: Variable name to write (must be in f_globals)\n"
+             "    value: Value to write\n\n"
+             "Returns:\n"
+             "    True if write succeeded, False otherwise\n\n"
+             "Note:\n"
+             "    Only global variables can be modified. Local variables\n"
+             "    cannot be updated because f_locals is a snapshot dict.");
+
+static PyObject*
+telepysys_vm_write(PyObject* Py_UNUSED(module),
+                   PyObject* const* args,
+                   Py_ssize_t nargs) {
+    // Check argument count
+    if (nargs != 3) {
+        PyErr_Format(PyExc_TypeError,
+                     "vm_write() takes exactly 3 arguments (%zd given)",
+                     nargs);
+        return NULL;
+    }
+
+    // First argument: tid (should be an integer)
+    PyObject* tid_obj = args[0];
+    if (!PyLong_Check(tid_obj)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "vm_write() argument 1 must be an integer (thread ID)");
+        return NULL;
+    }
+    unsigned long tid = PyLong_AsUnsignedLong(tid_obj);
+    if (tid == (unsigned long)-1 && PyErr_Occurred()) {
+        return NULL;
+    }
+
+    // Second argument: name (should be a string)
+    PyObject* name_obj = args[1];
+    if (!PyUnicode_Check(name_obj)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "vm_write() argument 2 must be a string (variable name)");
+        return NULL;
+    }
+    const char* name = PyUnicode_AsUTF8(name_obj);
+    if (name == NULL) {
+        return NULL;
+    }
+
+    // Third argument: value (can be any Python object)
+    PyObject* value = args[2];
+
+    // Get all thread frames - _PyThread_CurrentFrames() returns a new reference
+    PyObject* frames_dict = _PyThread_CurrentFrames();
+    if (frames_dict == NULL) {
+        return NULL;
+    }
+
+    // Get the frame for this tid - PyDict_GetItem returns a borrowed reference
+    PyObject* frame = PyDict_GetItem(frames_dict, tid_obj);
+
+    if (frame == NULL) {
+        // Thread not found
+        Py_DECREF(frames_dict);
+        Py_RETURN_FALSE;
+    }
+
+    // frame is a borrowed reference, so we need to incref it before releasing
+    // frames_dict
+    Py_INCREF(frame);
+    Py_DECREF(frames_dict);  // Done with frames_dict
+
+    int result = 0;
+
+    // NOTE: We only support updating globals because frame locals (f_locals)
+    // is a snapshot dict and modifying it doesn't affect the actual frame's
+    // fast locals (C-level local variables). To modify locals, we would need
+    // to use PyFrame_LocalsToFast() which is not part of the stable ABI.
+
+    // Get globals - PyObject_GetAttrString returns a new reference
+    PyObject* globals = PyObject_GetAttrString(frame, "f_globals");
+    if (globals != NULL) {
+        // Check if variable exists in globals
+        PyObject* existing_value = PyDict_GetItemString(globals, name);
+        if (existing_value != NULL) {
+            // Variable exists in globals, update it
+            // PyDict_SetItemString increfs value, so we don't need to
+            result = PyDict_SetItemString(globals, name, value);
+            Py_DECREF(globals);
+            Py_DECREF(frame);
+            if (result == 0) {
+                Py_RETURN_TRUE;
+            } else {
+                return NULL;  // Error occurred
+            }
+        }
+        Py_DECREF(globals);
+    } else {
+        // Clear the error if f_globals doesn't exist
+        PyErr_Clear();
+    }
+
+    // Variable not found in globals
+    Py_DECREF(frame);
+    Py_RETURN_FALSE;
+}
+
+PyDoc_STRVAR(
+    telepysys_top_namespace_doc,
+    "Get the top frame's namespace (locals or globals) for a thread.\n\n"
+    "Args:\n"
+    "    tid: Thread ID\n"
+    "    flag: 0 for locals, 1 for globals, 2 for both\n\n"
+    "Returns:\n"
+    "    dict: The namespace dictionary when flag is 0 or 1\n"
+    "    tuple: A tuple of (locals, globals) when flag is 2\n"
+    "    None: If thread not found");
+
+static PyObject*
+telepysys_top_namespace(PyObject* Py_UNUSED(module),
+                        PyObject* const* args,
+                        Py_ssize_t nargs) {
+    // Check argument count
+    if (nargs != 2) {
+        PyErr_Format(PyExc_TypeError,
+                     "top_namespace() takes exactly 2 arguments (%zd given)",
+                     nargs);
+        return NULL;
+    }
+
+    // First argument: tid (should be an integer)
+    PyObject* tid_obj = args[0];
+    if (!PyLong_Check(tid_obj)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "top_namespace() argument 1 must be an integer (thread ID)");
+        return NULL;
+    }
+
+    // Second argument: flag (should be an integer, 0, 1, or 2)
+    PyObject* flag_obj = args[1];
+    if (!PyLong_Check(flag_obj)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "top_namespace() argument 2 must be an integer (0, 1, or 2)");
+        return NULL;
+    }
+    long flag = PyLong_AsLong(flag_obj);
+    if (flag != 0 && flag != 1 && flag != 2) {
+        PyErr_SetString(PyExc_ValueError,
+                        "top_namespace() argument 2 must be 0 (locals), 1 "
+                        "(globals), or 2 (both)");
+        return NULL;
+    }
+
+    // Get all thread frames - _PyThread_CurrentFrames() returns a new reference
+    PyObject* frames_dict = _PyThread_CurrentFrames();
+    if (frames_dict == NULL) {
+        return NULL;
+    }
+
+    // Get the frame for this tid - PyDict_GetItem returns a borrowed reference
+    PyObject* frame = PyDict_GetItem(frames_dict, tid_obj);
+
+    if (frame == NULL) {
+        // Thread not found
+        Py_DECREF(frames_dict);
+        Py_RETURN_NONE;
+    }
+
+    // frame is a borrowed reference, so we need to incref it before releasing
+    // frames_dict
+    Py_INCREF(frame);
+    Py_DECREF(frames_dict);  // Done with frames_dict
+
+    PyObject* result = NULL;
+
+    if (flag == 0) {
+        // Return f_locals - PyObject_GetAttrString returns a new reference
+        result = PyObject_GetAttrString(frame, "f_locals");
+        Py_DECREF(frame);
+        if (result == NULL) {
+            // Clear the error if attribute doesn't exist
+            PyErr_Clear();
+            Py_RETURN_NONE;
+        }
+        return result;  // result is already a new reference
+    } else if (flag == 1) {
+        // Return f_globals - PyObject_GetAttrString returns a new reference
+        result = PyObject_GetAttrString(frame, "f_globals");
+        Py_DECREF(frame);
+        if (result == NULL) {
+            // Clear the error if attribute doesn't exist
+            PyErr_Clear();
+            Py_RETURN_NONE;
+        }
+        return result;  // result is already a new reference
+    } else {
+        // flag == 2: Return both locals and globals as a tuple
+        PyObject* locals = PyObject_GetAttrString(frame, "f_locals");
+        PyObject* globals = PyObject_GetAttrString(frame, "f_globals");
+        Py_DECREF(frame);
+
+        if (locals == NULL || globals == NULL) {
+            // Clear the error if attribute doesn't exist
+            PyErr_Clear();
+            Py_XDECREF(locals);
+            Py_XDECREF(globals);
+            Py_RETURN_NONE;
+        }
+
+        // Create a tuple containing (locals, globals)
+        result = PyTuple_Pack(2, locals, globals);
+        Py_DECREF(locals);
+        Py_DECREF(globals);
+
+        if (result == NULL) {
+            return NULL;
+        }
+
+        return result;
+    }
+}
+
 static PyMethodDef telepysys_methods[] = {
     {
         "current_frames",
@@ -1564,6 +2002,24 @@ static PyMethodDef telepysys_methods[] = {
         (PyCFunction)telepysys_yield,
         METH_NOARGS,
         telepysys_yield_doc,
+    },
+    {
+        "vm_read",
+        _PyCFunction_CAST(telepysys_vm_read),
+        METH_FASTCALL,
+        telepysys_vm_read_doc,
+    },
+    {
+        "vm_write",
+        _PyCFunction_CAST(telepysys_vm_write),
+        METH_FASTCALL,
+        telepysys_vm_write_doc,
+    },
+    {
+        "top_namespace",
+        _PyCFunction_CAST(telepysys_top_namespace),
+        METH_FASTCALL,
+        telepysys_top_namespace_doc,
     },
     {
         NULL,
@@ -1599,7 +2055,6 @@ telepysys_exec(PyObject* m) {
         Py_DECREF(async_sampler_type);
         return -1;
     }
-    PyModule_AddObjectRef(m, "async_sampler", Py_None);  // singleton
     return 0;
 }
 
@@ -1622,7 +2077,6 @@ telepysys_traverse(PyObject* module, visitproc visit, void* arg) {
 
 static void
 telepysys_free(void* module) {
-
     telepysys_clear(module);
 }
 

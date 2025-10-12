@@ -1,6 +1,7 @@
-import io
+from __future__ import annotations
+
 import json
-from typing import Any, Final, cast
+from typing import Any, Final
 from urllib import request
 from urllib.error import HTTPError, URLError
 
@@ -9,7 +10,7 @@ ERROR_CODE: Final = -1
 SUCCESS_CODE: Final = 0
 
 # Global registry for commands
-COMMAND_REGISTRY: dict[str, type["CommandProcessor"]] = {}
+COMMAND_REGISTRY: dict[str, type[CommandProcessor]] = {}
 
 
 def register_command(name: str, help_text: str):
@@ -21,7 +22,7 @@ def register_command(name: str, help_text: str):
         help_text: Help text for this command
     """
 
-    def decorator(cls: type["CommandProcessor"]) -> type["CommandProcessor"]:
+    def decorator(cls: type[CommandProcessor]) -> type[CommandProcessor]:
         cls._command_name = name  # type: ignore
         cls._help_text = help_text  # type: ignore
         COMMAND_REGISTRY[name] = cls
@@ -85,33 +86,14 @@ class Shutdown(CommandProcessor):
 
 @register_command("stack", "print stack trace of all threads")
 class Stack(CommandProcessor):
-    def process(self, *args):
-        """
-        {
-            "data": [
-                {
-                    "stack": "\n".join(["telepy.py", "<module>]),
-                    "name": "MainThread",
-                    "id": 1234567890,
-                    "daemon": true
-                }
-            ]
-        }
-        """
-        assert len(args) > 0 and args[0] == "stack"
-        result = super().process(*args)
-        msg, ok = cast(tuple[list[dict[str, Any]], bool], result)
-        if ok:
-            s = io.StringIO()
-            for item in msg:
-                s.write(
-                    f"Thread ({item['id']}, {item['name']}, daemon={item['daemon']})\n"
-                )
-                s.write(item["stack"])
-                s.write("\n")
-            return s.getvalue()[:-1], ok
+    """
+    Display stack traces for all threads.
 
-        return msg, ok  # pragma: no cover
+    The server formats the stack traces, so the client simply
+    displays the formatted output.
+    """
+
+    pass
 
 
 @register_command("ping", "ping the server")

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import json
 import logging
@@ -7,8 +9,20 @@ from collections import defaultdict
 from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Final, override
+from typing import Any, Final
 from urllib.parse import parse_qs, urlparse
+
+try:
+    from typing import override
+except ImportError:
+    # For Python < 3.12, use typing_extensions or create a no-op decorator
+    try:
+        from typing_extensions import override  # type: ignore # noqa: UP035
+    except ImportError:
+        # If typing_extensions is not available, create a no-op decorator
+        def override(func):
+            return func
+
 
 from ._telepysys import __version__
 
@@ -22,7 +36,7 @@ class TelePyHandler(BaseHTTPRequestHandler):
     """
 
     routers: dict[str, dict[str, Callable[..., Any]]]
-    app: "TelePyApp"
+    app: TelePyApp
     server: HTTPServer
 
     def __init__(self, request, client_address, server) -> None:
@@ -171,6 +185,7 @@ class TelePyHandler(BaseHTTPRequestHandler):
             }
         }
         self.wfile.write(json.dumps(body).encode())
+        self.wfile.flush()  # Ensure the error response is sent before connection closes
 
     def log_message(self, format, *args):
         if self.log:
@@ -201,7 +216,7 @@ class TelePyException(Exception):
 class TelePyRequest:
     def __init__(
         self,
-        app: "TelePyApp",
+        app: TelePyApp,
         headers: dict[str, str],
         body: bytes | None = None,
         url: str = "/",
@@ -451,6 +466,11 @@ class TelePyApp:
     def close(self) -> None:
         if self.server is not None:
             self.server.server_close()
+        # Close logger handlers to avoid ResourceWarning
+        if self.logger is not None:
+            for handler in self.logger.handlers[:]:
+                handler.close()
+                self.logger.removeHandler(handler)
 
     def server_close(self) -> None:
         return self.close()

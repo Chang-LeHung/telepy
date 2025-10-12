@@ -2,13 +2,24 @@
 TelePy command entry point.
 """
 
+from __future__ import annotations
+
 import argparse
 import heapq
 import os
 import sys
-import weakref
 from abc import ABC, abstractmethod
-from typing import override
+
+try:
+    from typing import override
+except ImportError:
+    try:
+        from typing_extensions import override  # noqa: UP035
+    except ImportError:
+
+        def override(func):
+            return func
+
 
 from rich import print
 from rich.panel import Panel
@@ -25,6 +36,62 @@ from .shell import TelePyShell
 
 console = logger.console
 err_console = logger.err_console
+
+# Python 3.8 compatibility: BooleanOptionalAction was added in Python 3.9
+# For Python 3.8, we need to manually add both --flag and --no-flag options
+_BOOLEAN_OPTIONAL_ACTION = getattr(argparse, "BooleanOptionalAction", None)
+
+
+def add_boolean_argument(
+    parser: argparse.ArgumentParser,
+    *flags: str,
+    default: bool | None = None,
+    help: str = "",
+    **kwargs,
+) -> None:
+    """
+    Add a boolean argument with --flag/--no-flag support.
+
+    Uses argparse.BooleanOptionalAction on Python 3.9+,
+    falls back to manual implementation on Python 3.8.
+    """
+    if _BOOLEAN_OPTIONAL_ACTION is not None:
+        # Python 3.9+: Use BooleanOptionalAction
+        parser.add_argument(
+            *flags,
+            action=_BOOLEAN_OPTIONAL_ACTION,
+            default=default,
+            help=help,
+            **kwargs,
+        )
+    else:
+        # Python 3.8: Simply add both positive and negative flags
+        # Extract the main flag (longest one with --)
+        main_flag = None
+        for flag in flags:
+            if flag.startswith("--"):
+                main_flag = flag
+                break
+
+        if main_flag is None:
+            raise ValueError("At least one long flag (--flag) is required")
+
+        # Generate the destination name from the main flag
+        dest = main_flag.lstrip("-").replace("-", "_")
+
+        # Add positive flag
+        positive_flags = list(flags)
+        parser.add_argument(
+            *positive_flags, action="store_true", dest=dest, help=help, **kwargs
+        )
+
+        # Add negative flag (only for long options)
+        no_flag = f"--no-{main_flag[2:]}"
+        parser.add_argument(no_flag, action="store_false", dest=dest, **kwargs)
+
+        # Set default value
+        if default is not None:
+            parser.set_defaults(**{dest: default})
 
 
 in_coverage = "coverage" in sys.modules
@@ -62,10 +129,10 @@ class ArgsHandler(ABC):
 
     @classmethod
     @abstractmethod
-    def build(cls) -> "ArgsHandler":
+    def build(cls) -> ArgsHandler:
         pass  # pragma: no cover
 
-    def __lt__(self, other: "ArgsHandler") -> bool:
+    def __lt__(self, other: ArgsHandler) -> bool:
         return self.weight > other.weight  # big heap
 
 
@@ -164,11 +231,9 @@ class PythonFileProfilingHandler(ArgsHandler):
             code = args.input[0].read()
             pyc = compile(code, os.path.abspath(filename), "exec")
             sampler.start()
-            if not in_coverage:
-                weakref.finalize(sampler, telepy_finalize)  # pragma: no cover
             exec(pyc, global_dict)
-        if in_coverage:
-            telepy_finalize()
+        # Always call finalize after exec completes
+        telepy_finalize()
         return True
 
 
@@ -194,11 +259,9 @@ class PyCommandStringProfilingHandler(ArgsHandler):
             # see the enviroment.py:patch_multiprocesssing and patch_os_fork_in_child
             if not config.fork_server:
                 sampler.start()
-            if not in_coverage:
-                weakref.finalize(sampler, telepy_finalize)  # pragma: no cover
             exec(pyc, global_dict)
-        if in_coverage:
-            telepy_finalize()
+        # Always call finalize after exec completes
+        telepy_finalize()
         return True
 
 
@@ -230,13 +293,10 @@ class PyCommandModuleProfilingHandler(ArgsHandler):
             pyc = compile(code, "<string>", "exec")
             if not config.fork_server:
                 sampler.start()
-            if not in_coverage:  # pragma: no cover
-                weakref.finalize(sampler, telepy_finalize)
             exec(pyc, global_dict)
-        # coverage do not cover this line, god knows why
-        if in_coverage:  # pragma: no cover
-            telepy_finalize()
-        return True  # pragma: no cover
+        # Always call finalize after exec completes
+        telepy_finalize()
+        return True
 
 
 @register_handler
@@ -319,9 +379,9 @@ def main():
     parser.add_argument(
         "-v", "--version", action="store_true", help="Show version information and exit."
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--verbose",
-        action=argparse.BooleanOptionalAction,
         default=True,
         help="Enable verbose mode (default: True).",
     )
@@ -410,9 +470,9 @@ def main():
         default=1200,
         help="SVG width in pixels for generated flamegraphs (default: 1200).",
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--merge",
-        action=argparse.BooleanOptionalAction,
         default=True,
         help="Merge multiple flamegraph files in multiprocess environment (default: "
         "True). If not merge them, the child flamegraphs and foldeds will be named in "
@@ -482,27 +542,27 @@ def main():
         help="PyTorch profiler activities to profile. Can be specified multiple times. "
         "Options: cpu, cuda, xpu. Default: ['cpu'].",
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--torch-record-shapes",
-        action=argparse.BooleanOptionalAction,
         default=True,
         help="Whether to record tensor shapes in PyTorch profiler (default: True).",
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--torch-profile-memory",
-        action=argparse.BooleanOptionalAction,
         default=True,
         help="Whether to profile memory usage in PyTorch profiler (default: True).",
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--torch-with-stack",
-        action=argparse.BooleanOptionalAction,
         default=False,
         help="Whether to record call stack in PyTorch profiler (default: False).",
     )
-    parser.add_argument(
+    add_boolean_argument(
+        parser,
         "--torch-export-chrome-trace",
-        action=argparse.BooleanOptionalAction,
         default=False,
         help="Whether to export Chrome trace format from PyTorch profiler "
         "(default: False).",
@@ -515,6 +575,13 @@ def main():
         "Options: cpu_time, cuda_time, cpu_time_total, cuda_time_total, "
         "cpu_memory_usage, cuda_memory_usage, self_cpu_memory_usage, "
         "self_cuda_memory_usage, count.",
+    )
+    parser.add_argument(
+        "--torch-row-limit",
+        type=int,
+        default=10,
+        help="Maximum number of rows in PyTorch profiler statistics table "
+        "(default: 10). Set to -1 for unlimited rows (may cause OOM for large profiles).",
     )
 
     args = parser.parse_args(arguments)

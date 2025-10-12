@@ -6,6 +6,8 @@ to the folded stack format used by TelePy for flame graph generation.
 Each trace line starts with Process(pid);Thread(tid); followed by the stack trace.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from collections import defaultdict
@@ -206,7 +208,7 @@ class ChromeTraceConverter:
 
                 # Use duration as the sample count (rounded to nearest int)
                 # Duration is in microseconds, multiply by 100 for better visibility
-                count = max(1, int(round(duration * 100)))
+                count = max(1, round(duration * 100))
                 self.stacks[folded_line] += count
 
         return self.stacks
@@ -521,7 +523,7 @@ def main():
                         f"[bold cyan]{svg_size:,}[/bold cyan] bytes"
                     )
 
-            except ImportError as e:
+            except ImportError as e:  # pragma: no cover
                 err_console.print(
                     f"[bold red]Warning:[/bold red] Could not import "
                     f"flamegraph module - {e}"
@@ -554,5 +556,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

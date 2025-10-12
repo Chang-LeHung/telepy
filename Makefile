@@ -10,7 +10,7 @@ build_debug: compile_commands
 
 clean: uninstall
 	make -C src/$(PKG_NAME)/telepysys clean
-	rm -rf dist build compile_commands.json src/$(PKG_NAME).egg-info .coverage\.* *.svg *.folded
+	rm -rf dist build compile_commands.json src/$(PKG_NAME).egg-info .coverage\.* *.svg *.folded coverage.xml htmlcov
 
 install:
 	@pip install .
@@ -39,6 +39,7 @@ coverage:
 	coverage combine; \
 	coverage report; \
 	coverage html; \
+	coverage xml; \
 	end=$$(date +%s.%N); \
 	elapsed=$$(echo "$$end - $$start" | bc); \
 	printf "COVERAGE TIME: %.3f seconds\n" $$elapsed

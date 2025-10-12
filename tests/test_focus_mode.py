@@ -99,7 +99,7 @@ class TestFocusMode(TestBase):
         def simple_function():
             """A simple function to sample."""
             time.sleep(0.01)  # Small delay to ensure sampling
-            return sum(range(100))
+            return sum(range(8000000))
 
         # Test with focus_mode disabled (should capture everything)
         sampler_normal = telepy.TelepySysSampler(
@@ -234,7 +234,8 @@ class TestAsyncSamplerFocusMode(TestBase):
         """Test that focus mode works correctly in threaded environment."""
 
         def worker_function():
-            time.sleep(0.01)
+            for i in range(10000):
+                _ = sum(range(10000))
             return threading.current_thread().name
 
         sampler = telepy.TelepySysAsyncWorkerSampler(
@@ -262,6 +263,7 @@ class TestAsyncSamplerFocusMode(TestBase):
         # Verify the sampler is still functional
         self.assertTrue(sampler.focus_mode)
         output = sampler.dumps()
+        print(f"{output = }")
         self.assertIsInstance(output, str)
 
         # Test focus_mode filtering: should contain user code but not standard library
