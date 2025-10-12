@@ -433,12 +433,14 @@ class TestMonitor(TestBase):
         )
 
     def test_shutdown(self):
+        import time
         from urllib import request
 
         from telepy import install_monitor
 
         port = 4533
         monitor = install_monitor(port=port)
+        time.sleep(0.5)  # Wait for the server to start
 
         req = request.Request(f"http://127.0.0.1:{port}/shutdown")
 
