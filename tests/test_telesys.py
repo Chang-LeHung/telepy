@@ -850,9 +850,6 @@ class TestVMWrite(TestBase):
         del globals()["test_roundtrip_data"]
 
 
-@unittest.skipIf(
-    sys.version_info >= (3, 13), "top_namespace not supported on Python 3.13+"
-)
 class TestTopNamespace(TestBase):
     """Test cases for top_namespace function."""
 
