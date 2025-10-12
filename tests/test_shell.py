@@ -234,10 +234,16 @@ class TestShell(TestBase):
         msg, ok = shell.dispatch("attach 127.0.0.1:65536")
         self.assertFalse(ok)
         # Port out of range may trigger different errors in different environments
+        # - "Bad Gateway" (some systems)
+        # - "Connection refused" (some systems)
+        # - "Invalid Host/Port" (validation error)
+        # - "Can't assign requested address" (macOS/BSD with invalid port)
         self.assertTrue(
             "Bad Gateway" in msg
             or "Connection refused" in msg
-            or "Invalid Host/Port" in msg,
+            or "Invalid Host/Port" in msg
+            or "Can't assign requested address" in msg
+            or "Url Error:" in msg,
             f"Expected connection/invalid port error but got: {msg}",
         )
 
