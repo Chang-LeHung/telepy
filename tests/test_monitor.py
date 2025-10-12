@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from telepy import TelePyMonitor
 
 from .base import TestBase
