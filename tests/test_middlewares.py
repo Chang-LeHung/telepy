@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import tempfile
 import threading
-import unittest
 
 import telepy
 from telepy.sampler import SamplerMiddleware
@@ -824,10 +823,6 @@ class TestPyTorchProfilerMiddleware(TestBase):
         self.assertGreater(len(files), 0, "No output files were created")
 
 
-@unittest.skipUnless(
-    os.environ.get("TELE_TORCH"),
-    "Skipping PyTorch profiler tests (set TELE_TORCH=1 to enable)",
-)
 class TestPyTorchProfilerCLI(CommandTemplate):
     """Test PyTorch profiler CLI integration."""
 
