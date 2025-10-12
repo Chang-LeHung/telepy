@@ -99,7 +99,7 @@ class TestFocusMode(TestBase):
         def simple_function():
             """A simple function to sample."""
             time.sleep(0.01)  # Small delay to ensure sampling
-            return sum(range(100))
+            return sum(range(8000000))
 
         # Test with focus_mode disabled (should capture everything)
         sampler_normal = telepy.TelepySysSampler(
