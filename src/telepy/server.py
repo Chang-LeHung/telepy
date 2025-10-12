@@ -183,6 +183,7 @@ class TelePyHandler(BaseHTTPRequestHandler):
             }
         }
         self.wfile.write(json.dumps(body).encode())
+        self.wfile.flush()  # Ensure the error response is sent before connection closes
 
     def log_message(self, format, *args):
         if self.log:
@@ -463,6 +464,11 @@ class TelePyApp:
     def close(self) -> None:
         if self.server is not None:
             self.server.server_close()
+        # Close logger handlers to avoid ResourceWarning
+        if self.logger is not None:
+            for handler in self.logger.handlers[:]:
+                handler.close()
+                self.logger.removeHandler(handler)
 
     def server_close(self) -> None:
         return self.close()
