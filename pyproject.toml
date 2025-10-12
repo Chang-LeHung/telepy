@@ -55,10 +55,11 @@ build-backend = "setuptools.build_meta"
 
 # code settings
 [tool.ruff]
-select = ["E", "F", "W", "I", "UP", "RUF"]
 line-length = 90
 target-version = "py313"
-fix = false
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "RUF"]
 
 [tool.setuptools.dynamic]
 version = { attr = "telepy.__version__" }

@@ -105,12 +105,15 @@ def patch_multiprocesssing():
                 # forkserver mode, we need to inject telepy code to profile.
                 # we do not launch telepy in the server process, but we will
                 # hack the fork syscall to sample its child processes.
-                new_args = (
-                    args[:idx]
-                    + ["-m", "telepy", "--fork-server", "--no-merge"]
-                    + get_child_process_args()
-                    + args[idx : idx + 2]
-                )
+                new_args = [
+                    *args[:idx],
+                    "-m",
+                    "telepy",
+                    "--fork-server",
+                    "--no-merge",
+                    *get_child_process_args(),
+                    *args[idx : idx + 2],
+                ]
                 if parser_args.verbose:
                     logger.log_warning_panel(MESSAGE_FORKSERVER_NO_MERGE)
                 rest = args[idx + 2 :]
@@ -119,12 +122,14 @@ def patch_multiprocesssing():
                 args = new_args
             elif "resource_tracker" not in cmd:
                 # spawn mode
-                new_args = (
-                    args[:idx]
-                    + ["-m", "telepy", "--mp"]
-                    + get_child_process_args()
-                    + args[idx : idx + 2]
-                )
+                new_args = [
+                    *args[:idx],
+                    "-m",
+                    "telepy",
+                    "--mp",
+                    *get_child_process_args(),
+                    *args[idx : idx + 2],
+                ]
                 rest = args[idx + 2 :]
                 if rest:
                     new_args += [CMD_SEPARATOR, *rest]
@@ -336,7 +341,7 @@ class Environment:
                 setattr(sys, INTERNAL_ARGV, old_arg)
                 if CMD_SEPARATOR in old_arg:
                     idx = old_arg.index(CMD_SEPARATOR)
-                    sys.argv = [file_name] + old_arg[idx + 1 :]
+                    sys.argv = [file_name, *old_arg[idx + 1 :]]
                 else:
                     sys.argv = [file_name]
                 sys.path.append(os.getcwd())
@@ -351,7 +356,7 @@ class Environment:
                 setattr(sys, INTERNAL_ARGV, old_arg)
                 if CMD_SEPARATOR in old_arg:
                     idx = old_arg.index(CMD_SEPARATOR)
-                    sys.argv = ["-c"] + old_arg[idx + 1 :]
+                    sys.argv = ["-c", *old_arg[idx + 1 :]]
                 else:
                     sys.argv = ["-c"]
                 sys.path.append(os.getcwd())
@@ -361,7 +366,7 @@ class Environment:
                 setattr(sys, INTERNAL_ARGV, old_arg)
                 if CMD_SEPARATOR in old_arg:
                     idx = old_arg.index(CMD_SEPARATOR)
-                    sys.argv = [old_arg[0]] + old_arg[idx + 1 :]
+                    sys.argv = [old_arg[0], *old_arg[idx + 1 :]]
                 else:
                     sys.argv = [old_arg[0]]
                 sys.path.append(os.getcwd())

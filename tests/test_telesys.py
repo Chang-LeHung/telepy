@@ -1135,7 +1135,7 @@ class TestTopNamespace(TestBase):
 
         # Get both locals and globals
         result = _telepysys.top_namespace(worker_thread.ident, 2)
-        locals_dict, globals_dict = result
+        _locals_dict, globals_dict = result
 
         self.assertEqual(globals_dict["test_flag2_modify_var"], "initial")
 

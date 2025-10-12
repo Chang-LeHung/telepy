@@ -206,7 +206,7 @@ class ChromeTraceConverter:
 
                 # Use duration as the sample count (rounded to nearest int)
                 # Duration is in microseconds, multiply by 100 for better visibility
-                count = max(1, int(round(duration * 100)))
+                count = max(1, round(duration * 100))
                 self.stacks[folded_line] += count
 
         return self.stacks
