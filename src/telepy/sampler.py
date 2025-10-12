@@ -25,9 +25,7 @@ from .thread import in_main_thread
 class SamplerMiddleware(ABC):
     """Abstract base class for sampler middleware."""
 
-    def on_before_start(
-        self, sampler: TelepySysAsyncSampler | TelepySysSampler
-    ) -> None:
+    def on_before_start(self, sampler: TelepySysAsyncSampler | TelepySysSampler) -> None:
         """Called before the sampler starts.
 
         Args:
