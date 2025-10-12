@@ -1,10 +1,11 @@
 import threading
-from unittest import TestCase
 
 from telepy.server import TelePyApp, TelePyInterceptor, TelePyRequest, TelePyResponse
 
+from .base import TestBase
 
-class TestApp(TestCase):
+
+class TestApp(TestBase):
     def test_app(self):
         app = TelePyApp()
 
