@@ -1715,10 +1715,29 @@ telepysys_vm_read(PyObject* Py_UNUSED(module),
     // Try to get locals - PyObject_GetAttrString returns a new reference
     PyObject* locals = PyObject_GetAttrString(frame, "f_locals");
     if (locals != NULL) {
-        // PyDict_GetItemString returns a borrowed reference
+#if PY_VERSION_HEX >= 0x030D0000  // Python 3.13+
+        // Convert name to PyObject
+        PyObject* name_obj = PyUnicode_FromString(name);
+        if (name_obj == NULL) {
+            Py_DECREF(locals);
+            Py_DECREF(frame);
+            return NULL;
+        }
+        // PyObject_GetItem returns a new reference, sets KeyError if not found
+        PyObject* value = PyObject_GetItem(locals, name_obj);
+        Py_DECREF(name_obj);
+        if (value == NULL) {
+            // Clear the KeyError - variable not found is not an error condition
+            PyErr_Clear();
+        }
+#else
+        // PyDict_GetItemString returns a borrowed reference, NULL if not found (no exception)
         PyObject* value = PyDict_GetItemString(locals, name);
         if (value != NULL) {
             Py_INCREF(value);  // Convert borrowed reference to new reference
+        }
+#endif
+        if (value != NULL) {
             result = value;
             Py_DECREF(locals);
             Py_DECREF(frame);
@@ -1733,10 +1752,29 @@ telepysys_vm_read(PyObject* Py_UNUSED(module),
     // Try to get globals - PyObject_GetAttrString returns a new reference
     PyObject* globals = PyObject_GetAttrString(frame, "f_globals");
     if (globals != NULL) {
-        // PyDict_GetItemString returns a borrowed reference
+#if PY_VERSION_HEX >= 0x030D0000  // Python 3.13+
+        // Convert name to PyObject
+        PyObject* name_obj = PyUnicode_FromString(name);
+        if (name_obj == NULL) {
+            Py_DECREF(globals);
+            Py_DECREF(frame);
+            return NULL;
+        }
+        // PyObject_GetItem returns a new reference, sets KeyError if not found
+        PyObject* value = PyObject_GetItem(globals, name_obj);
+        Py_DECREF(name_obj);
+        if (value == NULL) {
+            // Clear the KeyError - variable not found is not an error condition
+            PyErr_Clear();
+        }
+#else
+        // PyDict_GetItemString returns a borrowed reference, NULL if not found (no exception)
         PyObject* value = PyDict_GetItemString(globals, name);
         if (value != NULL) {
             Py_INCREF(value);  // Convert borrowed reference to new reference
+        }
+#endif
+        if (value != NULL) {
             result = value;
             Py_DECREF(globals);
             Py_DECREF(frame);
@@ -1836,11 +1874,40 @@ telepysys_vm_write(PyObject* Py_UNUSED(module),
     // Get globals - PyObject_GetAttrString returns a new reference
     PyObject* globals = PyObject_GetAttrString(frame, "f_globals");
     if (globals != NULL) {
-        // Check if variable exists in globals
+#if PY_VERSION_HEX >= 0x030D0000  // Python 3.13+
+        // Convert name to PyObject
+        PyObject* name_obj = PyUnicode_FromString(name);
+        if (name_obj == NULL) {
+            Py_DECREF(globals);
+            Py_DECREF(frame);
+            return NULL;
+        }
+        // Check if variable exists in globals (sets KeyError if not found)
+        PyObject* existing_value = PyObject_GetItem(globals, name_obj);
+        if (existing_value != NULL) {
+            // Variable exists in globals, update it
+            Py_DECREF(
+                existing_value);  // Don't need the value, just checked existence
+            // PyObject_SetItem increfs value, so we don't need to
+            result = PyObject_SetItem(globals, name_obj, value);
+            Py_DECREF(name_obj);
+            Py_DECREF(globals);
+            Py_DECREF(frame);
+            if (result == 0) {
+                Py_RETURN_TRUE;
+            } else {
+                return NULL;  // Error occurred
+            }
+        } else {
+            // Variable not found - clear the KeyError
+            PyErr_Clear();
+        }
+        Py_DECREF(name_obj);
+#else
+        // Check if variable exists in globals (no exception if not found)
         PyObject* existing_value = PyDict_GetItemString(globals, name);
         if (existing_value != NULL) {
             // Variable exists in globals, update it
-            // PyDict_SetItemString increfs value, so we don't need to
             result = PyDict_SetItemString(globals, name, value);
             Py_DECREF(globals);
             Py_DECREF(frame);
@@ -1850,6 +1917,7 @@ telepysys_vm_write(PyObject* Py_UNUSED(module),
                 return NULL;  // Error occurred
             }
         }
+#endif
         Py_DECREF(globals);
     } else {
         // Clear the error if f_globals doesn't exist

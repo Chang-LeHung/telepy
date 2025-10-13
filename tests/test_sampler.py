@@ -28,7 +28,7 @@ class TestAsyncSampler(TestBase):
             ignore_frozen=True,
         )
         async_sampler.start()
-        t = threading.Thread(target=fib, args=(38,))
+        t = threading.Thread(target=fib, args=(35,))
         t.start()
         t.join()
         async_sampler.stop()
