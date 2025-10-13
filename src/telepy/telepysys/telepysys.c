@@ -399,13 +399,12 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     const size_t buf_size = BUF_SIZE;
     char* buf = (char*)malloc(buf_size);
     Telepy_time sampling_start = unix_micro_time();
+    long nsec = (long)PyLong_AsLong(self->sampling_interval) * 1000;
     while (Sample_Enabled(self)) {
         self->sampling_times++;
         Py_BEGIN_ALLOW_THREADS;
         // allow dynamic updates of the sampling interval
-        struct timespec req = {
-            .tv_sec = 0,
-            .tv_nsec = (long)PyLong_AsLong(self->sampling_interval) * 1000};
+        struct timespec req = {.tv_sec = 0, .tv_nsec = nsec};
         int ret = nanosleep(&req, NULL);
         if (ret != 0) {
             perror("telepysys: nanosleep error");
