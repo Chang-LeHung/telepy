@@ -1,6 +1,5 @@
 import os
 import sys
-import unittest
 
 from .base import TestBase  # type: ignore
 
@@ -296,7 +295,7 @@ class TelepyMainThread(TestBase):
         t.join()
 
 
-@unittest.skipIf(sys.version_info >= (3, 13), "vm_read not supported on Python 3.13+")
+# @unittest.skipIf(sys.version_info >= (3, 13), "vm_read not supported on Python 3.13+")
 class TestVMRead(TestBase):
     """Test cases for vm_read function."""
 
@@ -493,7 +492,7 @@ class TestVMRead(TestBase):
 
         def worker():
             test_var = "test_value"  # noqa: F841
-            time.sleep(1)
+            time.sleep(2)
 
         worker_thread = threading.Thread(target=worker)
         worker_thread.start()
@@ -503,6 +502,7 @@ class TestVMRead(TestBase):
         result1 = _telepysys.vm_read(worker_thread.ident, "test_var")
         # Call with explicit level=0
         result2 = _telepysys.vm_read(worker_thread.ident, "test_var", 0)
+        print(f"{result1 = } {result2 = }")
 
         self.assertEqual(result1, result2)
         self.assertEqual(result1, "test_value")
@@ -561,7 +561,7 @@ class TestVMRead(TestBase):
             _telepysys.vm_read(123, 456)  # name must be string
 
 
-@unittest.skipIf(sys.version_info >= (3, 13), "vm_write not supported on Python 3.13+")
+# @unittest.skipIf(sys.version_info >= (3, 13), "vm_write not supported on Python 3.13+")
 class TestVMWrite(TestBase):
     """Test cases for vm_write function.
 
@@ -1034,7 +1034,6 @@ class TestTopNamespace(TestBase):
 
     def test_top_namespace_get_both(self):
         """Test getting both locals and globals from a worker thread (flag=2)."""
-        import sys
         import threading
         import time
 
