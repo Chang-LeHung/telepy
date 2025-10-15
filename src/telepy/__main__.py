@@ -417,9 +417,9 @@ def main():
     parser.add_argument(
         "--time",
         choices=("cpu", "wall"),
-        default="cpu",
+        default="wall",
         help="Select the timer source for sampling: 'cpu' uses SIGPROF/ITIMER_PROF,"
-        " while 'wall' uses SIGALRM/ITIMER_REAL (default: cpu).",
+        " while 'wall' uses SIGALRM/ITIMER_REAL (default: wall).",
     )
     parser.add_argument(
         "--full-path",
