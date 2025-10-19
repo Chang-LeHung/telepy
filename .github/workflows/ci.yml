@@ -59,26 +59,56 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build extension
-        run: make build
+        run: python -m build
 
       - name: Install package
-        run: make install
+        run: pip install .
 
       - name: Run tests with retry (Attempt 1)
         id: test_attempt_1
         continue-on-error: true
-        run: make test
+        run: |
+          PKG_NAME=$(python setup.py --name)
+          cd src/$PKG_NAME/telepysys
+          CXX=${CXX:-g++}
+          $CXX -Wall -Wextra -std=c++11 -DTELEPY_TEST -g -pthread tree.cc -o tree_test
+          ./tree_test || exit 1
+          cd ../../..
+          for file in tests/test_*.py; do
+            echo "Running $file"
+            TELEPY_SUPPRESS_OUTPUT=1 python -m unittest $file || exit 1
+          done
 
       - name: Run tests with retry (Attempt 2)
         id: test_attempt_2
         if: steps.test_attempt_1.outcome == 'failure'
         continue-on-error: true
-        run: make test
+        run: |
+          PKG_NAME=$(python setup.py --name)
+          cd src/$PKG_NAME/telepysys
+          CXX=${CXX:-g++}
+          $CXX -Wall -Wextra -std=c++11 -DTELEPY_TEST -g -pthread tree.cc -o tree_test
+          ./tree_test || exit 1
+          cd ../../..
+          for file in tests/test_*.py; do
+            echo "Running $file"
+            TELEPY_SUPPRESS_OUTPUT=1 python -m unittest $file || exit 1
+          done
 
       - name: Run tests with retry (Attempt 3)
         id: test_attempt_3
         if: steps.test_attempt_2.outcome == 'failure'
-        run: make test
+        run: |
+          PKG_NAME=$(python setup.py --name)
+          cd src/$PKG_NAME/telepysys
+          CXX=${CXX:-g++}
+          $CXX -Wall -Wextra -std=c++11 -DTELEPY_TEST -g -pthread tree.cc -o tree_test
+          ./tree_test || exit 1
+          cd ../../..
+          for file in tests/test_*.py; do
+            echo "Running $file"
+            TELEPY_SUPPRESS_OUTPUT=1 python -m unittest $file || exit 1
+          done
 
       - name: Check test results
         if: steps.test_attempt_1.outcome == 'failure' && steps.test_attempt_2.outcome == 'failure' && steps.test_attempt_3.outcome == 'failure'
@@ -112,26 +142,50 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build extension
-        run: make build
+        run: python -m build
 
       - name: Install package
-        run: make install
+        run: pip install .
 
       - name: Run coverage with retry (Attempt 1)
         id: coverage_attempt_1
         continue-on-error: true
-        run: make coverage
+        run: |
+          for file in tests/test_*.py; do
+            echo "Running $file"
+            TELEPY_SUPPRESS_OUTPUT=1 coverage run --parallel-mode --source=telepy -m unittest $file || exit 1
+          done
+          coverage combine
+          coverage report
+          coverage html
+          coverage xml
 
       - name: Run coverage with retry (Attempt 2)
         id: coverage_attempt_2
         if: steps.coverage_attempt_1.outcome == 'failure'
         continue-on-error: true
-        run: make coverage
+        run: |
+          for file in tests/test_*.py; do
+            echo "Running $file"
+            TELEPY_SUPPRESS_OUTPUT=1 coverage run --parallel-mode --source=telepy -m unittest $file || exit 1
+          done
+          coverage combine
+          coverage report
+          coverage html
+          coverage xml
 
       - name: Run coverage with retry (Attempt 3)
         id: coverage_attempt_3
         if: steps.coverage_attempt_2.outcome == 'failure'
-        run: make coverage
+        run: |
+          for file in tests/test_*.py; do
+            echo "Running $file"
+            TELEPY_SUPPRESS_OUTPUT=1 coverage run --parallel-mode --source=telepy -m unittest $file || exit 1
+          done
+          coverage combine
+          coverage report
+          coverage html
+          coverage xml
 
       - name: Check coverage results
         if: steps.coverage_attempt_1.outcome == 'failure' && steps.coverage_attempt_2.outcome == 'failure' && steps.coverage_attempt_3.outcome == 'failure'
