@@ -302,11 +302,11 @@ class TestMonitor(TestBase):
         with request.urlopen(req) as response:
             self.assertEqual(response.status, 200)
             data = json.loads(response.read().decode())
-            self.assertIn("usage", data["data"])
-            self.assertIn("--interval INTERVAL", data["data"])
-            self.assertIn("--ignore-frozen", data["data"])
-            self.assertIn("--ignore-self", data["data"])
-            self.assertIn("--help, -h", data["data"])
+            self.assertRegex(data["data"], r"usage")
+            self.assertRegex(data["data"], r"--interval.*INTERVAL")
+            self.assertRegex(data["data"], r"--ignore-frozen")
+            self.assertRegex(data["data"], r"--ignore-self")
+            self.assertRegex(data["data"], r"--help.*-h")
 
         stop_headers = {
             "args": "stop --save-folded",
@@ -327,13 +327,13 @@ class TestMonitor(TestBase):
         with request.urlopen(req) as response:
             data = json.loads(response.read().decode())
             # Check for options presence (format may vary across argparse versions)
-            self.assertIn("--help", data["data"])
-            self.assertIn("-h", data["data"])
-            self.assertIn("-f", data["data"])
-            self.assertIn("--filename", data["data"])
-            self.assertIn("--save-folded", data["data"])
-            self.assertIn("--folded-filename", data["data"])
-            self.assertIn("--inverted", data["data"])
+            self.assertRegex(data["data"], r"--help")
+            self.assertRegex(data["data"], r"-h")
+            self.assertRegex(data["data"], r"-f")
+            self.assertRegex(data["data"], r"--filename")
+            self.assertRegex(data["data"], r"--save-folded")
+            self.assertRegex(data["data"], r"--folded-filename")
+            self.assertRegex(data["data"], r"--inverted")
 
         req = request.Request(f"http://127.0.0.1:{port}/shutdown")
         with request.urlopen(req) as response:
@@ -373,11 +373,11 @@ class TestMonitor(TestBase):
             with request.urlopen(req) as response:
                 self.assertEqual(response.status, 200)
                 data = json.loads(response.read().decode())
-                self.assertIn("usage", data["data"])
-                self.assertIn("--interval INTERVAL", data["data"])
-                self.assertIn("--ignore-frozen", data["data"])
-                self.assertIn("--ignore-self", data["data"])
-                self.assertIn("--help, -h", data["data"])
+                self.assertRegex(data["data"], r"usage")
+                self.assertRegex(data["data"], r"--interval.*INTERVAL")
+                self.assertRegex(data["data"], r"--ignore-frozen")
+                self.assertRegex(data["data"], r"--ignore-self")
+                self.assertRegex(data["data"], r"--help.*-h")
 
             stop_headers = {
                 "args": "stop --save-folded",
@@ -400,12 +400,12 @@ class TestMonitor(TestBase):
             with request.urlopen(req) as response:
                 data = json.loads(response.read().decode())
                 # Check for options presence (format may vary across argparse versions)
-                self.assertIn("--help", data["data"])
-                self.assertIn("-h", data["data"])
-                self.assertIn("-f", data["data"])
-                self.assertIn("--filename", data["data"])
-                self.assertIn("--save-folded", data["data"])
-                self.assertIn("--folded-filename", data["data"])
+                self.assertRegex(data["data"], r"--help")
+                self.assertRegex(data["data"], r"-h")
+                self.assertRegex(data["data"], r"-f")
+                self.assertRegex(data["data"], r"--filename")
+                self.assertRegex(data["data"], r"--save-folded")
+                self.assertRegex(data["data"], r"--folded-filename")
 
             req = request.Request(f"http://127.0.0.1:{port}/shutdown")
             with request.urlopen(req) as response:
