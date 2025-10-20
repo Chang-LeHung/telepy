@@ -154,14 +154,10 @@ sched_yield(void) {
  * Windows doesn't have clock_gettime, so we implement it using QueryPerformanceCounter
  */
 
-// Define timespec for Windows if not defined
-#if !defined(_TIMESPEC_DEFINED) && !defined(_STRUCT_TIMESPEC)
-#define _TIMESPEC_DEFINED
-struct timespec {
-    time_t tv_sec;   // seconds
-    long tv_nsec;    // nanoseconds
-};
-#endif
+// Note: Modern Windows 10+ SDKs define struct timespec in time.h
+// We don't need to define it ourselves for recent SDK versions.
+// Only define timespec for very old Windows SDKs that don't have it.
+// The guards below prevent redefinition errors.
 
 // Define CLOCK_MONOTONIC for Windows
 #ifndef CLOCK_MONOTONIC
@@ -171,21 +167,23 @@ struct timespec {
 static inline int
 clock_gettime(int clk_id, struct timespec* tp) {
     (void)clk_id;  // Unused on Windows
-    
+
     static LARGE_INTEGER frequency = {0};
     LARGE_INTEGER counter;
-    
+
     // Initialize frequency on first call
     if (frequency.QuadPart == 0) {
         QueryPerformanceFrequency(&frequency);
     }
-    
+
     QueryPerformanceCounter(&counter);
-    
+
     // Convert to seconds and nanoseconds
     tp->tv_sec = (time_t)(counter.QuadPart / frequency.QuadPart);
-    tp->tv_nsec = (long)(((counter.QuadPart % frequency.QuadPart) * 1000000000LL) / frequency.QuadPart);
-    
+    tp->tv_nsec =
+        (long)(((counter.QuadPart % frequency.QuadPart) * 1000000000LL) /
+               frequency.QuadPart);
+
     return 0;
 }
 
@@ -196,15 +194,15 @@ clock_gettime(int clk_id, struct timespec* tp) {
 static inline int
 nanosleep(const struct timespec* req, struct timespec* rem) {
     (void)rem;  // Windows Sleep doesn't support remaining time
-    
+
     // Convert to milliseconds
     DWORD milliseconds = (DWORD)(req->tv_sec * 1000 + req->tv_nsec / 1000000);
-    
+
     // Sleep for at least 1ms if any time was requested
     if (milliseconds == 0 && (req->tv_sec > 0 || req->tv_nsec > 0)) {
         milliseconds = 1;
     }
-    
+
     Sleep(milliseconds);
     return 0;
 }
