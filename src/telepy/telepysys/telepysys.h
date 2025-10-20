@@ -71,7 +71,7 @@ typedef struct TelePySysState {
 #define CHECK_FALG(s, flag) (BIT_CHECK((s)->flags, flag))
 
 typedef struct SamplerObject {
-    PyObject_HEAD;
+    PyObject_HEAD
     PyObject* sampling_thread;
     PyObject* sampling_interval;  // in microseconds
 
