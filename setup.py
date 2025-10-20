@@ -48,25 +48,31 @@ flags = prepare_flags()
 class Builder(build_ext):
     def run(self):
         if IS_WINDOWS:
-            # Use MSVC on Windows
-            cmd = [
-                "cl",
-                "/c",
-                "/std:c++14",
-                "/EHsc",
-                "src/telepy/telepysys/tree.cc",
-                "/Fo:build/tree.obj",
-                *[f for f in flags if f not in ["/EHsc", "/std:c++14"]],
-            ]
-            try:
-                subprocess.check_call(cmd)
-            except FileNotFoundError:
-                print(
-                    "Warning: MSVC compiler (cl) not found. "
-                    "Make sure Visual Studio or Build Tools are installed.",
-                    file=sys.stderr,
-                )
-                raise
+            # On Windows, let setuptools handle the compilation via MSVC
+            # We need to compile tree.cc first as a separate step
+            from distutils.ccompiler import new_compiler
+            from distutils.sysconfig import customize_compiler
+
+            compiler = new_compiler(compiler=None)
+            customize_compiler(compiler)
+
+            # Set C++ standard for MSVC
+            if hasattr(compiler, "compiler_type") and compiler.compiler_type == "msvc":
+                # Add C++14 standard flag for MSVC
+                extra_args = ["/std:c++14", "/EHsc"] + [
+                    f for f in flags if f not in ["/EHsc", "/std:c++14"]
+                ]
+            else:
+                extra_args = flags
+
+            # Compile tree.cc
+            objects = compiler.compile(
+                ["src/telepy/telepysys/tree.cc"],
+                output_dir="build/temp",
+                extra_postargs=extra_args,
+            )
+            # Store the compiled object path for linking
+            self.tree_objects = objects
         else:
             # Use g++ on Unix-like systems
             cmd = [
@@ -81,11 +87,24 @@ class Builder(build_ext):
                 *flags,
             ]
             subprocess.check_call(cmd)
+            self.tree_objects = ["build/tree.o"]
         super().run()
 
+    def build_extensions(self):
+        # Add tree object files to the telepysys extension
+        if hasattr(self, "tree_objects"):
+            for ext in self.extensions:
+                if ext.name == "telepy._telepysys":
+                    if IS_WINDOWS:
+                        # On Windows, add as extra objects
+                        if not hasattr(ext, "extra_objects"):
+                            ext.extra_objects = []
+                        ext.extra_objects.extend(self.tree_objects)
+                    else:
+                        # On Unix, add as extra link args
+                        ext.extra_link_args.extend(self.tree_objects)
+        super().build_extensions()
 
-# Determine the tree object file based on platform
-tree_obj = "build/tree.obj" if IS_WINDOWS else "build/tree.o"
 
 ext_modules = [
     Extension(
@@ -96,7 +115,6 @@ ext_modules = [
         ],
         include_dirs=["src/telepy/telepysys"],
         extra_compile_args=flags,
-        extra_link_args=[tree_obj],
         language="c++",
     ),
     Extension(
