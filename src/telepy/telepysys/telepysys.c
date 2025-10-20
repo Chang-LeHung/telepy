@@ -1,7 +1,6 @@
 
 #include <Python.h>
 #include <assert.h>
-#include <sched.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>

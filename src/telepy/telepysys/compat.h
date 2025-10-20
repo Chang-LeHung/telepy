@@ -116,4 +116,47 @@ PyModule_AddObjectRef(PyObject* module, const char* name, PyObject* value) {
 // Python 3.13 specific compatibility if needed
 #endif
 
+/*
+ * Platform-specific compatibility
+ * Windows vs Unix differences
+ */
+
+// Platform detection
+#if defined(_WIN32) || defined(_WIN64) || defined(__CYGWIN__)
+#define TELEPY_PLATFORM_WINDOWS 1
+#define TELEPY_PLATFORM_UNIX 0
+#else
+#define TELEPY_PLATFORM_WINDOWS 0
+#define TELEPY_PLATFORM_UNIX 1
+#endif
+
+#if TELEPY_PLATFORM_WINDOWS
+
+// Windows-specific includes
+#include <process.h>
+#include <windows.h>
+
+/*
+ * sched_yield() equivalent for Windows
+ * On Windows, use SwitchToThread() which yields execution to another thread
+ */
+static inline int
+sched_yield(void) {
+    SwitchToThread();
+    return 0;
+}
+
+#ifndef Py_UNUSED
+#define Py_UNUSED(name) _unused_##name __attribute__((__unused__))
+#endif
+
+#else  // Unix platforms
+
+// Unix-specific includes
+#include <pthread.h>
+#include <sched.h>
+#include <unistd.h>
+
+#endif  // TELEPY_PLATFORM_WINDOWS
+
 #endif  // TELEPYSYS_COMPAT_H

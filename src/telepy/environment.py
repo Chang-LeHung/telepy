@@ -4,6 +4,7 @@ import contextlib
 import enum
 import functools
 import os
+import platform
 import site
 import sys
 import threading
@@ -18,7 +19,17 @@ from . import logger
 from ._telepysys import sched_yield
 from .config import TelePySamplerConfig
 from .flamegraph import FlameGraph, process_stack_trace
-from .sampler import PyTorchProfilerMiddleware, TelepySysAsyncWorkerSampler
+from .sampler import (
+    PyTorchProfilerMiddleware,
+    TelepySysAsyncWorkerSampler,
+    TelepySysSampler,
+)
+
+# Detect platform
+IS_WINDOWS = sys.platform == "win32" or platform.system() == "Windows"
+
+# Type alias for the sampler that can be either type based on platform
+SamplerType = TelepySysAsyncWorkerSampler | TelepySysSampler
 
 # String constants
 CMD_SEPARATOR: Final = "--"
@@ -159,7 +170,7 @@ class Environment:
     _spawnv_passfds = util.spawnv_passfds
 
     # Class attributes to store singleton instances
-    _sampler: None | TelepySysAsyncWorkerSampler = None
+    _sampler: None | SamplerType = None
     _args: None | TelePySamplerConfig = None
 
     def __new__(cls):
@@ -169,12 +180,12 @@ class Environment:
         )
 
     @classmethod
-    def get_sampler(cls) -> None | TelepySysAsyncWorkerSampler:
+    def get_sampler(cls) -> None | SamplerType:
         """Get the singleton sampler instance."""
         return cls._sampler
 
     @classmethod
-    def set_sampler(cls, sampler: TelepySysAsyncWorkerSampler) -> None:
+    def set_sampler(cls, sampler: SamplerType) -> None:
         """Set the singleton sampler instance."""
         if cls._sampler is not None:  # pragma: no cover
             raise RuntimeError(ERROR_SAMPLER_EXISTS)
@@ -199,30 +210,53 @@ class Environment:
             cls.initialized = False
 
     @classmethod
-    def _create_sampler(cls, config: TelePySamplerConfig) -> TelepySysAsyncWorkerSampler:
+    def _create_sampler(cls, config: TelePySamplerConfig) -> SamplerType:
         """
-        Create and configure a TelepySysAsyncWorkerSampler instance.
+        Create and configure a sampler instance based on the platform.
+
+        On Windows, creates a TelepySysSampler (main thread only).
+        On Unix platforms, creates a TelepySysAsyncWorkerSampler (worker thread).
 
         Args:
             config (TelePySamplerConfig): The configuration for the sampler.
 
         Returns:
-            TelepySysAsyncWorkerSampler: A configured sampler instance.
+            SamplerType: A configured sampler instance appropriate for the platform.
         """
-        sampler = TelepySysAsyncWorkerSampler(
-            config.interval,
-            debug=config.debug,
-            ignore_frozen=config.ignore_frozen,
-            ignore_self=not config.include_telepy,
-            tree_mode=config.tree_mode,
-            focus_mode=config.focus_mode,
-            regex_patterns=config.regex_patterns,
-            is_root=not (config.fork_server or config.mp),
-            forkserver=config.fork_server,
-            from_mp=config.mp,
-            time_mode=config.time,
-        )
-        sampler.adjust()
+        # Declare sampler with explicit type annotation
+        sampler: SamplerType
+
+        if IS_WINDOWS:
+            # Windows: Use main thread sampler
+            sampler = TelepySysSampler(
+                config.interval,
+                debug=config.debug,
+                ignore_frozen=config.ignore_frozen,
+                ignore_self=not config.include_telepy,
+                tree_mode=config.tree_mode,
+                focus_mode=config.focus_mode,
+                regex_patterns=config.regex_patterns,
+                is_root=not (config.fork_server or config.mp),
+                forkserver=config.fork_server,
+                from_mp=config.mp,
+                time_mode=config.time,
+            )
+        else:
+            # Unix: Use worker thread sampler
+            sampler = TelepySysAsyncWorkerSampler(
+                config.interval,
+                debug=config.debug,
+                ignore_frozen=config.ignore_frozen,
+                ignore_self=not config.include_telepy,
+                tree_mode=config.tree_mode,
+                focus_mode=config.focus_mode,
+                regex_patterns=config.regex_patterns,
+                is_root=not (config.fork_server or config.mp),
+                forkserver=config.fork_server,
+                from_mp=config.mp,
+                time_mode=config.time,
+            )
+            sampler.adjust()
 
         # Register PyTorch profiler middleware if enabled
         if config.torch_profile:
@@ -445,7 +479,7 @@ _MIN_SAMPLE_COUNT = 50
 class FlameGraphSaver:
     def __init__(
         self,
-        sampler: TelepySysAsyncWorkerSampler,
+        sampler: SamplerType,
         *,
         full_path: bool = False,
         inverted: bool = False,
