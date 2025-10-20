@@ -11,7 +11,7 @@ import threading
 import time
 import types
 from multiprocessing import util
-from typing import Any, Final
+from typing import Any, Final, Union
 
 from rich.table import Table
 
@@ -29,7 +29,7 @@ from .sampler import (
 IS_WINDOWS = sys.platform == "win32" or platform.system() == "Windows"
 
 # Type alias for the sampler that can be either type based on platform
-SamplerType = TelepySysAsyncWorkerSampler | TelepySysSampler
+SamplerType = Union[TelepySysAsyncWorkerSampler, TelepySysSampler]  # noqa
 
 # String constants
 CMD_SEPARATOR: Final = "--"
@@ -226,7 +226,7 @@ class Environment:
         # Declare sampler with explicit type annotation
         sampler: SamplerType
 
-        if IS_WINDOWS:
+        if IS_WINDOWS:  # pragma: no cover
             # Windows: Use main thread sampler
             sampler = TelepySysSampler(
                 config.interval,
