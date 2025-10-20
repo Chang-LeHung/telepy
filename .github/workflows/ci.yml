@@ -97,6 +97,7 @@ jobs:
           .\tree_test.exe
           if ($LASTEXITCODE -ne 0) { exit 1 }
           cd ..\..\..
+          $env:PYTHONIOENCODING = "utf-8"
           Get-ChildItem tests\test_*.py | ForEach-Object {
             Write-Host "Running $($_.Name)"
             $env:TELEPY_SUPPRESS_OUTPUT = "1"
@@ -133,6 +134,7 @@ jobs:
           .\tree_test.exe
           if ($LASTEXITCODE -ne 0) { exit 1 }
           cd ..\..\..
+          $env:PYTHONIOENCODING = "utf-8"
           Get-ChildItem tests\test_*.py | ForEach-Object {
             Write-Host "Running $($_.Name)"
             $env:TELEPY_SUPPRESS_OUTPUT = "1"
@@ -167,6 +169,7 @@ jobs:
           .\tree_test.exe
           if ($LASTEXITCODE -ne 0) { exit 1 }
           cd ..\..\..
+          $env:PYTHONIOENCODING = "utf-8"
           Get-ChildItem tests\test_*.py | ForEach-Object {
             Write-Host "Running $($_.Name)"
             $env:TELEPY_SUPPRESS_OUTPUT = "1"
