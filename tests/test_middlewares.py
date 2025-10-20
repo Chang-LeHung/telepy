@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import threading
+import unittest
 
 import telepy
 from telepy.sampler import SamplerMiddleware
@@ -332,6 +334,9 @@ class TestAsyncSamplerMiddleware(TestBase):
             result += i * i
         return result
 
+    @unittest.skipIf(
+        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    )
     def test_async_sampler_middleware(self):
         """Test middleware with TelepySysAsyncSampler."""
         # Skip if not in main thread (async sampler requirement)
@@ -357,6 +362,9 @@ class TestAsyncSamplerMiddleware(TestBase):
         sampler.dumps()  # This should trigger middleware
         self.assertEqual(middleware.calls["process_dump"], 1)
 
+    @unittest.skipIf(
+        sys.platform == "win32", "AsyncWorkerSampler not supported on Windows"
+    )
     def test_worker_sampler_middleware(self):
         """Test middleware with TelepySysAsyncWorkerSampler."""
 
@@ -719,6 +727,9 @@ class TestPyTorchProfilerMiddleware(TestBase):
             content = f.read()
         self.assertGreater(len(content), 0, "Statistics file should not be empty")
 
+    @unittest.skipIf(
+        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    )
     def test_pytorch_middleware_with_async_sampler(self):
         """Test PyTorchProfilerMiddleware with async sampler."""
         if not self.torch_available:

@@ -1,5 +1,7 @@
+import sys
 import threading
 import time
+import unittest
 
 import telepy
 
@@ -77,6 +79,9 @@ class TestFocusMode(TestBase):
 
         self.assertIsNone(sampler.regex_patterns)
 
+    @unittest.skipIf(
+        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    )
     def test_async_sampler_focus_mode(self):
         """Test focus_mode with AsyncSampler."""
         async_sampler = telepy.TelepySysAsyncSampler(
@@ -214,6 +219,9 @@ class TestFocusMode(TestBase):
         self.assertIsNone(sampler.regex_patterns)
 
 
+@unittest.skipIf(
+    sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+)
 class TestAsyncSamplerFocusMode(TestBase):
     """Test cases specifically for AsyncSampler focus mode functionality."""
 
