@@ -22,6 +22,30 @@ console = logger.console
 err_console = logger.err_console
 
 
+def safe_print(*args, **kwargs) -> None:
+    """
+    Print with error handling for Unicode encoding issues on Windows.
+
+    On Windows, when stdout is redirected (e.g., in tests), Unicode characters
+    like ✓ may cause UnicodeEncodeError. This function catches such errors
+    and retries with ASCII alternatives.
+    """
+    try:
+        console.print(*args, **kwargs)
+    except UnicodeEncodeError:
+        # Replace Unicode checkmark with ASCII alternative
+        if args:
+            new_args = list(args)
+            for i, arg in enumerate(new_args):
+                if isinstance(arg, str):
+                    new_args[i] = arg.replace("✓", "[OK]")
+            try:
+                console.print(*new_args, **kwargs)
+            except Exception:
+                # If still failing, just pass
+                pass
+
+
 class ChromeTraceConverter:
     """Convert Chrome Trace Event Format trace events to folded stack format."""
 
@@ -425,7 +449,7 @@ def main():
         converter.load_trace()
 
         if args.verbose:
-            console.print(
+            safe_print(
                 f"[green]✓[/green] Loaded [bold cyan]{len(converter.events)}"
                 f"[/bold cyan] trace events"
             )
@@ -433,11 +457,11 @@ def main():
         stacks = converter.convert_to_folded()
 
         if args.verbose:
-            console.print(
+            safe_print(
                 f"[green]✓[/green] Generated [bold cyan]{len(stacks)}"
                 f"[/bold cyan] unique stack traces"
             )
-            console.print(
+            safe_print(
                 f"[green]✓[/green] Total samples: "
                 f"[bold magenta]{sum(stacks.values()):,}[/bold magenta]"
             )
@@ -447,7 +471,7 @@ def main():
         )
         converter.save_folded(output_file)
 
-        console.print(
+        safe_print(
             f"[green]✓[/green] Converted trace saved to: "
             f"[bold yellow]{output_file}[/bold yellow]"
         )
@@ -455,12 +479,12 @@ def main():
         if args.verbose:
             # Show some statistics
             max_depth = max(len(stack.split(";")) for stack in stacks.keys())
-            console.print(
+            safe_print(
                 f"[green]✓[/green] Maximum stack depth: "
                 f"[bold cyan]{max_depth}[/bold cyan]"
             )
             file_size = Path(output_file).stat().st_size
-            console.print(
+            safe_print(
                 f"[green]✓[/green] Output file size: "
                 f"[bold cyan]{file_size:,}[/bold cyan] bytes"
             )
@@ -478,7 +502,7 @@ def main():
                     lines = f.readlines()
 
                 if args.verbose:
-                    console.print(
+                    safe_print(
                         f"[green]✓[/green] Read [bold cyan]{len(lines)}"
                         f"[/bold cyan] folded stack lines"
                     )
@@ -499,7 +523,7 @@ def main():
                 fg.parse_input()
 
                 if args.verbose:
-                    console.print(
+                    safe_print(
                         f"[green]✓[/green] Parsed "
                         f"[bold magenta]{fg.total_samples:,}[/bold magenta] samples"
                     )
@@ -511,14 +535,14 @@ def main():
                 with open(args.svg_file, "w") as f:
                     f.write(svg)
 
-                console.print(
+                safe_print(
                     f"[green]✓[/green] Flame graph saved to: "
                     f"[bold yellow]{args.svg_file}[/bold yellow]"
                 )
 
                 if args.verbose:
                     svg_size = Path(args.svg_file).stat().st_size
-                    console.print(
+                    safe_print(
                         f"[green]✓[/green] SVG file size: "
                         f"[bold cyan]{svg_size:,}[/bold cyan] bytes"
                     )
