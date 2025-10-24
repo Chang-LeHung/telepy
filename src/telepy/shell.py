@@ -49,14 +49,14 @@ class CaseInsensitiveFrequencyCompleter(Completer):
         if not self.history:
             self.history = os.path.join(os.path.expanduser("~"), ".telepy", "history")
         if not os.path.exists(self.history):
-            open(self.history, "w").close()
+            open(self.history, "w", encoding="utf-8").close()
 
     def get_completions(
         self, document: Document, complete_event: CompleteEvent
     ) -> Iterable[Completion]:
         assert self.history is not None
         if complete_event.completion_requested:
-            with open(self.history, "r+") as fp:
+            with open(self.history, "r+", encoding="utf-8") as fp:
                 lines = [
                     line.strip()
                     for line in fp.readlines()
@@ -76,7 +76,7 @@ class CaseInsensitiveFrequencyCompleter(Completer):
 
     def add_command(self, cmd: str):
         assert self.history is not None
-        with open(self.history, "a+") as f:
+        with open(self.history, "a+", encoding="utf-8") as f:
             lines = [line.strip() for line in f.readlines()]
             lines.append(cmd)
             if len(lines) >= MAX_HISTORY_SIZE:

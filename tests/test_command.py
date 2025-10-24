@@ -151,10 +151,17 @@ class CommandTemplate(TestBase):
             cmd_line = ["telepy", *options]
         output = subprocess.run(cmd_line, capture_output=True, timeout=timeout)  # type: ignore
         self.assertIn(output.returncode, [exit_code])
-        stdout = output.stdout.decode("utf-8")
+        # Try UTF-8 first, fall back to system encoding (GBK on Windows Chinese)
+        try:
+            stdout = output.stdout.decode("utf-8")
+        except UnicodeDecodeError:
+            stdout = output.stdout.decode("gbk", errors="replace")
         for check in stdout_check_list:
             self.assertRegex(stdout, check)
-        stderr = output.stderr.decode("utf-8")
+        try:
+            stderr = output.stderr.decode("utf-8")
+        except UnicodeDecodeError:
+            stderr = output.stderr.decode("gbk", errors="replace")
         for check in stderr_check_list:
             self.assertRegex(stderr, check)
         return output
@@ -1032,7 +1039,10 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
         output = self.run_command(
             ["--time", "invalid", "-c", "print('test')"], exit_code=2
         )
-        stderr = output.stderr.decode("utf-8")
+        try:
+            stderr = output.stderr.decode("utf-8")
+        except UnicodeDecodeError:
+            stderr = output.stderr.decode("gbk", errors="replace")
         self.assertIn("invalid choice: 'invalid'", stderr)
         # Support both formats: "choose from cpu, wall" and "(choose from 'cpu', 'wall')"
         self.assertTrue(

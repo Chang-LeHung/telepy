@@ -353,11 +353,13 @@ class Environment:
             sys.exit = cls.patch_sys_exit
             os._exit = cls.patch_os__exit
             if not cls.sampler_created:
-                os.register_at_fork(
-                    before=patch_before_fork,
-                    after_in_child=patch_os_fork_in_child,
-                    after_in_parent=patch_os_fork_in_parent,
-                )
+                # os.register_at_fork is not available on Windows
+                if hasattr(os, "register_at_fork"):
+                    os.register_at_fork(
+                        before=patch_before_fork,
+                        after_in_child=patch_os_fork_in_child,
+                        after_in_parent=patch_os_fork_in_parent,
+                    )
                 patch_multiprocesssing()
             cls.sampler_created = True
             cls.initialized = True
