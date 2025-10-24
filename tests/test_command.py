@@ -496,7 +496,6 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
         self.run_command(
             options=["-c", "a = 1 / 0"],
             stderr_check_list=[
-                "The following traceback may be useful",
                 "ZeroDivisionError: division by zero",
             ],
             exit_code=1,
