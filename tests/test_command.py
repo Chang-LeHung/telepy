@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unittest
 from typing import NamedTuple
 
 from .base import TestBase  # type: ignore
@@ -187,6 +188,7 @@ class TestCommand(CommandTemplate):
             if os.path.exists(svg_file):
                 os.unlink(svg_file)
 
+    @unittest.skipIf(sys.platform == "win32", "fork not supported on Windows")
     def test_fib_fork(self):
         output = self.run_filename(
             "test_files/test_fib_fork.py",
@@ -200,6 +202,7 @@ class TestCommand(CommandTemplate):
             [],
         )
 
+    @unittest.skipIf(sys.platform == "win32", "forkserver not supported on Windows")
     def test_forkserver(self):
         import os
         import tempfile
@@ -393,6 +396,7 @@ class TestCommand(CommandTemplate):
             ],
         )
 
+    @unittest.skipIf(sys.platform == "win32", "fork not supported on Windows")
     def test_fork_multiple_child_process(self):
         svg_fd, svg_path = tempfile.mkstemp(suffix=".svg")
         folded_fd, folded_path = tempfile.mkstemp(suffix=".folded")
@@ -424,6 +428,7 @@ class TestCommand(CommandTemplate):
             if os.path.exists(svg_path):
                 os.unlink(svg_path)
 
+    @unittest.skipIf(sys.platform == "win32", "fork not supported on Windows")
     def test_fork_multiple_child_process_no_merge(self):
         self.run_filename(
             "test_files/test_fork_multi_processes.py",
@@ -490,10 +495,8 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
     def test_py_error(self):
         self.run_command(
             options=["-c", "a = 1 / 0"],
-            stdout_check_list=[
-                "The following traceback may be useful for debugging",
-            ],
             stderr_check_list=[
+                "The following traceback may be useful",
                 "ZeroDivisionError: division by zero",
             ],
             exit_code=1,

@@ -1,8 +1,10 @@
 import contextlib
 import io
 import logging
+import sys
 import threading
 import time
+import unittest
 
 from prompt_toolkit.input.defaults import create_pipe_input
 
@@ -17,6 +19,10 @@ from .base import TestBase
 
 
 class TestShell(TestBase):
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "prompt_toolkit tests not supported in non-interactive environment",
+    )
     def test_shell_basic(self):
         logging.getLogger("asyncio").setLevel(logging.WARNING)
         port = 12345
@@ -61,6 +67,10 @@ class TestShell(TestBase):
         if t.is_alive():
             self.logger.warning("Server thread did not terminate in time")
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "prompt_toolkit tests not supported in non-interactive environment",
+    )
     def test_shell_corner_cases(self):
         import os
         import tempfile
@@ -296,6 +306,10 @@ class TestShell(TestBase):
             msg, ok = shell.dispatch("   ")
             self.assertTrue(ok)
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "prompt_toolkit tests not supported in non-interactive environment",
+    )
     def test_invalid_state_exception(self):
         """Test RuntimeError for invalid state"""
         shell = TelePyShell()
@@ -427,6 +441,10 @@ class TestShell(TestBase):
                 self.assertLessEqual(len(lines), MAX_UNIQUE_COMMANDS)
                 self.assertGreater(len(lines), 0)
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "prompt_toolkit tests not supported in non-interactive environment",
+    )
     def test_shell_initialization_edge_cases(self):
         """Test shell initialization edge cases"""
         import os

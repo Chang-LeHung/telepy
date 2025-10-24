@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+import unittest
+
 from telepy import TelePyMonitor
 
 from .base import TestBase
@@ -265,6 +268,7 @@ class TestMonitor(TestBase):
             pass
         monitor.close()
 
+    @unittest.skipIf(sys.platform == "win32", "fork not supported on Windows")
     def test_profile(self):
         """
         We can not use multiple threads in the same process, because if we test the
@@ -339,6 +343,7 @@ class TestMonitor(TestBase):
         with request.urlopen(req) as response:
             self.assertEqual(response.status, 200)
 
+    @unittest.skipIf(sys.platform == "win32", "fork not supported on Windows")
     def test_profile_switch_process(self):
         """
         This method is to cover the code ran in the main thread.
@@ -451,6 +456,7 @@ class TestMonitor(TestBase):
 
         monitor.close()
 
+    @unittest.skipIf(sys.platform == "win32", "fork not supported on Windows")
     def test_profile_inverted_flamegraph(self):
         """Test that the monitor correctly generates inverted flamegraphs."""
         import json

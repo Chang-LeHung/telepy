@@ -348,16 +348,6 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
             raise ValueError("time_mode must be either 'cpu' or 'wall'")
         self.time_mode = cast(Literal["cpu", "wall"], normalized_time_mode)
 
-        # On Windows, TelepySysSampler uses threading and doesn't need signals
-        # Only set signal attributes on non-Windows platforms
-        if not IS_WINDOWS:
-            if self.time_mode == "cpu":
-                self._timer_signal = signal.SIGPROF
-                self._timer_type = signal.ITIMER_PROF
-            else:
-                self._timer_signal = signal.SIGALRM  # type: ignore[assignment]
-                self._timer_type = signal.ITIMER_REAL
-
     def adjust_interval(self) -> bool:
         """
         Adjusts sys's interval to match TelepySys's interval.

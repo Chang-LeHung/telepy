@@ -15,6 +15,10 @@
 
 #define TELEPYSYS_VERSION "0.1.0"
 
+// Forward declaration
+static Telepy_time
+unix_micro_time(void);
+
 
 static PyObject*
 Sampler_start(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
@@ -24,6 +28,9 @@ Sampler_start(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
                      "telepysys is already enabled, call disable first");
         return NULL;
     }
+
+    // Set start time
+    self->start_time = unix_micro_time();
 
     PyObject* threading_module = PyImport_ImportModule("threading");
 
@@ -91,6 +98,10 @@ Sampler_stop(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
         return NULL;
     }
     Sample_Disable(self);  // signal the sampling routine to stop first
+
+    // Set end time
+    self->end_time = unix_micro_time();
+
     // join the thread
     PyObject* result =
         PyObject_CallMethod(self->sampling_thread, "join", NULL);
@@ -648,6 +659,19 @@ Sampler_get_acc_sampling_time(SamplerObject* self, void* Py_UNUSED(closure)) {
     return PyLong_FromLongLong(self->acc_sampling_time);
 }
 
+
+static PyObject*
+Sampler_get_start_time(SamplerObject* self, void* Py_UNUSED(closure)) {
+    return PyLong_FromLongLong(self->start_time);
+}
+
+
+static PyObject*
+Sampler_get_end_time(SamplerObject* self, void* Py_UNUSED(closure)) {
+    return PyLong_FromLongLong(self->end_time);
+}
+
+
 static PyObject*
 Sampler_get_debug(SamplerObject* self, void* Py_UNUSED(closure)) {
     if (CHECK_FALG(self, VERBOSE))
@@ -839,6 +863,20 @@ static PyGetSetDef Sampler_getset[] = {
         NULL,
     },
     {
+        "start_time",
+        (getter)Sampler_get_start_time,
+        NULL,
+        "start time in microseconds (monotonic)",
+        NULL,
+    },
+    {
+        "end_time",
+        (getter)Sampler_get_end_time,
+        NULL,
+        "end time in microseconds (monotonic)",
+        NULL,
+    },
+    {
         "debug",
         (getter)Sampler_get_debug,
         (setter)Sampler_set_debug,
@@ -1019,13 +1057,13 @@ AsyncSampler_set_sampling_tid(SamplerObject* self,
 static PyObject*
 AsyncSampler_get_start_time(AsyncSamplerObject* self,
                             void* Py_UNUSED(closure)) {
-    return PyLong_FromLong(self->start);
+    return PyLong_FromLongLong(self->base.start_time);
 }
 
 
 static PyObject*
 AsyncSampler_get_end_time(AsyncSamplerObject* self, void* Py_UNUSED(closure)) {
-    return PyLong_FromLong(self->end);
+    return PyLong_FromLongLong(self->base.end_time);
 }
 
 
@@ -1372,7 +1410,7 @@ static PyObject*
 AsyncSampler_start(AsyncSamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     SamplerObject* base = (SamplerObject*)self;
     Sample_Enable(base);
-    self->start = unix_micro_time();
+    base->start_time = unix_micro_time();
     Py_RETURN_NONE;
 }
 
@@ -1380,8 +1418,8 @@ static PyObject*
 AsyncSampler_stop(AsyncSamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     SamplerObject* base = (SamplerObject*)self;
     Sample_Disable(base);
-    self->end = unix_micro_time();
-    base->life_time = self->end - self->start;
+    base->end_time = unix_micro_time();
+    base->life_time = base->end_time - base->start_time;
     Py_RETURN_NONE;
 }
 

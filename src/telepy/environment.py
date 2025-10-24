@@ -239,7 +239,7 @@ class Environment:
                 is_root=not (config.fork_server or config.mp),
                 forkserver=config.fork_server,
                 from_mp=config.mp,
-                time_mode=config.time,
+                time_mode=config.time,  # Accept for consistency
             )
         else:
             # Unix: Use worker thread sampler

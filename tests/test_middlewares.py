@@ -867,6 +867,7 @@ class TestPyTorchProfilerCLI(CommandTemplate):
         self.temp_dirs.append(temp_dir)
         return temp_dir
 
+    @unittest.skipIf(sys.platform == "win32", "Skip PyTorch CLI tests on Windows")
     def test_torch_profile_basic(self):
         """Test: telepy test_torch.py --torch-profile -- --epochs 1."""
         if not self.torch_available:
@@ -906,6 +907,7 @@ class TestPyTorchProfilerCLI(CommandTemplate):
         stats_files = [f for f in files if f.startswith("profiler_stats_")]
         self.assertGreater(len(stats_files), 0, "No profiler statistics files found")
 
+    @unittest.skipIf(sys.platform == "win32", "Skip PyTorch CLI tests on Windows")
     def test_torch_profile_with_verbose(self):
         """Test torch profiler with --debug --verbose flags."""
         if not self.torch_available:
@@ -943,6 +945,7 @@ class TestPyTorchProfilerCLI(CommandTemplate):
         stats_files = [f for f in files if f.startswith("profiler_stats_")]
         self.assertGreater(len(stats_files), 0, "No stats files found")
 
+    @unittest.skipIf(sys.platform == "win32", "Skip PyTorch CLI tests on Windows")
     def test_torch_profile_without_chrome_trace(self):
         """Test PyTorch profiler with chrome trace disabled."""
         if not self.torch_available:
@@ -979,6 +982,7 @@ class TestPyTorchProfilerCLI(CommandTemplate):
         stats_files = [f for f in files if f.startswith("profiler_stats_")]
         self.assertGreater(len(stats_files), 0, "Stats files should exist")
 
+    @unittest.skipIf(sys.platform == "win32", "Skip PyTorch CLI tests on Windows")
     def test_torch_profile_custom_activities(self):
         """Test PyTorch profiler with custom activities."""
         if not self.torch_available:

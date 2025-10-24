@@ -83,6 +83,8 @@ typedef struct SamplerObject {
     // profiling data
     Telepy_time acc_sampling_time;  // accumulated sampling time
     Telepy_time life_time;          // sampling thread life time
+    Telepy_time start_time;         // start time in microseconds
+    Telepy_time end_time;           // end time in microseconds
 
     // filtering options
     PyObject* regex_patterns;  // list of compiled regex patterns
@@ -95,8 +97,7 @@ typedef struct AsyncSamplerObject {
     SamplerObject base;
     // ------------------------------------------------------
     // do not make any changes to the above field
-    Telepy_time start;    // start time in microseconds
-    Telepy_time end;      // end time in microseconds
+    // start_time and end_time are now in the base SamplerObject
     PyObject* threading;  // we can not import it in singal function
     // log buffer, we can not allocate memory in singal function, malloc is not async safe.
     char* buf;

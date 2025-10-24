@@ -47,7 +47,11 @@ class TestTelePySys(TestBase):
         call_stack = telepy.current_stacks()
         for key, value in telepy.join_current_stacks(call_stack).items():
             self.assertIn("fib", value)
-            self.assertIn("tests/test_telesys.py", value)
+            # Check for both Unix and Windows path separators
+            self.assertTrue(
+                "tests/test_telesys.py" in value or "tests\\test_telesys.py" in value,
+                f"Expected path not found in: {value}",
+            )
             break
         t.join()
         # Check that our threads are in the call stack (may have other system threads)
