@@ -25,6 +25,7 @@ from .thread import in_main_thread
 # Check if we're on Windows
 IS_WINDOWS = sys.platform == "win32" or platform.system() == "Windows"
 
+
 class SamplerMiddleware(ABC):
     """Abstract base class for sampler middleware."""
 
