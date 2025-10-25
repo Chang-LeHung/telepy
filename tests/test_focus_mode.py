@@ -137,11 +137,7 @@ class TestFocusMode(TestBase):
         simple_function()
         sampler_focus.stop()
 
-        print(f"{sys.getswitchinterval()= }")
         focus_output = sampler_focus.dumps()
-        print("===========================")
-        print(focus_output)
-        print("===========================")
 
         # The focus mode output should generally be shorter or different
         # since it filters out standard library calls
