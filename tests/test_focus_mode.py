@@ -103,12 +103,15 @@ class TestFocusMode(TestBase):
 
         def simple_function():
             """A simple function to sample."""
-            time.sleep(0.01)  # Small delay to ensure sampling
-            return sum(range(8000000))
+            s = 0
+            for i in range(10000):
+                for j in range(1000):
+                    s += 1
+            return s
 
         # Test with focus_mode disabled (should capture everything)
         sampler_normal = telepy.TelepySysSampler(
-            sampling_interval=1000,
+            sampling_interval=100,
             focus_mode=False,
             debug=False,
         )
@@ -133,7 +136,11 @@ class TestFocusMode(TestBase):
         simple_function()
         sampler_focus.stop()
 
+        print(f"{sys.getswitchinterval()= }")
         focus_output = sampler_focus.dumps()
+        print("===========================")
+        print(focus_output)
+        print("===========================")
 
         # The focus mode output should generally be shorter or different
         # since it filters out standard library calls
