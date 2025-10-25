@@ -441,8 +441,8 @@ class TeleXSamplerConfig:
             res.append("--no-merge")
         if self.ignore_frozen:
             res.append("--ignore-frozen")
-        if self.include_telepy:
-            res.append("--include-telepy")
+        if self.include_telex:
+            res.append("--include-telex")
         if self.focus_mode:
             res.append("--focus-mode")
         if self.regex_patterns:

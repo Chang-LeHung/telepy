@@ -42,7 +42,7 @@ def vm_read(tid: int, name: str, level: int = 0) -> object | None:
 
     Example:
         >>> import threading
-        >>> from telepy import _telepysys
+        >>> from telex import _telepysys
         >>> def worker():
         ...     local_var = "Hello"
         ...     time.sleep(2)
@@ -81,7 +81,7 @@ def vm_write(tid: int, name: str, value: object) -> bool:
 
     Example:
         >>> import threading
-        >>> from telepy import _telepysys
+        >>> from telex import _telepysys
         >>> global_counter = 0
         >>> def worker():
         ...     global global_counter
@@ -121,7 +121,7 @@ def top_namespace(
 
     Example:
         >>> import threading
-        >>> from telepy import _telepysys
+        >>> from telex import _telepysys
         >>> def worker():
         ...     local_var = "test"
         ...     global_var = "global"

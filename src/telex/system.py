@@ -6,22 +6,22 @@ import sys
 import threading
 from typing import Any, Final
 
-import telepy
+import telex
 
 from .flamegraph import FlameGraph
-from .sampler import TelepySysAsyncWorkerSampler
+from .sampler import TelexSysAsyncWorkerSampler
 
-TITLE: Final = "TelePy System Monitor Flame Graph"
+TITLE: Final = "TeleX System Monitor Flame Graph"
 
 
 class TelePySystem:
     def __init__(self) -> None:
         self.profiling = False
-        self.profiler: None | TelepySysAsyncWorkerSampler = None
+        self.profiler: None | TelexSysAsyncWorkerSampler = None
 
     @staticmethod
     def thread() -> list[dict[str, Any]]:
-        stacks = telepy.join_current_stacks(telepy.current_stacks())
+        stacks = telex.join_current_stacks(telex.current_stacks())
         threads = {t.ident: (t.name, t.daemon) for t in threading.enumerate()}
         t_infos = [
             {
@@ -46,13 +46,13 @@ class TelePySystem:
         Args:
             interval (int): The interval between samples in microseconds.
             ignore_frozen (bool): Whether to ignore frozen objects.
-            ignore_self (bool): Whether to ignore the telepy.
+            ignore_self (bool): Whether to ignore the telex.
             tree_mode (bool): Whether to use tree mode.
         """
         if self.profiling:  # pragma: no cover
             return False
         self.profiling = True
-        self.profiler = TelepySysAsyncWorkerSampler(
+        self.profiler = TelexSysAsyncWorkerSampler(
             sampling_interval=interval,
             debug=False,
             ignore_frozen=ignore_frozen,
@@ -84,7 +84,7 @@ class TelePySystem:
             raise RuntimeError("profiler not started or profiler is None")
         self.profiler.stop()
         if filename is None:
-            filename = f"telepy-monitor-{os.getpid()}.svg"
+            filename = f"telex-monitor-{os.getpid()}.svg"
         abs_path, folded_filename = self.save(
             filename,
             save_folded=save_folded,

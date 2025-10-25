@@ -1,26 +1,26 @@
 import contextlib
 import threading
 
-from telepy.server import TelePyApp, TelePyInterceptor, TelePyRequest, TelePyResponse
+from telex.server import TeleXApp, TeleXInterceptor, TeleXRequest, TeleXResponse
 
 from .base import TestBase
 
 
 class TestApp(TestBase):
     def test_app(self):
-        app = TelePyApp()
+        app = TeleXApp()
 
         @app.route("/")
-        def hello(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def hello(req: TeleXRequest, resp: TeleXResponse) -> None:
             resp.return_json({"hello": "world"})
 
         @app.route("/shutdown")
-        def shutdown(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def shutdown(req: TeleXRequest, resp: TeleXResponse) -> None:
             req.app.defered_shutdown()
             resp.return_json({"code": 200, "message": "server is shutting down"})
 
         @app.route("/test")
-        def test(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def test(req: TeleXRequest, resp: TeleXResponse) -> None:
             resp.return_json({"test": "test"})
 
         def client() -> None:
@@ -52,13 +52,13 @@ class TestApp(TestBase):
 
     def test_server_post_functionality_exists(self):
         """Test that POST functionality exists in server.py"""
-        from telepy.server import TelePyHandler
+        from telex.server import TeleXHandler
 
         # Verify POST method is handled
-        self.assertTrue(hasattr(TelePyHandler, "do_POST"))
+        self.assertTrue(hasattr(TeleXHandler, "do_POST"))
 
         # Test that POST router exists in handler
-        handler = TelePyHandler.__new__(TelePyHandler)
+        handler = TeleXHandler.__new__(TeleXHandler)
         handler.routers = {"POST": {}}
 
         # Test that POST is in the routers structure
@@ -67,10 +67,10 @@ class TestApp(TestBase):
     def test_server_post_nonexistent_endpoint(self):
         """Test POST request to non-existent endpoint returns 404"""
 
-        from telepy.server import TelePyHandler
+        from telex.server import TeleXHandler
 
         # Mock handler for testing non-existent POST endpoint
-        handler = TelePyHandler.__new__(TelePyHandler)
+        handler = TeleXHandler.__new__(TeleXHandler)
         handler.routers = {"POST": {}}
         handler.path = "/nonexistent"
         handler.headers = {}
@@ -82,10 +82,10 @@ class TestApp(TestBase):
         """Test POST request with empty body handling"""
         from unittest.mock import MagicMock
 
-        from telepy.server import TelePyRequest
+        from telex.server import TeleXRequest
 
         # Test empty body handling
-        req = TelePyRequest(
+        req = TeleXRequest(
             app=MagicMock(),
             headers={"Content-Type": "application/json"},
             body=b"",
@@ -214,28 +214,28 @@ class TestApp(TestBase):
         self.assertEqual(len(parsed), 0)
 
     def test_before_request(self):
-        app = TelePyApp(port=8027)
+        app = TeleXApp(port=8027)
 
         @app.route("/")
-        def hello(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def hello(req: TeleXRequest, resp: TeleXResponse) -> None:
             resp.return_json({"hello": "world"})
 
         @app.route("/shutdown")
-        def shutdown(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def shutdown(req: TeleXRequest, resp: TeleXResponse) -> None:
             req.app.defered_shutdown()
             resp.return_json({"code": 200, "message": "server is shutting down"})
 
         @app.route("/test")
-        def test(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def test(req: TeleXRequest, resp: TeleXResponse) -> None:
             resp.return_json({"test": "test"})
 
         @app.register_interceptor
-        def intercept(req: TelePyRequest, interceptor: TelePyInterceptor) -> None:
+        def intercept(req: TeleXRequest, interceptor: TeleXInterceptor) -> None:
             interceptor.headers["Pass"] = "Interceptor"
             interceptor.flow = False
 
         @app.register_response_handler
-        def tail_handler(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def tail_handler(req: TeleXRequest, resp: TeleXResponse) -> None:
             print("Tail Handler")
             resp.headers["Tail"] = "Handler"
 
@@ -271,10 +271,10 @@ class TestApp(TestBase):
         app.close()
 
     def test_post_request(self):
-        app = TelePyApp(port=8027)
+        app = TeleXApp(port=8027)
 
         @app.route("/echo", method="POST")
-        def hello(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def hello(req: TeleXRequest, resp: TeleXResponse) -> None:
             try:
                 data = req.json
                 resp.return_json(data)
@@ -282,7 +282,7 @@ class TestApp(TestBase):
                 resp.return_json({"error": str(e)})
 
         @app.route("/shutdown")
-        def shutdown(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def shutdown(req: TeleXRequest, resp: TeleXResponse) -> None:
             req.app.defered_shutdown()
 
         def client() -> None:
@@ -332,7 +332,7 @@ class TestApp(TestBase):
         self.assertGreater(large_size, max_size)
 
         # Test request with body size information
-        req = TelePyRequest(
+        req = TeleXRequest(
             app=MagicMock(),
             headers={"Content-Length": str(normal_size)},
             body=b"x" * normal_size,
@@ -342,10 +342,10 @@ class TestApp(TestBase):
 
     def test_post_request_not_found(self):
         """Test POST request to non-existent endpoint"""
-        app = TelePyApp(port=8029)
+        app = TeleXApp(port=8029)
 
         @app.route("/shutdown")
-        def shutdown(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def shutdown(req: TeleXRequest, resp: TeleXResponse) -> None:
             req.app.defered_shutdown()
             resp.return_json({"message": "shutting down"})
 
@@ -391,10 +391,10 @@ class TestApp(TestBase):
 
     def test_get_request_not_found(self):
         """Test GET request to non-existent endpoint"""
-        app = TelePyApp(port=8030)
+        app = TeleXApp(port=8030)
 
         @app.route("/shutdown")
-        def shutdown(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def shutdown(req: TeleXRequest, resp: TeleXResponse) -> None:
             req.app.defered_shutdown()
             resp.return_json({"message": "shutting down"})
 
@@ -432,18 +432,18 @@ class TestApp(TestBase):
 
     def test_response_content_type_defaults(self):
         """Test response content type default handling"""
-        app = TelePyApp(port=8031)
+        app = TeleXApp(port=8031)
 
         @app.route("/raw")
-        def raw_response(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def raw_response(req: TeleXRequest, resp: TeleXResponse) -> None:
             resp.return_raw(b"raw data")
 
         @app.route("/text")
-        def text_response(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def text_response(req: TeleXRequest, resp: TeleXResponse) -> None:
             resp.return_str("text data")
 
         @app.route("/shutdown")
-        def shutdown(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def shutdown(req: TeleXRequest, resp: TeleXResponse) -> None:
             req.app.defered_shutdown()
             resp.return_json({"message": "shutting down"})
 
@@ -479,7 +479,7 @@ class TestApp(TestBase):
 
     def test_app_register_and_lookup(self):
         """Test app register and lookup functionality"""
-        app = TelePyApp(port=8032)
+        app = TeleXApp(port=8032)
 
         # Test register and lookup
         app.register("test_key", "test_value")
@@ -491,12 +491,12 @@ class TestApp(TestBase):
             app.register("test_key", "another_value")
 
         @app.route("/lookup")
-        def lookup_test(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def lookup_test(req: TeleXRequest, resp: TeleXResponse) -> None:
             value = req.app.lookup("test_key")
             resp.return_json({"value": value})
 
         @app.route("/shutdown")
-        def shutdown(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def shutdown(req: TeleXRequest, resp: TeleXResponse) -> None:
             req.app.defered_shutdown()
             resp.return_json({"message": "shutting down"})
 
@@ -524,23 +524,23 @@ class TestApp(TestBase):
 
     def test_unsupported_method(self):
         """Test route decorator with unsupported method"""
-        app = TelePyApp()
+        app = TeleXApp()
 
         with self.assertRaises(Exception) as context:
 
             @app.route("/test", method="DELETE")
-            def delete_handler(req: TelePyRequest, resp: TelePyResponse) -> None:
+            def delete_handler(req: TeleXRequest, resp: TeleXResponse) -> None:
                 pass
 
         self.assertIn("DELETE", str(context.exception))
 
     def test_request_properties(self):
-        """Test TelePyRequest properties"""
+        """Test TeleXRequest properties"""
         import json
         from unittest.mock import MagicMock
 
         # Test content_length property
-        req = TelePyRequest(
+        req = TeleXRequest(
             app=MagicMock(),
             headers={"Content-Length": "123"},
             body=b'{"test": "data"}',
@@ -553,7 +553,7 @@ class TestApp(TestBase):
         self.assertEqual(req.json, {"test": "data"})
 
         # Test invalid content length
-        req2 = TelePyRequest(
+        req2 = TeleXRequest(
             app=MagicMock(),
             headers={"Content-Length": "invalid"},
             body=None,
@@ -561,7 +561,7 @@ class TestApp(TestBase):
         self.assertEqual(req2.content_length, 0)
 
         # Test content type
-        req3 = TelePyRequest(
+        req3 = TeleXRequest(
             app=MagicMock(),
             headers={"Content-Type": "application/json"},
             body=None,
@@ -569,7 +569,7 @@ class TestApp(TestBase):
         self.assertEqual(req3.content_type, "application/json")
 
         # Test JSON with no body
-        req4 = TelePyRequest(
+        req4 = TeleXRequest(
             app=MagicMock(),
             headers={},
             body=None,
@@ -577,7 +577,7 @@ class TestApp(TestBase):
         self.assertIsNone(req4.json)
 
         # Test JSON decode error
-        req5 = TelePyRequest(
+        req5 = TeleXRequest(
             app=MagicMock(),
             headers={},
             body=b"{invalid json}",
@@ -590,8 +590,8 @@ class TestApp(TestBase):
             _ = req5.json
 
     def test_interceptor_properties(self):
-        """Test TelePyInterceptor properties"""
-        interceptor = TelePyInterceptor(200, {})
+        """Test TeleXInterceptor properties"""
+        interceptor = TeleXInterceptor(200, {})
 
         # Test initial state
         self.assertTrue(interceptor.forward)
@@ -603,26 +603,26 @@ class TestApp(TestBase):
         self.assertFalse(interceptor.flow)
 
         # Test setting flow independently
-        interceptor2 = TelePyInterceptor(200, {})
+        interceptor2 = TeleXInterceptor(200, {})
         interceptor2.flow = False
         self.assertFalse(interceptor2.flow)
         self.assertTrue(interceptor2.forward)  # forward should still be True
 
     def test_server_static_methods(self):
-        """Test TelePyApp static methods"""
+        """Test TeleXApp static methods"""
         from http.server import HTTPServer
 
         # Test enable_address_reuse
-        TelePyApp.enable_address_reuse()
+        TeleXApp.enable_address_reuse()
         self.assertTrue(HTTPServer.allow_reuse_address)
 
         # Test disable_address_reuse
-        TelePyApp.disable_address_reuse()
+        TeleXApp.disable_address_reuse()
         self.assertFalse(HTTPServer.allow_reuse_address)
 
     def test_app_is_alive(self):
-        """Test TelePyApp is_alive property"""
-        app = TelePyApp()
+        """Test TeleXApp is_alive property"""
+        app = TeleXApp()
 
         # Should be alive initially
         self.assertTrue(app.is_alive)
@@ -632,10 +632,10 @@ class TestApp(TestBase):
         self.assertFalse(app.is_alive)
 
     def test_response_mixin_lifecycle(self):
-        """Test TelePyResponseMixin lifecycle methods"""
-        from telepy.server import TelePyResponseMixin
+        """Test TeleXResponseMixin lifecycle methods"""
+        from telex.server import TeleXResponseMixin
 
-        mixin = TelePyResponseMixin()
+        mixin = TeleXResponseMixin()
 
         # These should not raise exceptions
         mixin.start()
@@ -644,14 +644,14 @@ class TestApp(TestBase):
     def test_interceptor_flow_control(self):
         """Test interceptor flow control in request handling"""
         # This test only verifies the interceptor properties work correctly
-        interceptor = TelePyInterceptor(200, {})
+        interceptor = TeleXInterceptor(200, {})
 
         # Test that setting flow to False stops processing
         interceptor.flow = False
         self.assertFalse(interceptor.flow)
 
         # Test that forward controls flow
-        interceptor2 = TelePyInterceptor(200, {})
+        interceptor2 = TeleXInterceptor(200, {})
         interceptor2.forward = False
         self.assertFalse(interceptor2.forward)
         self.assertFalse(interceptor2.flow)
@@ -659,7 +659,7 @@ class TestApp(TestBase):
     def test_response_handler_flow_control(self):
         """Test response handler flow control"""
         # This test only verifies the response properties work correctly
-        response = TelePyResponse(200, {})
+        response = TeleXResponse(200, {})
 
         # Test flow property
         response.flow = False
@@ -669,7 +669,7 @@ class TestApp(TestBase):
         response.return_str("test")
         self.assertEqual(response.headers["Content-Type"], "text/plain; charset=utf-8")
 
-        response2 = TelePyResponse(200, {})
+        response2 = TeleXResponse(200, {})
         response2.return_json({"test": "data"})
         self.assertEqual(
             response2.headers["Content-Type"], "application/json; charset=utf-8"
@@ -684,7 +684,7 @@ class TestApp(TestBase):
             log_file = f.name
 
         try:
-            app = TelePyApp(port=8035, filename=log_file, log=True)
+            app = TeleXApp(port=8035, filename=log_file, log=True)
 
             # Verify logger is set up correctly
             self.assertIsNotNone(app.logger)
@@ -700,20 +700,20 @@ class TestApp(TestBase):
 
     def test_logging_disabled(self):
         """Test app with logging disabled"""
-        app = TelePyApp(log=False)
+        app = TeleXApp(log=False)
         self.assertIsNone(app.logger)
         app.close()
 
     def test_server_headers(self):
         """Test server response headers"""
-        app = TelePyApp(port=8036)
+        app = TeleXApp(port=8036)
 
         @app.route("/headers")
-        def headers_test(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def headers_test(req: TeleXRequest, resp: TeleXResponse) -> None:
             resp.return_json({"test": "headers"})
 
         @app.route("/shutdown")
-        def shutdown(req: TelePyRequest, resp: TelePyResponse) -> None:
+        def shutdown(req: TeleXRequest, resp: TeleXResponse) -> None:
             req.app.defered_shutdown()
             resp.return_json({"message": "shutting down"})
 

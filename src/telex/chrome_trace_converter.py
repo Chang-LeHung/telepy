@@ -283,7 +283,7 @@ def main():
             "[bold cyan]TracEC[/bold cyan] - Convert Chrome Trace Event "
             "Format to folded stack format for flame graph generation.\n\n"
             "Report issues: [underline blue]"
-            "https://github.com/Chang-LeHung/telepy/issues[/underline blue]"
+            "https://github.com/Chang-LeHung/telex/issues[/underline blue]"
         ),
         formatter_class=RichHelpFormatter,
         add_help=False,
@@ -471,7 +471,7 @@ def main():
                 console.print("\n[cyan]Generating flame graph...[/cyan]")
 
             try:
-                from telepy.flamegraph import FlameGraph
+                from telex.flamegraph import FlameGraph
 
                 # Read the folded file
                 with open(output_file) as f:
@@ -551,7 +551,7 @@ def main():
         logger.log_error_panel(
             f"Unexpected error: {e}\n\n"
             f"Please report this issue at: "
-            f"https://github.com/Chang-LeHung/telepy/issues"
+            f"https://github.com/Chang-LeHung/telex/issues"
         )
         sys.exit(1)
 

@@ -6,7 +6,8 @@ import unittest
 
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
-from telepy.shell import CaseInsensitiveFrequencyCompleter
+
+from telex.shell import CaseInsensitiveFrequencyCompleter
 
 
 class TestCaseInsensitiveFrequencyCompleter(unittest.TestCase):

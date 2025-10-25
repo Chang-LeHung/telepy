@@ -3,7 +3,7 @@ import threading
 import time
 import unittest
 
-import telepy
+import telex
 
 from .base import TestBase  # type: ignore
 
@@ -14,7 +14,7 @@ class TestFocusMode(TestBase):
     def test_focus_mode_basic(self):
         """Test basic focus_mode functionality."""
         # Test creating sampler with focus_mode enabled
-        sampler = telepy.TelepySysSampler(
+        sampler = telex.TelexSysSampler(
             sampling_interval=1000,
             focus_mode=True,
             debug=False,
@@ -31,7 +31,7 @@ class TestFocusMode(TestBase):
         """Test basic regex_patterns functionality."""
         patterns = [r".*test.*\.py$", r".*main.*\.py$"]
 
-        sampler = telepy.TelepySysSampler(
+        sampler = telex.TelexSysSampler(
             sampling_interval=1000,
             regex_patterns=patterns,
             debug=False,
@@ -51,7 +51,7 @@ class TestFocusMode(TestBase):
         invalid_patterns = [r"[invalid(regex"]
 
         with self.assertRaises(ValueError) as context:
-            telepy.TelepySysSampler(
+            telex.TelexSysSampler(
                 sampling_interval=1000,
                 regex_patterns=invalid_patterns,
                 debug=False,
@@ -61,7 +61,7 @@ class TestFocusMode(TestBase):
 
     def test_none_regex_patterns(self):
         """Test that None regex_patterns works correctly."""
-        sampler = telepy.TelepySysSampler(
+        sampler = telex.TelexSysSampler(
             sampling_interval=1000,
             regex_patterns=None,
             debug=False,
@@ -71,7 +71,7 @@ class TestFocusMode(TestBase):
 
     def test_empty_regex_patterns(self):
         """Test that empty regex_patterns list works correctly."""
-        sampler = telepy.TelepySysSampler(
+        sampler = telex.TelexSysSampler(
             sampling_interval=1000,
             regex_patterns=[],
             debug=False,
@@ -80,11 +80,11 @@ class TestFocusMode(TestBase):
         self.assertIsNone(sampler.regex_patterns)
 
     @unittest.skipIf(
-        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+        sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
     )
     def test_async_sampler_focus_mode(self):
         """Test focus_mode with AsyncSampler."""
-        async_sampler = telepy.TelepySysAsyncSampler(
+        async_sampler = telex.TelexSysAsyncSampler(
             sampling_interval=100,
             focus_mode=True,
             debug=False,
@@ -111,7 +111,7 @@ class TestFocusMode(TestBase):
             return s
 
         # Test with focus_mode disabled (should capture everything)
-        sampler_normal = telepy.TelepySysSampler(
+        sampler_normal = telex.TelexSysSampler(
             sampling_interval=100,
             focus_mode=False,
             debug=False,
@@ -126,7 +126,7 @@ class TestFocusMode(TestBase):
         sampler_normal.clear()
 
         # Test with focus_mode enabled (should filter out stdlib)
-        sampler_focus = telepy.TelepySysSampler(
+        sampler_focus = telex.TelexSysSampler(
             sampling_interval=100,
             focus_mode=True,
             debug=False,
@@ -176,7 +176,7 @@ class TestFocusMode(TestBase):
         # Only include files with 'test' in the path
         patterns = [r".*test.*"]
 
-        sampler = telepy.TelepySysSampler(
+        sampler = telex.TelexSysSampler(
             sampling_interval=1000,
             regex_patterns=patterns,
             debug=False,
@@ -194,9 +194,9 @@ class TestFocusMode(TestBase):
 
     def test_config_integration(self):
         """Test that config properly passes focus_mode and regex_patterns."""
-        from telepy.config import TelePySamplerConfig
+        from telex.config import TeleXSamplerConfig
 
-        config = TelePySamplerConfig(
+        config = TeleXSamplerConfig(
             focus_mode=True,
             regex_patterns=[r".*\.py$", r".*test.*"],
             interval=1000,
@@ -209,7 +209,7 @@ class TestFocusMode(TestBase):
 
     def test_sampler_attribute_setting(self):
         """Test setting attributes directly on sampler."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         # Test setting focus_mode
         sampler.focus_mode = True
@@ -227,14 +227,14 @@ class TestFocusMode(TestBase):
 
 
 @unittest.skipIf(
-    sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
 )
 class TestAsyncSamplerFocusMode(TestBase):
     """Test cases specifically for AsyncSampler focus mode functionality."""
 
     def test_async_sampler_focus_mode_basic(self):
         """Test basic focus_mode functionality with AsyncSampler."""
-        sampler = telepy.TelepySysAsyncSampler(
+        sampler = telex.TelexSysAsyncSampler(
             sampling_interval=100,
             focus_mode=True,
             regex_patterns=[r".*test.*"],
@@ -253,7 +253,7 @@ class TestAsyncSamplerFocusMode(TestBase):
                 _ = sum(range(10000))
             return threading.current_thread().name
 
-        sampler = telepy.TelepySysAsyncWorkerSampler(
+        sampler = telex.TelexSysAsyncWorkerSampler(
             sampling_interval=10,
             focus_mode=True,
             debug=False,

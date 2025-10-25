@@ -7,8 +7,9 @@ import time
 import unittest
 
 from prompt_toolkit.input.defaults import create_pipe_input
-from telepy import TelePyShell, install_monitor
-from telepy.shell import (
+
+from telex import TeleXShell, install_monitor
+from telex.shell import (
     MAX_HISTORY_SIZE,
     MAX_UNIQUE_COMMANDS,
     CaseInsensitiveFrequencyCompleter,
@@ -58,7 +59,7 @@ class TestShell(TestBase):
                 ipt.send_text("exit\n")
                 # Close the input pipe to send EOF after all commands
                 ipt.close()
-                shell = TelePyShell(input=ipt)
+                shell = TeleXShell(input=ipt)
                 shell.run()
 
         # Add timeout to join to prevent indefinite hanging
@@ -75,10 +76,10 @@ class TestShell(TestBase):
         import tempfile
         from unittest.mock import patch
 
-        from telepy.commands import CommandManager
+        from telex.commands import CommandManager
 
         # Test basic corner cases
-        shell = TelePyShell()
+        shell = TeleXShell()
         msg, ok = shell.dispatch("help")
         self.assertTrue(ok)
         self.assertIn("Available commands", msg)
@@ -285,11 +286,11 @@ class TestShell(TestBase):
 
         # Test attached state corner cases
         # Mock a successful attach first
-        with patch("telepy.commands.CommandManager") as mock_cmd_manager:
+        with patch("telex.commands.CommandManager") as mock_cmd_manager:
             mock_instance = mock_cmd_manager.return_value
             mock_instance.process.return_value = ("pong", True)
 
-            from telepy.shell import ShellState
+            from telex.shell import ShellState
 
             shell.state = ShellState.ATTACHED
             shell.cmd_manager = mock_instance
@@ -311,7 +312,7 @@ class TestShell(TestBase):
     )
     def test_invalid_state_exception(self):
         """Test RuntimeError for invalid state"""
-        shell = TelePyShell()
+        shell = TeleXShell()
 
         # Force an invalid state (this should not normally happen)
         # We need to bypass the enum constraint to test the RuntimeError
@@ -328,7 +329,7 @@ class TestShell(TestBase):
         import os
         import tempfile
 
-        from telepy.shell import CaseInsensitiveFrequencyCompleter
+        from telex.shell import CaseInsensitiveFrequencyCompleter
 
         with tempfile.TemporaryDirectory() as temp_dir:
             history_file = os.path.join(temp_dir, "test_history")
@@ -354,7 +355,7 @@ class TestShell(TestBase):
         import tempfile
         from unittest.mock import mock_open, patch
 
-        from telepy.shell import MAX_HISTORY_SIZE, CaseInsensitiveFrequencyCompleter
+        from telex.shell import MAX_HISTORY_SIZE, CaseInsensitiveFrequencyCompleter
 
         with tempfile.TemporaryDirectory() as temp_dir:
             history_file = os.path.join(temp_dir, "test_history")
@@ -414,7 +415,7 @@ class TestShell(TestBase):
         import os
         import tempfile
 
-        from telepy.shell import CaseInsensitiveFrequencyCompleter
+        from telex.shell import CaseInsensitiveFrequencyCompleter
 
         with tempfile.TemporaryDirectory() as temp_dir:
             history_file = os.path.join(temp_dir, "test_history")
@@ -454,11 +455,11 @@ class TestShell(TestBase):
         mock_input = MagicMock()
         mock_output = MagicMock()
 
-        shell = TelePyShell(input=mock_input, output=mock_output)
+        shell = TeleXShell(input=mock_input, output=mock_output)
         self.assertEqual(shell.state.value, 1)  # DETACHED
 
         # Test initialization with None input/output
-        shell = TelePyShell(input=None, output=None)
+        shell = TeleXShell(input=None, output=None)
         self.assertIsNotNone(shell.session)
 
         # Test with non-existent history directory
@@ -479,7 +480,7 @@ class TestShell(TestBase):
         # Test KeyboardInterrupt handling
         with create_pipe_input() as input_pipe:
             mock_output = MagicMock()
-            shell = TelePyShell(input=input_pipe, output=mock_output)
+            shell = TeleXShell(input=input_pipe, output=mock_output)
 
             # Mock the prompt to raise KeyboardInterrupt
             with patch.object(shell.session, "prompt", side_effect=KeyboardInterrupt):
@@ -496,7 +497,7 @@ class TestShell(TestBase):
         # Test EOFError handling
         with create_pipe_input() as input_pipe:
             mock_output = MagicMock()
-            shell = TelePyShell(input=input_pipe, output=mock_output)
+            shell = TeleXShell(input=input_pipe, output=mock_output)
 
             # Mock the prompt to raise EOFError
             with patch.object(shell.session, "prompt", side_effect=EOFError):

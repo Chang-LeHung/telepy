@@ -8,19 +8,19 @@ from types import FrameType
 
 from . import _telexsys  # type: ignore
 from ._telexsys import sched_yield, unix_micro_time
-from .monitor import TelePyMonitor
-from .sampler import TelepySysAsyncSampler, TelepySysAsyncWorkerSampler, TelepySysSampler
-from .shell import TelePyShell
+from .monitor import TeleXMonitor
+from .sampler import TelexSysAsyncSampler, TelexSysAsyncWorkerSampler, TelexSysSampler
+from .shell import TeleXShell
 from .thread import in_main_thread
 
 __all__: list[str] = [
     "Profiler",
     "ProfilerState",
-    "TelePyMonitor",
-    "TelePyShell",
-    "TelepySysAsyncSampler",
-    "TelepySysAsyncWorkerSampler",
-    "TelepySysSampler",
+    "TeleXMonitor",
+    "TeleXShell",
+    "TelexSysAsyncSampler",
+    "TelexSysAsyncWorkerSampler",
+    "TelexSysSampler",
     "__version__",
     "current_frames",
     "current_stacks",
@@ -87,9 +87,9 @@ def join_current_stacks(stack_dict: dict[int, list[str]]) -> dict[int, str]:
 
 def install_monitor(
     port: int = 8026, host: str = "127.0.0.1", log=True, in_thread: bool = False
-) -> TelePyMonitor:
+) -> TeleXMonitor:
     """
-    Install a TelePy monitor to the current process. If you want to shutdown
+    Install a TeleX monitor to the current process. If you want to shutdown
     the monitor gracefully, call minitor.shutdown() and monitor.close() then.
     Args:
         port (int):
@@ -101,10 +101,10 @@ def install_monitor(
         in_thread (bool):
             whether to run in the current thread
     Returns:
-        TelePyMonitor: the monitor instance
+        TeleXMonitor: the monitor instance
         Call monitor.close() to stop the monitor.
     """
-    monitor = TelePyMonitor(port, host, log=log)
+    monitor = TeleXMonitor(port, host, log=log)
     if in_thread:
         monitor.run()
     else:
@@ -239,7 +239,7 @@ class Profiler:
     """
     A sampler wrapper specifically designed for the profile decorator.
 
-    This class wraps TelepySysAsyncWorkerSampler and provides additional
+    This class wraps TelexSysAsyncWorkerSampler and provides additional
     functionality for saving flame graphs with optional truncation.
 
     The profiler uses a state machine with the following states:
@@ -279,7 +279,7 @@ class Profiler:
         ignore_self: bool = True,
         regex_patterns: list | None = None,
     ):
-        """Initialize the FunctionProfiler with TelepySysAsyncWorkerSampler.
+        """Initialize the FunctionProfiler with TelexSysAsyncWorkerSampler.
 
         Args:
             verbose (bool): Enable verbose output messages during profiling.
@@ -300,18 +300,18 @@ class Profiler:
             folded_saved (bool): Whether to save the folded stack file.
             folded_filename (str): Filename for the folded stack file if saved.
             merge (bool): Whether to merge samples with the same stack trace.
-            ignore_self (bool): Whether to ignore telepy stack trace data.
+            ignore_self (bool): Whether to ignore telex stack trace data.
             regex_patterns (list | None): List of regex patterns for filtering stack traces.
         """  # noqa: E501
         if width <= 0:
             raise ValueError("width must be a positive integer")
-        from .config import TelePySamplerConfig
+        from .config import TeleXSamplerConfig
 
         # State machine initialization
         self._state = ProfilerState.UNINITIALIZED
         self._state_lock = threading.Lock()
 
-        config = TelePySamplerConfig(
+        config = TeleXSamplerConfig(
             interval=sampling_interval,
             timeout=timeout,
             debug=debug,
@@ -320,7 +320,7 @@ class Profiler:
             inverted=inverted,
             time=time,
             ignore_frozen=ignore_frozen,
-            include_telepy=not ignore_self,
+            include_telex=not ignore_self,
             focus_mode=focus_mode,
             output=output,
             folded_save=folded_saved,
@@ -353,7 +353,7 @@ class Profiler:
         # Don't create context yet - defer until first use
         # This prevents Environment singleton conflicts in tests
         self._ctx = None
-        self._sampler: TelepySysAsyncWorkerSampler | None = None
+        self._sampler: TelexSysAsyncWorkerSampler | None = None
 
         # Mark as initialized
         self._state = ProfilerState.INITIALIZED
@@ -412,9 +412,9 @@ class Profiler:
         if self._context_depth == 1:
             # Create context on first use if not already created
             if self._ctx is None:
-                from .environment import CodeMode, telepy_env
+                from .environment import CodeMode, telex_env
 
-                self._ctx = telepy_env(self._config, CodeMode.PyString)
+                self._ctx = telex_env(self._config, CodeMode.PyString)
 
             # Initialize sampler from context if not already done
             if self._sampler is None:
@@ -446,7 +446,7 @@ class Profiler:
         Raises:
             RuntimeError: If called from an invalid state.
         """
-        from .environment import CodeMode, telepy_env
+        from .environment import CodeMode, telex_env
 
         self._transition_to(ProfilerState.STARTED)
 
@@ -454,7 +454,7 @@ class Profiler:
         if self._sampler is None:
             # Use existing context if available, otherwise create new one
             if self._ctx is None:
-                self._ctx = telepy_env(self._config, CodeMode.PyString)
+                self._ctx = telex_env(self._config, CodeMode.PyString)
             _, self._sampler = self._ctx.__enter__()
 
         self._sampler.start()
@@ -475,7 +475,7 @@ class Profiler:
         self._transition_to(ProfilerState.FINISHED)
 
         if self._sampler is not None:
-            # Don't stop sampler here - let telepy_finalize handle it
+            # Don't stop sampler here - let telex_finalize handle it
             # This ensures sampler.started is still True when _do_save() runs
             self._finalize()
             if self._ctx is not None:
@@ -512,10 +512,10 @@ class Profiler:
 
     def _finalize(self):
         """Finalize the profiler, stopping the sampler and cleaning up."""
-        from .environment import telepy_finalize
+        from .environment import telex_finalize
 
-        # Call telepy_finalize to clean up environment
-        telepy_finalize()
+        # Call telex_finalize to clean up environment
+        telex_finalize()
 
         # Clean up internal state
         if self._sampler is not None:

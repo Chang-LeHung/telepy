@@ -20,10 +20,10 @@ class TestConfigCommand(CommandTemplate):
         timeout: int = 10,
         exit_code: int = 0,
     ):
-        """Run command without TELEPY_SUPPRESS_OUTPUT to see output messages."""
-        # Create environment without TELEPY_SUPPRESS_OUTPUT
+        """Run command without TELEX_SUPPRESS_OUTPUT to see output messages."""
+        # Create environment without TELEX_SUPPRESS_OUTPUT
         env = os.environ.copy()
-        env.pop("TELEPY_SUPPRESS_OUTPUT", None)
+        env.pop("TELEX_SUPPRESS_OUTPUT", None)
 
         if "coverage" in sys.modules:
             cmd_line = [
@@ -31,13 +31,13 @@ class TestConfigCommand(CommandTemplate):
                 "run",
                 "--parallel-mode",
                 "--source",
-                "telepy",
+                "telex",
                 "-m",
-                "telepy",
+                "telex",
                 *options,
             ]
         else:
-            cmd_line = ["telepy", *options]
+            cmd_line = ["telex", *options]
 
         output = subprocess.run(cmd_line, capture_output=True, timeout=timeout, env=env)
         self.assertEqual(output.returncode, exit_code)
@@ -59,12 +59,12 @@ class TestConfigCommand(CommandTemplate):
         if config_file.exists():
             config_file.unlink()
 
-        # Run telepy with --create-config (without TELEPY_SUPPRESS_OUTPUT)
+        # Run telepy with --create-config (without TELEX_SUPPRESS_OUTPUT)
         self.run_command_with_output(
             ["--create-config"],
             stdout_check_list=[
                 "Created example configuration file",
-                r"\.telepy.*\.telepyrc",
+                r"\.telex.*.telexrc",
             ],
             exit_code=0,
         )
@@ -102,7 +102,7 @@ class TestConfigCommand(CommandTemplate):
                 ["-c", "print('hello')"],
                 stdout_check_list=[
                     "hello",
-                    "TelePySampler Metrics",  # This appears when debug is True
+                    "TeleXSampler Metrics",  # This appears when debug is True
                 ],
                 exit_code=0,
             )
@@ -129,7 +129,7 @@ class TestConfigCommand(CommandTemplate):
                 ["--debug", "-c", "print('hello')"],
                 stdout_check_list=[
                     "hello",
-                    "TelePySampler Metrics",  # This appears when debug is True
+                    "TeleXSampler Metrics",  # This appears when debug is True
                 ],
                 exit_code=0,
             )

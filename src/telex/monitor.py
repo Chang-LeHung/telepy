@@ -19,15 +19,15 @@ from collections.abc import Callable
 from typing import Final, cast
 
 from .gc_analyzer import get_analyzer
-from .server import TelePyApp, TelePyRequest, TelePyResponse
+from .server import TeleXApp, TeleXRequest, TeleXResponse
 from .system import TelePySystem
 
-TELEPY_SYSTEM: Final = "system"
+TELEX_SYSTEM: Final = "system"
 ERROR_CODE: Final = -1
 SUCCESS_CODE: Final = 0
 
 # Global registry for endpoints
-ENDPOINT_REGISTRY: dict[str, Callable[[TelePyRequest, TelePyResponse], None]] = {}
+ENDPOINT_REGISTRY: dict[str, Callable[[TeleXRequest, TeleXResponse], None]] = {}
 
 
 def safe_parse_args(parser: argparse.ArgumentParser, args: list[str]):
@@ -85,13 +85,13 @@ def register_endpoint(path: str):
 
     Example:
         @register_endpoint("/my-endpoint")
-        def my_handler(req: TelePyRequest, resp: TelePyResponse):
+        def my_handler(req: TeleXRequest, resp: TeleXResponse):
             resp.return_json({"data": "success", "code": 0})
     """
 
     def decorator(
-        func: Callable[[TelePyRequest, TelePyResponse], None],
-    ) -> Callable[[TelePyRequest, TelePyResponse], None]:
+        func: Callable[[TeleXRequest, TeleXResponse], None],
+    ) -> Callable[[TeleXRequest, TeleXResponse], None]:
         if path in ENDPOINT_REGISTRY:
             raise ValueError(
                 f"Endpoint path '{path}' is already registered. "
@@ -104,10 +104,10 @@ def register_endpoint(path: str):
 
 
 @register_endpoint("/shutdown")
-def shutdown(req: TelePyRequest, resp: TelePyResponse) -> None:
+def shutdown(req: TeleXRequest, resp: TeleXResponse) -> None:
     resp.return_json(
         {
-            "data": "TelePy monitor is shutting down...",
+            "data": "TeleX monitor is shutting down...",
             "code": SUCCESS_CODE,
         }
     )
@@ -115,7 +115,7 @@ def shutdown(req: TelePyRequest, resp: TelePyResponse) -> None:
 
 
 @register_endpoint("/stack")
-def stack(req: TelePyRequest, resp: TelePyResponse):
+def stack(req: TeleXRequest, resp: TeleXResponse):
     """
     Get the stack trace of all threads and format it on the server side.
 
@@ -166,7 +166,7 @@ def stack(req: TelePyRequest, resp: TelePyResponse):
         resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
         return
 
-    system = cast(TelePySystem, req.app.lookup(TELEPY_SYSTEM))
+    system = cast(TelePySystem, req.app.lookup(TELEX_SYSTEM))
     thread_data = system.thread()
 
     # Get sys.base_prefix for stripping
@@ -224,18 +224,18 @@ def stack(req: TelePyRequest, resp: TelePyResponse):
 
 
 @register_endpoint("/ping")
-def ping(req: TelePyRequest, resp: TelePyResponse):
+def ping(req: TeleXRequest, resp: TeleXResponse):
     resp.return_json(
         {
             "data": "pong",
-            "server": "TelePy Monitor",
+            "server": "TeleX Monitor",
             "code": SUCCESS_CODE,
         }
     )
 
 
 @register_endpoint("/profile")
-def profile(req: TelePyRequest, resp: TelePyResponse):
+def profile(req: TeleXRequest, resp: TeleXResponse):
     def create_start_parser():
         parser = argparse.ArgumentParser(add_help=False)
         parser.add_argument(
@@ -304,7 +304,7 @@ def profile(req: TelePyRequest, resp: TelePyResponse):
         return parser
 
     args = req.headers["args"].split()
-    system = cast(TelePySystem, req.app.lookup(TELEPY_SYSTEM))
+    system = cast(TelePySystem, req.app.lookup(TELEX_SYSTEM))
     if len(args) == 0:
         resp.return_json(
             {"data": "No arguments provided, use 'start' or 'stop'", "code": ERROR_CODE}
@@ -365,7 +365,7 @@ def profile(req: TelePyRequest, resp: TelePyResponse):
 
 
 @register_endpoint("/gc-status")
-def gc_status(req: TelePyRequest, resp: TelePyResponse):
+def gc_status(req: TeleXRequest, resp: TeleXResponse):
     """Get Python garbage collection status."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
@@ -393,7 +393,7 @@ def gc_status(req: TelePyRequest, resp: TelePyResponse):
 
 
 @register_endpoint("/gc-stats")
-def gc_stats(req: TelePyRequest, resp: TelePyResponse):
+def gc_stats(req: TeleXRequest, resp: TeleXResponse):
     """Get detailed garbage collection statistics."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
@@ -421,7 +421,7 @@ def gc_stats(req: TelePyRequest, resp: TelePyResponse):
 
 
 @register_endpoint("/gc-objects")
-def gc_objects(req: TelePyRequest, resp: TelePyResponse):
+def gc_objects(req: TeleXRequest, resp: TeleXResponse):
     """Get statistics about tracked objects by type."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
@@ -499,7 +499,7 @@ def gc_objects(req: TelePyRequest, resp: TelePyResponse):
 
 
 @register_endpoint("/gc-garbage")
-def gc_garbage(req: TelePyRequest, resp: TelePyResponse):
+def gc_garbage(req: TeleXRequest, resp: TeleXResponse):
     """Get information about uncollectable garbage objects."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
@@ -527,7 +527,7 @@ def gc_garbage(req: TelePyRequest, resp: TelePyResponse):
 
 
 @register_endpoint("/gc-collect")
-def gc_collect(req: TelePyRequest, resp: TelePyResponse):
+def gc_collect(req: TeleXRequest, resp: TeleXResponse):
     """Manually trigger garbage collection."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
@@ -563,7 +563,7 @@ def gc_collect(req: TelePyRequest, resp: TelePyResponse):
 
 
 @register_endpoint("/gc-monitor")
-def gc_monitor(req: TelePyRequest, resp: TelePyResponse):
+def gc_monitor(req: TeleXRequest, resp: TeleXResponse):
     """Monitor garbage collection activity since last check."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
@@ -590,10 +590,10 @@ def gc_monitor(req: TelePyRequest, resp: TelePyResponse):
     resp.return_json({"data": monitor_result, "code": SUCCESS_CODE})
 
 
-class TelePyMonitor:
+class TeleXMonitor:
     def __init__(self, port: int = 8026, host: str = "127.0.0.1", log=True):
-        app = TelePyApp(port=port, host=host, log=log)
-        app.register(TELEPY_SYSTEM, TelePySystem())
+        app = TeleXApp(port=port, host=host, log=log)
+        app.register(TELEX_SYSTEM, TelePySystem())
 
         # Automatically register all endpoints from the global registry
         for path, handler in ENDPOINT_REGISTRY.items():
@@ -616,8 +616,8 @@ class TelePyMonitor:
 
     @staticmethod
     def enable_address_reuse():
-        TelePyApp.enable_address_reuse()
+        TeleXApp.enable_address_reuse()
 
     @staticmethod
     def disable_address_reuse():
-        TelePyApp.disable_address_reuse()
+        TeleXApp.disable_address_reuse()

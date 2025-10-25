@@ -3,13 +3,13 @@ import sys
 import threading
 import unittest
 
-import telepy
+import telex
 
 from .base import TestBase  # type: ignore
 
 
 @unittest.skipIf(
-    sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
 )
 class TestAsyncSampler(TestBase):
     def tearDown(self):
@@ -28,7 +28,7 @@ class TestAsyncSampler(TestBase):
                 return n
             return fib(n - 1) + fib(n - 2)
 
-        async_sampler = telepy.TelepySysAsyncSampler(
+        async_sampler = telex.TelexSysAsyncSampler(
             sampling_interval=10,
             ignore_frozen=True,
         )
@@ -43,7 +43,7 @@ class TestAsyncSampler(TestBase):
     def test_worker_sampler(self):
         import threading
 
-        from telepy import TelepySysAsyncWorkerSampler
+        from telex import TelexSysAsyncWorkerSampler
 
         def fib(n: int) -> int:
             if n < 2:
@@ -55,7 +55,7 @@ class TestAsyncSampler(TestBase):
         def profiling_in_non_main_thread():
             nonlocal finished
 
-            sampler = TelepySysAsyncWorkerSampler(sampling_interval=100)
+            sampler = TelexSysAsyncWorkerSampler(sampling_interval=100)
 
             adjusted = sampler.adjust()
             self.assertTrue(adjusted)
@@ -83,16 +83,16 @@ class TestAsyncSampler(TestBase):
     def test_switch_interval(self):
         import sys
 
-        async_sampler = telepy.TelepySysAsyncSampler()
+        async_sampler = telex.TelexSysAsyncSampler()
         async_sampler.setswitchinterval(0.001)
         self.assertEqual(sys.getswitchinterval(), async_sampler.getswitchinterval())
 
-        async_sampler = telepy.TelepySysAsyncSampler(sampling_interval=1000000)
+        async_sampler = telex.TelexSysAsyncSampler(sampling_interval=1000000)
         async_sampler.adjust()
         self.assertEqual(async_sampler.getswitchinterval(), 0.001)
 
     def test_sampler_runtime_error(self):
-        async_sampler = telepy.TelepySysAsyncSampler()
+        async_sampler = telex.TelexSysAsyncSampler()
         async_sampler.start()
         try:
             async_sampler.start()
@@ -103,7 +103,7 @@ class TestAsyncSampler(TestBase):
         async_sampler.stop()
 
         def spawn_sampler():
-            async_sampler = telepy.TelepySysAsyncSampler()
+            async_sampler = telex.TelexSysAsyncSampler()
 
             try:
                 async_sampler.start()
@@ -121,7 +121,7 @@ class TestAsyncSampler(TestBase):
         import threading
 
         def bar():
-            async_sampler = telepy.TelepySysAsyncSampler()
+            async_sampler = telex.TelexSysAsyncSampler()
             try:
                 async_sampler.start()
             except RuntimeError:
@@ -145,8 +145,8 @@ class TestSamplerContextManager(TestBase):
         return total
 
     def test_telepysys_sampler_context_manager(self):
-        """Test TelepySysSampler as context manager."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        """Test TelexSysSampler as context manager."""
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         # Initially not started
         self.assertFalse(sampler.started)
@@ -161,11 +161,11 @@ class TestSamplerContextManager(TestBase):
         self.assertFalse(sampler.started)
 
     @unittest.skipIf(
-        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+        sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
     )
     def test_telepysys_async_sampler_context_manager(self):
-        """Test TelepySysAsyncSampler as context manager."""
-        sampler = telepy.TelepySysAsyncSampler(sampling_interval=1000)
+        """Test TelexSysAsyncSampler as context manager."""
+        sampler = telex.TelexSysAsyncSampler(sampling_interval=1000)
 
         # Initially not started
         self.assertFalse(sampler.started)
@@ -181,7 +181,7 @@ class TestSamplerContextManager(TestBase):
 
     def test_context_manager_exception_handling(self):
         """Test that sampler is properly stopped even when exception occurs."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         self.assertFalse(sampler.started)
 
@@ -196,7 +196,7 @@ class TestSamplerContextManager(TestBase):
 
     def test_context_manager_returns_self(self):
         """Test that context manager returns self for chaining."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         with sampler as s:
             self.assertIs(s, sampler)
@@ -204,8 +204,8 @@ class TestSamplerContextManager(TestBase):
 
     def test_nested_context_managers(self):
         """Test behavior with nested context managers."""
-        sampler1 = telepy.TelepySysSampler(sampling_interval=1000)
-        sampler2 = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler1 = telex.TelexSysSampler(sampling_interval=1000)
+        sampler2 = telex.TelexSysSampler(sampling_interval=1000)
 
         with sampler1:
             self.assertTrue(sampler1.started)
@@ -220,7 +220,7 @@ class TestSamplerContextManager(TestBase):
 
     def test_context_manager_with_focus_mode(self):
         """Test context manager with focus mode enabled."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000, focus_mode=True)
+        sampler = telex.TelexSysSampler(sampling_interval=1000, focus_mode=True)
 
         with sampler:
             self.assertTrue(sampler.started)
@@ -232,7 +232,7 @@ class TestSamplerContextManager(TestBase):
 
     def test_context_manager_with_regex_patterns(self):
         """Test context manager with regex patterns."""
-        sampler = telepy.TelepySysSampler(
+        sampler = telex.TelexSysSampler(
             sampling_interval=1000, regex_patterns=[r"test_.*", r"sample_.*"]
         )
 
@@ -246,7 +246,7 @@ class TestSamplerContextManager(TestBase):
 
     def test_multiple_sequential_context_uses(self):
         """Test using the same sampler in multiple sequential contexts."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         # First use
         with sampler:
@@ -264,11 +264,11 @@ class TestSamplerContextManager(TestBase):
         self.assertGreater(result2, 0)
 
     @unittest.skipIf(
-        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+        sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
     )
     def test_async_sampler_exception_handling(self):
         """Test async sampler exception handling in context manager."""
-        sampler = telepy.TelepySysAsyncSampler(sampling_interval=1000)
+        sampler = telex.TelexSysAsyncSampler(sampling_interval=1000)
 
         self.assertFalse(sampler.started)
 
@@ -280,11 +280,11 @@ class TestSamplerContextManager(TestBase):
         self.assertFalse(sampler.started)
 
     @unittest.skipIf(
-        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+        sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
     )
     def test_time_mode_cpu(self):
         """Test CPU time mode sampler initialization and signal selection."""
-        sampler = telepy.TelepySysAsyncSampler(time_mode="cpu")
+        sampler = telex.TelexSysAsyncSampler(time_mode="cpu")
         self.assertEqual(sampler.time_mode, "cpu")
         # In CPU mode, it should use SIGPROF
         import signal
@@ -293,11 +293,11 @@ class TestSamplerContextManager(TestBase):
         self.assertEqual(sampler._timer_type, signal.ITIMER_PROF)
 
     @unittest.skipIf(
-        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+        sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
     )
     def test_time_mode_wall(self):
         """Test wall time mode sampler initialization and signal selection."""
-        sampler = telepy.TelepySysAsyncSampler(time_mode="wall")
+        sampler = telex.TelexSysAsyncSampler(time_mode="wall")
         self.assertEqual(sampler.time_mode, "wall")
         # In wall mode, it should use SIGALRM
         import signal
@@ -306,12 +306,12 @@ class TestSamplerContextManager(TestBase):
         self.assertEqual(sampler._timer_type, signal.ITIMER_REAL)
 
     @unittest.skipIf(
-        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+        sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
     )
     def test_time_mode_invalid(self):
         """Test that invalid time mode raises ValueError."""
         with self.assertRaises(ValueError) as context:
-            telepy.TelepySysAsyncSampler(time_mode="invalid")
+            telex.TelexSysAsyncSampler(time_mode="invalid")
         self.assertIn("time_mode must be either 'cpu' or 'wall'", str(context.exception))
 
     @unittest.skipIf(
@@ -319,7 +319,7 @@ class TestSamplerContextManager(TestBase):
     )
     def test_worker_sampler_time_mode(self):
         """Test that worker sampler also supports time mode parameter."""
-        worker_sampler = telepy.TelepySysAsyncWorkerSampler(time_mode="wall")
+        worker_sampler = telex.TelexSysAsyncWorkerSampler(time_mode="wall")
         self.assertEqual(worker_sampler.time_mode, "wall")
         import signal
 

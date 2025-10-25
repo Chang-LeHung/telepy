@@ -14,15 +14,15 @@ class TestTelePySys(TestBase):
                 os.remove(file)
 
     def test_telepysys_version(self):
-        import telepy
+        import telex
 
-        v = telepy.__version__
+        v = telex.__version__
         self.assertTrue(v is not None and v != "")
 
     def test_telepysys_current_stacks(self):
-        import telepy
+        import telex
 
-        call_stack = telepy.current_stacks()
+        call_stack = telex.current_stacks()
 
         self.assertGreater(len(call_stack), 0)
         for _, val in call_stack.items():
@@ -31,7 +31,7 @@ class TestTelePySys(TestBase):
     def test_telepysys_pretty_stack(self):
         import threading
 
-        import telepy
+        import telex
 
         def fib(n: int) -> int:
             if n <= 1:
@@ -44,8 +44,8 @@ class TestTelePySys(TestBase):
         t.start()
         tids.add(t.ident)
         tids.add(threading.get_ident())
-        call_stack = telepy.current_stacks()
-        for key, value in telepy.join_current_stacks(call_stack).items():
+        call_stack = telex.current_stacks()
+        for key, value in telex.join_current_stacks(call_stack).items():
             self.assertIn("fib", value)
             # Check for both Unix and Windows path separators
             self.assertTrue(
@@ -60,7 +60,7 @@ class TestTelePySys(TestBase):
     def test_current_frames(self):
         import threading
 
-        import telepy
+        import telex
 
         def fib(n: int) -> int:
             if n <= 1:
@@ -69,10 +69,10 @@ class TestTelePySys(TestBase):
 
         t = threading.Thread(target=fib, args=(10,))
         t.start()
-        frames = telepy.current_frames()
+        frames = telex.current_frames()
         for tid, frame in frames.items():
             self.assertIn(tid, [t.ident, threading.get_ident()])
-            if "telepy" not in frame.f_code.co_filename:
+            if "telex" not in frame.f_code.co_filename:
                 self.assertIn("tests/test_telesys.py", frame.f_code.co_filename)
                 self.assertIn("fib", frame.f_code.co_name)
         t.join()
@@ -80,7 +80,7 @@ class TestTelePySys(TestBase):
     def test_static_cls_method(self):
         import threading
 
-        import telepy
+        import telex
 
         class Fib:
             @staticmethod
@@ -100,8 +100,8 @@ class TestTelePySys(TestBase):
         t.start()
         tids.add(t.ident)
         tids.add(threading.get_ident())
-        call_stack = telepy.current_stacks()
-        for tid, value in telepy.join_current_stacks(call_stack).items():
+        call_stack = telex.current_stacks()
+        for tid, value in telex.join_current_stacks(call_stack).items():
             if tid != threading.get_ident():
                 # In Python 3.9/3.10, static methods may not include class name
                 self.assertTrue("Fib.fib" in value or "fib" in value)
@@ -115,8 +115,8 @@ class TestTelePySys(TestBase):
         t.start()
         tids.add(t.ident)
         tids.add(threading.get_ident())
-        call_stack = telepy.current_stacks()
-        for tid, value in telepy.join_current_stacks(call_stack).items():
+        call_stack = telex.current_stacks()
+        for tid, value in telex.join_current_stacks(call_stack).items():
             if tid != threading.get_ident():
                 # In Python 3.9/3.10, class methods may not include class name
                 self.assertTrue("Fib.bar" in value or "bar" in value)
@@ -136,9 +136,9 @@ class TestSampler(TestBase):
                 os.remove(file)
 
     def test_sampler(self):
-        import telepy
+        import telex
 
-        sampler = telepy.TelepySysSampler()
+        sampler = telex.TelexSysSampler()
         self.assertEqual(sampler.sampling_interval, 10_000)
         sampler.sampling_interval = 1000
         self.assertEqual(sampler.sampling_interval, 1000)
@@ -146,14 +146,14 @@ class TestSampler(TestBase):
     def test_sampler_start(self):
         import threading
 
-        import telepy
+        import telex
 
         def fib(n: int) -> int:
             if n <= 1:
                 return n
             return fib(n - 1) + fib(n - 2)
 
-        sampler = telepy.TelepySysSampler()
+        sampler = telex.TelexSysSampler()
         sampler.start()
         t = threading.Thread(target=fib, args=(30,))
         t.start()
@@ -163,14 +163,14 @@ class TestSampler(TestBase):
     def test_sampler_dump(self):
         import threading
 
-        import telepy
+        import telex
 
         def fib(n: int) -> int:
             if n < 2:
                 return 1
             return fib(n - 1) + fib(n - 2)
 
-        sampler = telepy.TelepySysSampler()
+        sampler = telex.TelexSysSampler()
         sampler.sampling_interval = 500
         sampler.adjust()
         sampler.start()
@@ -196,9 +196,9 @@ class TestSampler(TestBase):
     def test_adjust(self):
         import sys
 
-        import telepy
+        import telex
 
-        sampler = telepy.TelepySysSampler()
+        sampler = telex.TelexSysSampler()
         sampler.sampling_interval = 1000  # 1ms = 0.001s
 
         # Test adjust_interval (old behavior with /4 logic)
@@ -220,9 +220,9 @@ class TestSampler(TestBase):
     def test_ignore_froze(self):
         import threading
 
-        import telepy
+        import telex
 
-        sampler = telepy.TelepySysSampler(ignore_frozen=True)
+        sampler = telex.TelexSysSampler(ignore_frozen=True)
         sampler.start()
         self.assertTrue(sampler.started)
 
@@ -248,7 +248,7 @@ class TelepyMainThread(TestBase):
         import io
         import threading
 
-        from telepy import in_main_thread
+        from telex import in_main_thread
 
         def bar():
             @in_main_thread
@@ -264,7 +264,7 @@ class TelepyMainThread(TestBase):
         t.join()
 
     def test_in_main_thread_runtime_error(self):
-        from telepy import in_main_thread
+        from telex import in_main_thread
 
         try:
             in_main_thread([1, 2, 3])()
@@ -280,7 +280,7 @@ class TelepyMainThread(TestBase):
             self.fail("RuntimeError not raised")
 
     def test_in_main_thread_in_main(self):
-        from telepy import in_main_thread
+        from telex import in_main_thread
 
         @in_main_thread
         def bar():
@@ -293,7 +293,7 @@ class TelepyMainThread(TestBase):
     def test_in_main_in_non_main(self):
         import threading
 
-        from telepy import in_main_thread
+        from telex import in_main_thread
 
         def test():
             @in_main_thread
@@ -318,7 +318,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             local_var = "I am a local variable"  # noqa: F841
@@ -338,7 +338,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         global test_global_var
         test_global_var = "I am a global variable"
@@ -360,7 +360,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             time.sleep(1)
@@ -376,7 +376,7 @@ class TestVMRead(TestBase):
 
     def test_vm_read_nonexistent_thread(self):
         """Test reading from non-existent thread returns None."""
-        from telepy import _telepysys
+        from telex import _telepysys
 
         result = _telepysys.vm_read(99999, "some_var")
         self.assertIsNone(result)
@@ -386,7 +386,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             # Reference threading module so it's in the frame's globals
@@ -407,7 +407,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             int_var = 42  # noqa: F841
@@ -443,7 +443,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             test_obj = [1, 2, 3]  # noqa: F841
@@ -469,7 +469,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def inner_function():
             inner_var = "inner_value"  # noqa: F841
@@ -502,7 +502,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             test_var = "test_value"  # noqa: F841
@@ -528,7 +528,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             local_var = "value"  # noqa: F841
@@ -546,7 +546,7 @@ class TestVMRead(TestBase):
 
     def test_vm_read_level_validation(self):
         """Test level parameter validation."""
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Test with negative level
         with self.assertRaises(ValueError):
@@ -558,7 +558,7 @@ class TestVMRead(TestBase):
 
     def test_vm_read_parameter_validation(self):
         """Test parameter validation."""
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Test with wrong number of arguments
         with self.assertRaises(TypeError):
@@ -587,7 +587,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             local_var = "initial_value"  # noqa: F841
@@ -612,7 +612,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Create a unique global variable for this test
         globals()["test_vm_write_global_var"] = "initial_global"
@@ -644,7 +644,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             time.sleep(1)
@@ -667,7 +667,7 @@ class TestVMWrite(TestBase):
 
     def test_vm_write_nonexistent_thread(self):
         """Test writing to nonexistent thread returns False."""
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Use a thread ID that definitely doesn't exist
         nonexistent_tid = 999999999
@@ -679,7 +679,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Create global variables for testing
         globals()["test_int_var"] = 0
@@ -741,7 +741,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Create a global variable
         globals()["test_counter_var"] = 0
@@ -770,7 +770,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Create a global variable
         globals()["test_shadowed_var"] = "global_value"
@@ -803,7 +803,7 @@ class TestVMWrite(TestBase):
 
     def test_vm_write_parameter_validation(self):
         """Test parameter validation."""
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Test with wrong number of arguments
         with self.assertRaises(TypeError):
@@ -824,7 +824,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Create a global variable
         globals()["test_roundtrip_data"] = None
@@ -872,7 +872,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             local_var1 = "test"  # noqa: F841
@@ -900,7 +900,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             time.sleep(1)
@@ -921,7 +921,7 @@ class TestTopNamespace(TestBase):
 
     def test_top_namespace_nonexistent_thread(self):
         """Test with nonexistent thread returns None."""
-        from telepy import _telepysys
+        from telex import _telepysys
 
         nonexistent_tid = 999999999
         result = _telepysys.top_namespace(nonexistent_tid, 0)
@@ -932,7 +932,7 @@ class TestTopNamespace(TestBase):
 
     def test_top_namespace_parameter_validation(self):
         """Test parameter validation."""
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Test with wrong number of arguments
         with self.assertRaises(TypeError):
@@ -960,7 +960,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             local_only = "local"  # noqa: F841
@@ -988,7 +988,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Create a global variable
         globals()["test_top_namespace_var"] = "initial"
@@ -1021,7 +1021,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             int_var = 42  # noqa: F841
@@ -1050,7 +1050,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Create a global variable for this test
         globals()["test_both_global_var"] = "global_value"
@@ -1092,7 +1092,7 @@ class TestTopNamespace(TestBase):
 
     def test_top_namespace_flag2_nonexistent_thread(self):
         """Test flag=2 with nonexistent thread returns None."""
-        from telepy import _telepysys
+        from telex import _telepysys
 
         nonexistent_tid = 999999999
         result = _telepysys.top_namespace(nonexistent_tid, 2)
@@ -1103,7 +1103,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         def worker():
             local_only = "local_value"  # noqa: F841
@@ -1134,7 +1134,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Create a global variable
         globals()["test_flag2_modify_var"] = "initial"
@@ -1169,7 +1169,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telepy import _telepysys
+        from telex import _telepysys
 
         # Create a global variable
         globals()["test_consistency_var"] = "consistent"

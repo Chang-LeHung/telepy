@@ -14,7 +14,7 @@ extern "C" {
 
 #define BUF_SIZE 16 KiB
 
-typedef unsigned long long Telepy_time;
+typedef unsigned long long Telex_time;
 
 #define TELEPYSYS_CHECK(arg, ret)                                             \
     do {                                                                      \
@@ -80,10 +80,10 @@ typedef struct SamplerObject {
     unsigned long sampling_times;
 
     // profiling data
-    Telepy_time acc_sampling_time;  // accumulated sampling time
-    Telepy_time life_time;          // sampling thread life time
-    Telepy_time start_time;         // start time in microseconds
-    Telepy_time end_time;           // end time in microseconds
+    Telex_time acc_sampling_time;  // accumulated sampling time
+    Telex_time life_time;          // sampling thread life time
+    Telex_time start_time;         // start time in microseconds
+    Telex_time end_time;           // end time in microseconds
 
     // filtering options
     PyObject* regex_patterns;  // list of compiled regex patterns

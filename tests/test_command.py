@@ -57,14 +57,14 @@ class CommandTemplate(TestBase):
                 "run",
                 "--parallel-mode",
                 "--source",
-                "telepy",
+                "telex",
                 "-m",
-                "telepy",
+                "telex",
                 os.path.join(path, filename),
                 *options,
             ]
         else:
-            cmd_line = ["telepy", os.path.join(path, filename), *options]
+            cmd_line = ["telex", os.path.join(path, filename), *options]
         if debug:
             logging.debug(cmd_line)
 
@@ -143,13 +143,13 @@ class CommandTemplate(TestBase):
                 "run",
                 "--parallel-mode",
                 "--source",
-                "telepy",
+                "telex",
                 "-m",
-                "telepy",
+                "telex",
                 *options,
             ]
         else:
-            cmd_line = ["telepy", *options]
+            cmd_line = ["telex", *options]
         output = subprocess.run(cmd_line, capture_output=True, timeout=timeout)  # type: ignore
         self.assertIn(output.returncode, [exit_code])
         # Try UTF-8 first, fall back to system encoding (GBK on Windows Chinese)
@@ -229,7 +229,7 @@ class TestCommand(CommandTemplate):
                 stdout_check_list=[
                     "hello bob",
                     "saved the profiling data to the svg file",
-                    "TelePySampler Metrics",
+                    "TeleXSampler Metrics",
                     "Accumulated Sampling Time",
                     "TelePy Sampler Start Time",
                     "TelePy Sampler End Time",
@@ -282,7 +282,7 @@ class TestCommand(CommandTemplate):
         self.run_command(
             ["-v"],
             stdout_check_list=[
-                r"TelePy version \d+\.\d+\.\d+",
+                r"TeleX version \d+\.\d+\.\d+",
             ],
         )
 
@@ -290,7 +290,7 @@ class TestCommand(CommandTemplate):
         self.run_command(
             ["--version"],
             stdout_check_list=[
-                r"TelePy version \d+\.\d+\.\d+",
+                r"TeleX version \d+\.\d+\.\d+",
             ],
         )
 
@@ -370,7 +370,7 @@ class TestCommand(CommandTemplate):
 
     def test_run_module(self):
         self.run_command(
-            ["-m", "telepy", "--", "-h"],
+            ["-m", "telex", "--", "-h"],
             stdout_check_list=[
                 "-h, --help",
                 "--no-verbose",
@@ -818,26 +818,26 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
 
 class TestEnvironment(TestBase):
     def test_environment_init(self):
-        from telepy.environment import Environment
+        from telex.environment import Environment
 
         try:
             Environment.initialized = True
-            Environment.init_telepy_environment(None)
+            Environment.init_telex_environment(None)
         except RuntimeError:
             pass
         else:
             self.fail("RuntimeError not raised")
 
     def test_environment_destroy(self):
-        from telepy.environment import Environment
+        from telex.environment import Environment
 
-        Environment.destory_telepy_enviroment()
+        Environment.destory_telex_enviroment()
 
     def test_finalize(self):
-        from telepy.environment import telepy_finalize
+        from telex.environment import telex_finalize
 
         try:
-            telepy_finalize()
+            telex_finalize()
         except RuntimeError:
             pass
         else:
@@ -845,7 +845,7 @@ class TestEnvironment(TestBase):
 
     def test_environment_cannot_be_instantiated(self):
         """Test that Environment class cannot be instantiated."""
-        from telepy.environment import Environment
+        from telex.environment import Environment
 
         with self.assertRaises(TypeError) as context:
             Environment()
@@ -856,7 +856,7 @@ class TestEnvironment(TestBase):
 
 class TestFlameGraph(TestBase):
     def test_flamegraph(self):
-        from telepy.flamegraph import FlameGraph
+        from telex.flamegraph import FlameGraph
 
         node = FlameGraph.Node("test")
 
@@ -866,7 +866,7 @@ class TestFlameGraph(TestBase):
 
     def test_flamegraph_svg_caching(self):
         """Test that generate_svg() caches results and only executes once"""
-        from telepy.flamegraph import FlameGraph
+        from telex.flamegraph import FlameGraph
 
         # Sample stack trace data
         test_lines = ["main;func_a;func_b 10", "main;func_a;func_c 5", "main;func_d 3"]
@@ -899,7 +899,7 @@ class TestFlameGraph(TestBase):
         self.assertIn("</svg>", svg1)
 
     def test_flamegraph_inverted_orientation(self):
-        from telepy.flamegraph import FlameGraph
+        from telex.flamegraph import FlameGraph
 
         test_lines = [
             "main;worker;task 10",

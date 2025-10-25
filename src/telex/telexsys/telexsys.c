@@ -16,10 +16,10 @@
 #include "tupleobject.h"
 
 
-#define TELEPYSYS_VERSION "0.1.0"
+#define TELEXSYS_VERSION "0.1.0"
 
 // Forward declaration
-static Telepy_time
+static Telex_time
 unix_micro_time(void);
 
 
@@ -28,7 +28,7 @@ Sampler_start(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
 
     if (Sample_Enabled(self)) {
         PyErr_Format(PyExc_RuntimeError,
-                     "telepysys is already enabled, call disable first");
+                     "telexsys is already enabled, call disable first");
         return NULL;
     }
 
@@ -343,16 +343,16 @@ call_stack(SamplerObject* self,
 
         // Support both Unix (/) and Windows (\) path separators for ignore_self
         if (IGNORE_SELF_ENABLED(self) &&
-            (PyUnicode_Contain(filename, "/site-packages/telepy") ||
-             PyUnicode_Contain(filename, "\\site-packages\\telepy") ||
-             PyUnicode_Contain(filename, "/bin/telepy") ||
-             PyUnicode_Contain(filename, "\\bin\\telepy"))) {
+            (PyUnicode_Contain(filename, "/site-packages/telex") ||
+             PyUnicode_Contain(filename, "\\site-packages\\telex") ||
+             PyUnicode_Contain(filename, "/bin/telex") ||
+             PyUnicode_Contain(filename, "\\bin\\telex"))) {
             Py_DECREF(code);
             continue;
         }
         if (filename == NULL || name == NULL) {
             PyErr_Format(PyExc_RuntimeError,
-                         "telepysys: failed to get filename or name");
+                         "telexsys: failed to get filename or name");
             Py_DECREF(code);
             goto error;
         }
@@ -379,7 +379,7 @@ call_stack(SamplerObject* self,
                 overflow = 1;
                 PyErr_Format(
                     PyExc_RuntimeError,
-                    "telepysys: buffer overflow, call stack too deep");
+                    "telexsys: buffer overflow, call stack too deep");
                 Py_DECREF(code);
                 goto error;
             }
@@ -418,11 +418,11 @@ get_thread_name(PyObject* threads, PyObject* thread_id) {
 
 
 // microsecond
-static Telepy_time
+static Telex_time
 unix_micro_time(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (Telepy_time)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+    return (Telex_time)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
 }
 
 static PyObject*
@@ -435,7 +435,7 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     }
     const size_t buf_size = BUF_SIZE;
     char* buf = (char*)malloc(buf_size);
-    Telepy_time sampling_start = unix_micro_time();
+    Telex_time sampling_start = unix_micro_time();
     long nsec = (long)PyLong_AsLong(self->sampling_interval) * 1000;
     while (Sample_Enabled(self)) {
         self->sampling_times++;
@@ -444,14 +444,14 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
         struct timespec req = {.tv_sec = 0, .tv_nsec = nsec};
         int ret = nanosleep(&req, NULL);
         if (ret != 0) {
-            perror("telepysys: nanosleep error");
+            perror("telexsys: nanosleep error");
         }
         Py_END_ALLOW_THREADS;
-        Telepy_time sampler_start = unix_micro_time();
+        Telex_time sampler_start = unix_micro_time();
         PyObject* frames = _PyThread_CurrentFrames();  // New reference
         if (frames == NULL) {
             PyErr_Format(PyExc_RuntimeError,
-                         "telepysys: _PyThread_CurrentFrames() failed");
+                         "telexsys: _PyThread_CurrentFrames() failed");
             return NULL;
         }
         PyObject* threads = PyObject_CallMethod(threading,
@@ -459,7 +459,7 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
                                                 NULL);  // New reference
         if (threads == NULL) {
             PyErr_SetString(PyExc_RuntimeError,
-                            "telepysys: threading.enumerate() failed");
+                            "telexsys: threading.enumerate() failed");
             Py_DECREF(frames);
             goto error;
         }
@@ -483,7 +483,7 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
             PyObject* name = get_thread_name(threads, key);
             if (name == NULL) {
                 PyErr_Format(PyExc_RuntimeError,
-                             "telepysys: failed to get thread name");
+                             "telexsys: failed to get thread name");
                 Py_DECREF(frames);
                 Py_DECREF(threads);
                 goto error;
@@ -504,10 +504,10 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
         }
         Py_DECREF(frames);
         Py_DECREF(threads);
-        Telepy_time sampler_end = unix_micro_time();
+        Telex_time sampler_end = unix_micro_time();
         self->acc_sampling_time += sampler_end - sampler_start;
         if (CHECK_FALG(self, VERBOSE)) {
-            printf("Telepysys Debug Info: sampling cnt: %ld, interval: %ld, "
+            printf("Telexsys Debug Info: sampling cnt: %ld, interval: %ld, "
                    "overhead time: %llu stack: "
                    "%s\n",
                    self->sampling_times,
@@ -518,7 +518,7 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     }
     free(buf);
     Py_DECREF(threading);
-    Telepy_time sampling_end = unix_micro_time();
+    Telex_time sampling_end = unix_micro_time();
     self->life_time = sampling_end - sampling_start;
     Py_RETURN_NONE;
 
@@ -1309,7 +1309,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     const size_t buf_size = self->buf_size;
     char* buf = self->buf;
 
-    Telepy_time sampling_start = unix_micro_time();
+    Telex_time sampling_start = unix_micro_time();
 
     // Check again before accessing frames - sampler might have been stopped
     if (!Sample_Enabled(base)) {
@@ -1321,7 +1321,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     if (frames == NULL) {
         DISABLE_SAMPLING(base);
         PyErr_Format(PyExc_RuntimeError,
-                     "telepysys: _PyThread_CurrentFrames() failed");
+                     "telexsys: _PyThread_CurrentFrames() failed");
         return NULL;
     }
 
@@ -1378,7 +1378,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
         PyObject* name = get_thread_name(threads, key);
         if (name == NULL) {
             PyErr_Format(PyExc_RuntimeError,
-                         "telepysys: failed to get thread name");
+                         "telexsys: failed to get thread name");
             goto error;
         }
 
@@ -1409,7 +1409,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
 
     // ====================== printf IS NOT async safe ======================
     // if (CHECK_FALG(base, VERBOSE)) {
-    //     printf("Telepysys Debug Info: sampling cnt: %ld, interval: %ld, "
+    //     printf("Telexsys Debug Info: sampling cnt: %ld, interval: %ld, "
     //            "overhead time: %llu stack: "
     //            "%s\n",
     //            base->sampling_times,
@@ -1419,7 +1419,7 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
     // }
     // =======================================================================
 
-    Telepy_time sampling_end = unix_micro_time();
+    Telex_time sampling_end = unix_micro_time();
     base->acc_sampling_time += sampling_end - sampling_start;
     base->sampling_times++;
     DISABLE_SAMPLING(base);
@@ -2162,7 +2162,7 @@ static PyMethodDef telepysys_methods[] = {
 
 static int
 telepysys_exec(PyObject* m) {
-    if (PyModule_AddStringConstant(m, "__version__", TELEPYSYS_VERSION)) {
+    if (PyModule_AddStringConstant(m, "__version__", TELEXSYS_VERSION)) {
         return -1;
     }
     TelePySysState* state = PyModule_GetState(m);

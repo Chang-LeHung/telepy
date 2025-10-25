@@ -1,7 +1,7 @@
 """
 Garbage Collection Analyzer Module
 
-Provides comprehensive GC analysis functionality for TelePy profiler.
+Provides comprehensive GC analysis functionality for TeleX profiler.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Any
 
 # Try to import the C extension for better performance
 try:
-    from telepy import _gc_stats
+    from telex import _gc_stats
 
     _HAS_C_EXTENSION = True
 except ImportError:  # pragma: no cover

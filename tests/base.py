@@ -12,7 +12,7 @@ logging.basicConfig(
 class TestBase(TestCase):
     @staticmethod
     def truncate(filename: str) -> str:
-        idx = filename.index("telepy")
+        idx = filename.index("telex")
         return filename[idx:]
 
     def setUp(self):

@@ -28,7 +28,7 @@ IS_WINDOWS = sys.platform == "win32"
 class SamplerMiddleware(ABC):
     """Abstract base class for sampler middleware."""
 
-    def on_before_start(self, sampler: TelepySysAsyncSampler | TelepySysSampler) -> None:
+    def on_before_start(self, sampler: TelexSysAsyncSampler | TelexSysSampler) -> None:
         """Called before the sampler starts.
 
         Args:
@@ -37,7 +37,7 @@ class SamplerMiddleware(ABC):
         pass
 
     def on_after_start(
-        self, sampler: TelepySysAsyncSampler | TelepySysSampler
+        self, sampler: TelexSysAsyncSampler | TelexSysSampler
     ) -> None:  # pragma: no cover
         """Called after the sampler has started.
 
@@ -47,7 +47,7 @@ class SamplerMiddleware(ABC):
         pass
 
     def on_before_stop(
-        self, sampler: TelepySysAsyncSampler | TelepySysSampler
+        self, sampler: TelexSysAsyncSampler | TelexSysSampler
     ) -> None:  # pragma: no cover
         """Called before the sampler stops.
 
@@ -57,7 +57,7 @@ class SamplerMiddleware(ABC):
         pass
 
     def on_after_stop(
-        self, sampler: TelepySysAsyncSampler | TelepySysSampler
+        self, sampler: TelexSysAsyncSampler | TelexSysSampler
     ) -> None:  # pragma: no cover
         """Called after the sampler has stopped.
 
@@ -67,7 +67,7 @@ class SamplerMiddleware(ABC):
         pass
 
     def process_dump(
-        self, sampler: TelepySysAsyncSampler | TelepySysSampler, dump_str: str
+        self, sampler: TelexSysAsyncSampler | TelexSysSampler, dump_str: str
     ) -> str | None:
         """Process the dump string before it's returned.
 
@@ -280,10 +280,10 @@ class SamplerMixin(ABC):
         return compiled_patterns
 
 
-# Deprecated: Use TelepySysAsyncWorkerSampler instead.
-class TelepySysSampler(_telexsys.Sampler, SamplerMixin, MultiProcessEnv):
+# Deprecated: Use TelexSysAsyncWorkerSampler instead.
+class TelexSysSampler(_telexsys.Sampler, SamplerMixin, MultiProcessEnv):
     """
-    Inherited sampler for TelepySys.
+    Inherited sampler for TelexSys.
     """
 
     def __init__(
@@ -350,7 +350,7 @@ class TelepySysSampler(_telexsys.Sampler, SamplerMixin, MultiProcessEnv):
 
     def adjust_interval(self) -> bool:
         """
-        Adjusts sys's interval to match TelepySys's interval.
+        Adjusts sys's interval to match TelexSys's interval.
         Returns:
             bool: True if sys's interval adjusted, False otherwise
         """
@@ -460,7 +460,7 @@ class TelepySysSampler(_telexsys.Sampler, SamplerMixin, MultiProcessEnv):
         return self.enabled()
 
 
-class TelepySysAsyncSampler(_telexsys.AsyncSampler, SamplerMixin, MultiProcessEnv):
+class TelexSysAsyncSampler(_telexsys.AsyncSampler, SamplerMixin, MultiProcessEnv):
     """
     AsyncSampler class.
     """
@@ -588,7 +588,7 @@ class TelepySysAsyncSampler(_telexsys.AsyncSampler, SamplerMixin, MultiProcessEn
         if threading.current_thread() != threading.main_thread():
             # coverage do not cover this line, god knows why
             raise RuntimeError(
-                "TelepySysAsyncSampler must be started from the main thread"
+                "TelexSysAsyncSampler must be started from the main thread"
             )  # pragma: no cover
 
         current = signal.getsignal(self._timer_signal)
@@ -654,9 +654,9 @@ class TelepySysAsyncSampler(_telexsys.AsyncSampler, SamplerMixin, MultiProcessEn
         return self.acc_sampling_time / self.sampler_life_time
 
 
-class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
+class TelexSysAsyncWorkerSampler(TelexSysAsyncSampler):
     """
-    TelepyAsyncWorkerSampler is a TelepySysAsyncSampler that runs in the non-main threads.
+    TelexAsyncWorkerSampler is a TelexSysAsyncSampler that runs in the non-main threads.
     """
 
     def __init__(
@@ -714,7 +714,7 @@ class TelepySysAsyncWorkerSampler(TelepySysAsyncSampler):
 
 
 class PyTorchProfilerMiddleware(SamplerMiddleware):  # pragma: no cover
-    """Middleware that integrates PyTorch profiler with TelePy sampler.
+    """Middleware that integrates PyTorch profiler with TeleX sampler.
 
     This middleware starts PyTorch profiler when the sampler starts and
     exports the profiling results when the sampler stops.
@@ -793,7 +793,7 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):  # pragma: no cover
 
         return datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")[:-3]
 
-    def on_after_start(self, sampler: TelepySysAsyncSampler | TelepySysSampler) -> None:
+    def on_after_start(self, sampler: TelexSysAsyncSampler | TelexSysSampler) -> None:
         """Called after the sampler starts - start PyTorch profiler."""
         if not self.torch_available:
             return
@@ -834,7 +834,7 @@ class PyTorchProfilerMiddleware(SamplerMiddleware):  # pragma: no cover
             self._log(f"Error starting profiler: {e}")
             self.profiler = None
 
-    def on_before_stop(self, sampler: TelepySysAsyncSampler | TelepySysSampler) -> None:
+    def on_before_stop(self, sampler: TelexSysAsyncSampler | TelexSysSampler) -> None:
         """Called after the sampler stops - stop profiler and export results."""
         if not self.torch_available or self.profiler is None:
             return
