@@ -1,5 +1,5 @@
 """
-Configuration file handling for TelePy.
+Configuration file handling for TeleX.
 """
 
 from __future__ import annotations
@@ -11,14 +11,14 @@ from typing import Any
 
 from . import logger
 
-CONFIG_DIR = ".telepy"
-CONFIG_FILE = ".telepyrc"
+CONFIG_DIR = ".telex"
+CONFIG_FILE = ".telexrc"
 
 
 def _is_testing() -> bool:
     """Check if we're running in a testing environment."""
     # Check if explicitly set to suppress output during testing
-    return os.environ.get("TELEPY_SUPPRESS_OUTPUT", "").lower() in ("1", "true", "yes")
+    return os.environ.get("TELEX_SUPPRESS_OUTPUT", "").lower() in ("1", "true", "yes")
 
 
 def _safe_print(message: str) -> None:
@@ -37,8 +37,8 @@ def _safe_input(prompt: str, default: str = "n") -> str:
     return input(prompt)
 
 
-class TelePyConfig:
-    """Configuration manager for TelePy."""
+class TeleXConfig:
+    """Configuration manager for TeleX."""
 
     def __init__(self) -> None:
         self.config_path = self._get_config_path()
@@ -51,7 +51,7 @@ class TelePyConfig:
 
     def load_config(self) -> dict[str, Any]:
         """
-        Load configuration from ~/.telepy/.telepyrc file.
+        Load configuration from ~/.telex/.telexrc file.
 
         Returns:
             dict[str, Any]: Configuration dictionary. Empty dict if file doesn't exist.
@@ -149,7 +149,7 @@ class TelePyConfig:
                 # "--tree-mode",     # Enable tree mode
                 # Filtering options
                 "--ignore-frozen",  # Ignore frozen modules (recommended)
-                # "--include-telepy", # Include telepy in profiling
+                # "--include-telex", # Include telex in profiling
                 # Process handling
                 "--merge",  # Merge multiprocess results
                 # "--no-merge",      # Disable merging (alternative to --merge)
@@ -171,11 +171,11 @@ def load_config_if_exists() -> dict[str, Any]:
     Returns:
         dict[str, Any]: Configuration dictionary
     """
-    config_manager = TelePyConfig()
+    config_manager = TeleXConfig()
     return config_manager.load_config()
 
 
-class TelePySamplerConfig:
+class TeleXSamplerConfig:
     """Configuration class to replace argparse.Namespace dependency."""
 
     def __init__(
@@ -192,7 +192,7 @@ class TelePySamplerConfig:
         time: str = "cpu",
         # Filtering options
         ignore_frozen: bool = False,
-        include_telepy: bool = False,
+        include_telex: bool = False,
         focus_mode: bool = False,
         regex_patterns: list[str] | None = None,
         # Output configuration
@@ -224,7 +224,7 @@ class TelePySamplerConfig:
         torch_sort_by: str = "cpu_time_total",
         torch_row_limit: int = 10,
     ) -> None:
-        """Initialize TelePySamplerConfig with keyword-only arguments.
+        """Initialize TeleXSamplerConfig with keyword-only arguments.
 
         Args:
             interval: Sampling interval in microseconds. Controls how frequently
@@ -251,7 +251,7 @@ class TelePySamplerConfig:
             ignore_frozen: Ignore frozen modules (compiled modules) in the stack
                 trace. Helps focus on user code by excluding standard library
                 internals. Default: False.
-            include_telepy: Whether to include telepy profiler code itself in
+            include_telex: Whether to include telex profiler code itself in
                 the stack trace. Usually disabled to focus on user code.
                 Default: False.
             focus_mode: When enabled, ignores standard library and third-party
@@ -285,7 +285,7 @@ class TelePySamplerConfig:
                 and use the default Python traceback format instead.
                 Default: False.
             create_config: Create an example configuration file at
-                ~/.telepy/.telepyrc and exit immediately. Used for initial
+                ~/.telex/.telexrc and exit immediately. Used for initial
                 setup. Default: False.
             input: Input file(s) to profile. Can be a list of file objects or
                 None. Used when profiling specific files. Default: None.
@@ -296,7 +296,7 @@ class TelePySamplerConfig:
             module: Module name to profile when using -m option.
                 Default: None.
             torch_profile: Enable PyTorch profiler integration. When True,
-                PyTorch profiler will run alongside TelePy profiler.
+                PyTorch profiler will run alongside TeleX profiler.
                 Default: False.
             torch_output_dir: Directory to save PyTorch profiler outputs.
                 Default: "./pytorch_profiles".
@@ -332,7 +332,7 @@ class TelePySamplerConfig:
 
         # Filtering options
         self.ignore_frozen = ignore_frozen
-        self.include_telepy = include_telepy
+        self.include_telex = include_telex
         self.focus_mode = focus_mode
         self.regex_patterns = regex_patterns
 
@@ -372,15 +372,15 @@ class TelePySamplerConfig:
         self.torch_row_limit = torch_row_limit
 
     @classmethod
-    def from_namespace(cls, args_namespace) -> TelePySamplerConfig:
-        """Create TelePySamplerConfig from argparse.Namespace.
+    def from_namespace(cls, args_namespace) -> TeleXSamplerConfig:
+        """Create TeleXSamplerConfig from argparse.Namespace.
 
         Args:
             args_namespace: An argparse.Namespace object containing the parsed
                 command line arguments.
 
         Returns:
-            A new TelePySamplerConfig instance with values extracted from the
+            A new TeleXSamplerConfig instance with values extracted from the
             namespace, using appropriate defaults for missing attributes.
         """
         return cls(
@@ -393,7 +393,7 @@ class TelePySamplerConfig:
             reverse=getattr(args_namespace, "reverse", False),
             time=getattr(args_namespace, "time", "cpu"),
             ignore_frozen=getattr(args_namespace, "ignore_frozen", False),
-            include_telepy=getattr(args_namespace, "include_telepy", False),
+            include_telex=getattr(args_namespace, "include_telex", False),
             focus_mode=getattr(args_namespace, "focus_mode", False),
             regex_patterns=getattr(args_namespace, "regex_patterns", None),
             output=getattr(args_namespace, "output", "result.svg"),
@@ -511,6 +511,6 @@ def merge_config_with_args(cmd_args: list[str]) -> list[str]:
     Returns:
         list[str]: Merged arguments
     """
-    config_manager = TelePyConfig()
+    config_manager = TeleXConfig()
     config = config_manager.load_config()
     return config_manager.merge_with_args(config, cmd_args)
