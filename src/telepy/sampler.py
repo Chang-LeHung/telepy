@@ -363,8 +363,21 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         return False
 
     @override
-    def adjust(self):
-        return self.adjust_interval()
+    def adjust(self) -> bool:
+        """Adjust the switch interval to match the sampling interval.
+
+        This method adjusts the thread switch interval to be equal to the
+        sampling interval when the sampling interval is smaller than the
+        current switch interval. This ensures more accurate sampling.
+
+        Returns:
+            bool: True if the switch interval was adjusted, False otherwise.
+        """
+        interval = self.sampling_interval / 1000_000
+        if interval < sys.getswitchinterval():
+            sys.setswitchinterval(interval)
+            return True
+        return False
 
     @property
     def sampling_time_rate(self):

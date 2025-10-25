@@ -241,6 +241,7 @@ class Environment:
                 from_mp=config.mp,
                 time_mode=config.time,  # Accept for consistency
             )
+            sampler.adjust()
         else:
             # Unix: Use worker thread sampler
             sampler = TelepySysAsyncWorkerSampler(
