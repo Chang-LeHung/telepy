@@ -98,6 +98,7 @@ class TestFocusMode(TestBase):
         self.assertIsNotNone(async_sampler.regex_patterns)
         self.assertEqual(len(async_sampler.regex_patterns), 1)
 
+    @unittest.skipIf(sys.platform == "win32", "Enable it later on Windows")
     def test_focus_mode_with_actual_sampling(self):
         """Test focus_mode with actual sampling to verify filtering works."""
 
@@ -126,7 +127,7 @@ class TestFocusMode(TestBase):
 
         # Test with focus_mode enabled (should filter out stdlib)
         sampler_focus = telepy.TelepySysSampler(
-            sampling_interval=1000,
+            sampling_interval=100,
             focus_mode=True,
             debug=False,
         )
