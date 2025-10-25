@@ -16,7 +16,7 @@ extern "C" {
 
 typedef unsigned long long Telex_time;
 
-#define TELEPYSYS_CHECK(arg, ret)                                             \
+#define TELEXSYS_CHECK(arg, ret)                                              \
     do {                                                                      \
         if (!(arg)) {                                                         \
             return ret;                                                       \

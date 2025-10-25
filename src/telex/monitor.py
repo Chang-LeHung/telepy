@@ -20,7 +20,7 @@ from typing import Final, cast
 
 from .gc_analyzer import get_analyzer
 from .server import TeleXApp, TeleXRequest, TeleXResponse
-from .system import TelePySystem
+from .system import TeleXSystem
 
 TELEX_SYSTEM: Final = "system"
 ERROR_CODE: Final = -1
@@ -166,7 +166,7 @@ def stack(req: TeleXRequest, resp: TeleXResponse):
         resp.return_json({"data": parser.format_help(), "code": SUCCESS_CODE})
         return
 
-    system = cast(TelePySystem, req.app.lookup(TELEX_SYSTEM))
+    system = cast(TeleXSystem, req.app.lookup(TELEX_SYSTEM))
     thread_data = system.thread()
 
     # Get sys.base_prefix for stripping
@@ -254,7 +254,7 @@ def profile(req: TeleXRequest, resp: TeleXResponse):
             "--ignore-self",
             action="store_true",
             default=False,
-            help="Ignore the telepy",
+            help="Ignore the telex profiler itself",
         )
         parser.add_argument(
             "--help",
@@ -304,7 +304,7 @@ def profile(req: TeleXRequest, resp: TeleXResponse):
         return parser
 
     args = req.headers["args"].split()
-    system = cast(TelePySystem, req.app.lookup(TELEX_SYSTEM))
+    system = cast(TeleXSystem, req.app.lookup(TELEX_SYSTEM))
     if len(args) == 0:
         resp.return_json(
             {"data": "No arguments provided, use 'start' or 'stop'", "code": ERROR_CODE}
@@ -593,7 +593,7 @@ def gc_monitor(req: TeleXRequest, resp: TeleXResponse):
 class TeleXMonitor:
     def __init__(self, port: int = 8026, host: str = "127.0.0.1", log=True):
         app = TeleXApp(port=port, host=host, log=log)
-        app.register(TELEX_SYSTEM, TelePySystem())
+        app.register(TELEX_SYSTEM, TeleXSystem())
 
         # Automatically register all endpoints from the global registry
         for path, handler in ENDPOINT_REGISTRY.items():

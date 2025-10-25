@@ -726,7 +726,7 @@ class TestApp(TestBase):
             with request.urlopen("http://127.0.0.1:8036/headers") as response:
                 self.assertEqual(response.status, 200)
                 # Check server header is set correctly
-                self.assertIn("TelePy Monitoring Server", response.headers["Server"])
+                self.assertIn("TeleX Monitoring Server", response.headers["Server"])
                 self.assertIn("Date", response.headers)
 
             # Shutdown server

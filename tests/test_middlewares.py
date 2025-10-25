@@ -869,7 +869,7 @@ class TestPyTorchProfilerCLI(CommandTemplate):
 
     @unittest.skipIf(sys.platform == "win32", "Skip PyTorch CLI tests on Windows")
     def test_torch_profile_basic(self):
-        """Test: telepy test_torch.py --torch-profile -- --epochs 1."""
+        """Test: telex test_torch.py --torch-profile -- --epochs 1."""
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 

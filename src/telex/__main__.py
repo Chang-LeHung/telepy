@@ -397,7 +397,7 @@ def main():
         action="store_true",
         help="Parse stack trace data to generate a flamegraph svg file, "
         "such as `telex -p result.folded`. Multiple input files are supported, "
-        "TelePy will merge them into a single SVG file.",
+        "TeleX will merge them into a single SVG file.",
     )
     parser.add_argument(
         "-i",

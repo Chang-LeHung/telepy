@@ -2,7 +2,7 @@
 Convert Chrome Trace Event Format trace.json to folded stack format.
 
 This module reads Chrome Trace Event Format trace.json files and converts them
-to the folded stack format used by TelePy for flame graph generation.
+to the folded stack format used by TeleX for flame graph generation.
 Each trace line starts with Process(pid);Thread(tid); followed by the stack trace.
 """
 
@@ -329,8 +329,8 @@ def main():
     parser.add_argument(
         "--title",
         metavar="TITLE",
-        default="TelePy Torch Trace Flame Graph",
-        help=('Title for the flame graph (default: "TelePy Torch Trace Flame Graph")'),
+        default="TeleX Torch Trace Flame Graph",
+        help=('Title for the flame graph (default: "TeleX Torch Trace Flame Graph")'),
     )
 
     parser.add_argument(
@@ -529,7 +529,7 @@ def main():
                     f"flamegraph module - {e}"
                 )
                 err_console.print(
-                    "SVG generation skipped. Make sure telepy is properly installed."
+                    "SVG generation skipped. Make sure telex is properly installed."
                 )
             except Exception as e:
                 err_console.print(

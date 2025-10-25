@@ -125,7 +125,7 @@ class CommandTemplate(TestBase):
         Run a command with given options and validate its output.
 
         Args:
-            options: List of command line options to pass to the telepy command.
+            options: List of command line options to pass to the telex command.
             stdout_check_list: List of regex patterns to check against stdout.
             stderr_check_list: List of regex patterns to check against stderr.
             timeout: Maximum time in seconds to wait for command completion.

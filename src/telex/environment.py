@@ -447,7 +447,7 @@ class Environment:
 @contextlib.contextmanager
 def telex_env(config: TeleXSamplerConfig, code_mode: CodeMode = CodeMode.PyFile):
     """
-    Context manager that prepares the TelePy environment for sampling and restores it afterwards.
+    Context manager that prepares the TeleX environment for sampling and restores it afterwards.
 
     Args:
         config (TeleXSamplerConfig): The configuration object used to bootstrap TeleX.

@@ -177,7 +177,7 @@ class TeleXMagics(Magics):
                     {key: value for key, value in preserved.items() if value is not None}
                 )
 
-                pyc = compile(cell, "<telepy-cell>", "exec")
+                pyc = compile(cell, "<telex-cell>", "exec")
                 if not config.fork_server:
                     sampler.start()
                 exec(pyc, global_dict, global_dict)

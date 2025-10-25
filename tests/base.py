@@ -12,7 +12,7 @@ logging.basicConfig(
 class TestBase(TestCase):
     @staticmethod
     def truncate(filename: str) -> str:
-        # Support both "telex" (new name) and "telepy" (old directory name)
+        # Support both "telex" (package name) and "telepy" (workspace directory name)
         for name in ["telex", "telepy"]:
             try:
                 idx = filename.index(name)

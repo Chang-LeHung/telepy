@@ -59,7 +59,7 @@ class TestConfigCommand(CommandTemplate):
         if config_file.exists():
             config_file.unlink()
 
-        # Run telepy with --create-config (without TELEX_SUPPRESS_OUTPUT)
+        # Run telex with --create-config (without TELEX_SUPPRESS_OUTPUT)
         self.run_command_with_output(
             ["--create-config"],
             stdout_check_list=[

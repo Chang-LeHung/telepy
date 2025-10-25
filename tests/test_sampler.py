@@ -8,9 +8,7 @@ import telex
 from .base import TestBase  # type: ignore
 
 
-@unittest.skipIf(
-    sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
-)
+@unittest.skipIf(sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows")
 class TestAsyncSampler(TestBase):
     def tearDown(self):
         """Clean up test files after each test."""
@@ -144,7 +142,7 @@ class TestSamplerContextManager(TestBase):
             total += i * 2
         return total
 
-    def test_telepysys_sampler_context_manager(self):
+    def test_telexsys_sampler_context_manager(self):
         """Test TelexSysSampler as context manager."""
         sampler = telex.TelexSysSampler(sampling_interval=1000)
 
@@ -163,7 +161,7 @@ class TestSamplerContextManager(TestBase):
     @unittest.skipIf(
         sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
     )
-    def test_telepysys_async_sampler_context_manager(self):
+    def test_telexsys_async_sampler_context_manager(self):
         """Test TelexSysAsyncSampler as context manager."""
         sampler = telex.TelexSysAsyncSampler(sampling_interval=1000)
 

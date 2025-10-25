@@ -1,6 +1,6 @@
 [run]
 cover_pylib = True
-source = telepy
+source = telex
 concurrency = multiprocessing
 omit =
-	*/telepy/jupyter.py
+	*/telex/jupyter.py

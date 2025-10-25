@@ -43,11 +43,11 @@ class CaseInsensitiveFrequencyCompleter(Completer):
         shell_commands = ["exit", "attach"]  # Commands specific to shell
         self.commands = registry_commands + shell_commands
         # ensure ~/.telex exists
-        if not os.path.exists(os.path.join(os.path.expanduser("~"), ".telepy")):
-            os.makedirs(os.path.join(os.path.expanduser("~"), ".telepy"))
+        if not os.path.exists(os.path.join(os.path.expanduser("~"), ".telex")):
+            os.makedirs(os.path.join(os.path.expanduser("~"), ".telex"))
         self.history = history
         if not self.history:
-            self.history = os.path.join(os.path.expanduser("~"), ".telepy", "history")
+            self.history = os.path.join(os.path.expanduser("~"), ".telex", "history")
         if not os.path.exists(self.history):
             open(self.history, "w", encoding="utf-8").close()
 

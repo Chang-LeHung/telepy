@@ -14,7 +14,7 @@ from .sampler import TelexSysAsyncWorkerSampler
 TITLE: Final = "TeleX System Monitor Flame Graph"
 
 
-class TelePySystem:
+class TeleXSystem:
     def __init__(self) -> None:
         self.profiling = False
         self.profiler: None | TelexSysAsyncWorkerSampler = None
