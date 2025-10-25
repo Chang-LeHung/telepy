@@ -18,7 +18,7 @@ except ImportError:
             return func
 
 
-from . import _telepysys
+from . import _telexsys
 from .thread import in_main_thread
 
 # Check if we're on Windows
@@ -281,7 +281,7 @@ class SamplerMixin(ABC):
 
 
 # Deprecated: Use TelepySysAsyncWorkerSampler instead.
-class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
+class TelepySysSampler(_telexsys.Sampler, SamplerMixin, MultiProcessEnv):
     """
     Inherited sampler for TelepySys.
     """
@@ -327,7 +327,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
             forkserver (bool):
                 Whether the current process is the forkserver.
         """  # noqa: E501
-        _telepysys.Sampler.__init__(self)
+        _telexsys.Sampler.__init__(self)
         SamplerMixin.__init__(self)
         MultiProcessEnv.__init__(self)
         if not debug and sampling_interval < 5:
@@ -460,7 +460,7 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         return self.enabled()
 
 
-class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessEnv):
+class TelepySysAsyncSampler(_telexsys.AsyncSampler, SamplerMixin, MultiProcessEnv):
     """
     AsyncSampler class.
     """
@@ -508,7 +508,7 @@ class TelepySysAsyncSampler(_telepysys.AsyncSampler, SamplerMixin, MultiProcessE
             time_mode (str):
                 Timer source for sampling. "cpu" uses SIGPROF/ITIMER_PROF, "wall" uses SIGALRM/ITIMER_REAL.
         """  # noqa: E501
-        _telepysys.AsyncSampler.__init__(self)
+        _telexsys.AsyncSampler.__init__(self)
         SamplerMixin.__init__(self)
         MultiProcessEnv.__init__(self)
 

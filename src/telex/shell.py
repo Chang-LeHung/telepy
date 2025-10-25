@@ -17,7 +17,7 @@ from prompt_toolkit.output import Output
 from pygments.lexers.python import PythonLexer  # type: ignore
 from rich import print
 
-from ._telepysys import __version__
+from ._telexsys import __version__
 from .commands import COMMAND_REGISTRY, CommandManager
 
 MAX_HISTORY_SIZE: Final = 10000

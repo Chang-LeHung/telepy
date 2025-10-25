@@ -6,8 +6,8 @@ import threading
 from enum import Enum
 from types import FrameType
 
-from . import _telepysys  # type: ignore
-from ._telepysys import sched_yield, unix_micro_time
+from . import _telexsys  # type: ignore
+from ._telexsys import sched_yield, unix_micro_time
 from .monitor import TelePyMonitor
 from .sampler import TelepySysAsyncSampler, TelepySysAsyncWorkerSampler, TelepySysSampler
 from .shell import TelePyShell
@@ -32,7 +32,7 @@ __all__: list[str] = [
     "version",
 ]
 
-__version__: str = _telepysys.__version__
+__version__: str = _telexsys.__version__
 version: str = __version__
 
 
@@ -42,7 +42,7 @@ def current_frames() -> dict[int, FrameType]:
         A dictionary of thread IDs to frame objects, representing
         the current stack trace for each frame.
     """
-    return _telepysys.current_frames()  # pragma: no cover
+    return _telexsys.current_frames()  # pragma: no cover
 
 
 def current_stacks() -> dict[int, list[str]]:
@@ -51,7 +51,7 @@ def current_stacks() -> dict[int, list[str]]:
         A dictionary of thread IDs to lists of strings, representing
         the current stack trace for each frame.
     """
-    frames = _telepysys.current_frames()
+    frames = _telexsys.current_frames()
     res: dict[int, list[str]] = dict()
 
     for tid, frame in frames.items():

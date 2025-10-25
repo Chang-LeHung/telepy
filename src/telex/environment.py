@@ -16,7 +16,7 @@ from typing import Any, Final, Union
 from rich.table import Table
 
 from . import logger
-from ._telepysys import sched_yield
+from ._telexsys import sched_yield
 from .config import TelePySamplerConfig
 from .flamegraph import FlameGraph, process_stack_trace
 from .sampler import (

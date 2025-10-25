@@ -9,7 +9,7 @@ build_debug: compile_commands
 
 
 clean: uninstall
-	make -C src/$(PKG_NAME)/telepysys clean
+	make -C src/$(PKG_NAME)/telexsys clean
 	rm -rf dist build compile_commands.json src/$(PKG_NAME).egg-info .coverage\.* *.svg *.folded coverage.xml htmlcov
 
 install:
@@ -46,7 +46,7 @@ coverage:
 
 test:
 	@start=$$(date +%s.%N); \
-	make -C src/$(PKG_NAME)/telepysys test || exit 1; \
+	make -C src/$(PKG_NAME)/telexsys test || exit 1; \
 	for file in $(TEST_FILES); do \
 		echo "Running $$file"; \
 		TELEPY_SUPPRESS_OUTPUT=1 python -m unittest $$file || exit 1; \

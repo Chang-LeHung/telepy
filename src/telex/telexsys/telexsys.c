@@ -11,7 +11,7 @@
 #include "compat.h"
 #include "inject.h"
 #include "object.h"
-#include "telepysys.h"
+#include "telexsys.h"
 #include "tree.h"
 #include "tupleobject.h"
 
@@ -1050,7 +1050,7 @@ static PyType_Slot Sampler_slots[] = {
 };
 
 static PyType_Spec sampler_spec = {
-    .name = "_telepysys.Sampler",
+    .name = "_telexsys.Sampler",
     .basicsize = sizeof(SamplerObject),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
     .slots = Sampler_slots,
@@ -1588,7 +1588,7 @@ static PyType_Slot AsyncSampler_slots[] = {
 };
 
 static PyType_Spec async_sampler_spec = {
-    .name = "_telepysys.AsyncSampler",
+    .name = "_telexsys.AsyncSampler",
     .basicsize = sizeof(AsyncSamplerObject),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
     .slots = AsyncSampler_slots,
@@ -2219,7 +2219,7 @@ static PyModuleDef_Slot telepysys_slots[] = {
 
 static struct PyModuleDef telepysys = {
     PyModuleDef_HEAD_INIT,
-    .m_name = "_telepysys",
+    .m_name = "_telexsys",
     .m_doc = telepysys_doc,
     .m_size = sizeof(TelePySysState),
     .m_slots = telepysys_slots,
@@ -2231,6 +2231,6 @@ static struct PyModuleDef telepysys = {
 
 
 PyMODINIT_FUNC
-PyInit__telepysys(void) {
+PyInit__telexsys(void) {
     return PyModuleDef_Init(&telepysys);
 }

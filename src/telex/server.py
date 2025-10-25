@@ -24,7 +24,7 @@ except ImportError:
             return func
 
 
-from ._telepysys import __version__
+from ._telexsys import __version__
 
 GET: Final = "GET"
 POST: Final = "POST"

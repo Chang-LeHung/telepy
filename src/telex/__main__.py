@@ -28,7 +28,7 @@ from rich.traceback import Traceback, install
 from rich_argparse import RichHelpFormatter
 
 from . import logger
-from ._telepysys import __version__
+from ._telexsys import __version__
 from .config import TelePyConfig, TelePySamplerConfig, merge_config_with_args
 from .environment import CodeMode, telepy_env, telepy_finalize
 from .flamegraph import FlameGraph

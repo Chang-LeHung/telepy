@@ -1,6 +1,6 @@
-// Only for telepysys.c
-#ifndef TelepySys_h
-#define TelepySys_h
+// Only for telexsys.c
+#ifndef TelexSys_h
+#define TelexSys_h
 
 #include "tree.h"
 #include <Python.h>

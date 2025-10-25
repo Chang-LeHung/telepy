@@ -91,10 +91,10 @@ class Builder(build_ext):
         super().run()
 
     def build_extensions(self):
-        # Add tree object files to the telepysys extension
+        # Add tree object files to the telexsys extension
         if hasattr(self, "tree_objects"):
             for ext in self.extensions:
-                if ext.name == "telepy._telepysys":
+                if ext.name == "telepy._telexsys":
                     if IS_WINDOWS:
                         # On Windows, add as extra objects
                         if not hasattr(ext, "extra_objects"):
@@ -108,19 +108,19 @@ class Builder(build_ext):
 
 ext_modules = [
     Extension(
-        name="telepy._telepysys",
+        name="telepy._telexsys",
         sources=[
-            "src/telepy/telepysys/telepysys.c",
-            "src/telepy/telepysys/inject.c",
+            "src/telepy/telexsys/telexsys.c",
+            "src/telepy/telexsys/inject.c",
         ],
-        include_dirs=["src/telepy/telepysys"],
+        include_dirs=["src/telepy/telexsys"],
         extra_compile_args=flags,
         language="c++",
     ),
     Extension(
         name="telepy._gc_stats",
-        sources=["src/telepy/telepysys/gc_stats.c"],
-        include_dirs=["src/telepy/telepysys"],
+        sources=["src/telepy/telexsys/gc_stats.c"],
+        include_dirs=["src/telepy/telexsys"],
         extra_compile_args=flags,
         language="c",
     ),
