@@ -110,17 +110,17 @@ ext_modules = [
     Extension(
         name="telepy._telexsys",
         sources=[
-            "src/telepy/telexsys/telexsys.c",
-            "src/telepy/telexsys/inject.c",
+            "src/telex/telexsys/telexsys.c",
+            "src/telex/telexsys/inject.c",
         ],
-        include_dirs=["src/telepy/telexsys"],
+        include_dirs=["src/telex/telexsys"],
         extra_compile_args=flags,
         language="c++",
     ),
     Extension(
         name="telepy._gc_stats",
-        sources=["src/telepy/telexsys/gc_stats.c"],
-        include_dirs=["src/telepy/telexsys"],
+        sources=["src/telex/telexsys/gc_stats.c"],
+        include_dirs=["src/telex/telexsys"],
         extra_compile_args=flags,
         language="c",
     ),
