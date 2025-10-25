@@ -4,8 +4,8 @@ import os
 import time
 import unittest
 
-from telepy import Profiler, ProfilerState, profile
-from telepy.environment import Environment
+from telex import Profiler, ProfilerState, profile
+from telex.environment import Environment
 
 from .base import TestBase
 

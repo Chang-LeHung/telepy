@@ -2,7 +2,7 @@
 Convert Chrome Trace Event Format trace.json to folded stack format.
 
 This module reads Chrome Trace Event Format trace.json files and converts them
-to the folded stack format used by TelePy for flame graph generation.
+to the folded stack format used by TeleX for flame graph generation.
 Each trace line starts with Process(pid);Thread(tid); followed by the stack trace.
 """
 
@@ -283,7 +283,7 @@ def main():
             "[bold cyan]TracEC[/bold cyan] - Convert Chrome Trace Event "
             "Format to folded stack format for flame graph generation.\n\n"
             "Report issues: [underline blue]"
-            "https://github.com/Chang-LeHung/telepy/issues[/underline blue]"
+            "https://github.com/Chang-LeHung/telex/issues[/underline blue]"
         ),
         formatter_class=RichHelpFormatter,
         add_help=False,
@@ -329,8 +329,8 @@ def main():
     parser.add_argument(
         "--title",
         metavar="TITLE",
-        default="TelePy Torch Trace Flame Graph",
-        help=('Title for the flame graph (default: "TelePy Torch Trace Flame Graph")'),
+        default="TeleX Torch Trace Flame Graph",
+        help=('Title for the flame graph (default: "TeleX Torch Trace Flame Graph")'),
     )
 
     parser.add_argument(
@@ -471,7 +471,7 @@ def main():
                 console.print("\n[cyan]Generating flame graph...[/cyan]")
 
             try:
-                from telepy.flamegraph import FlameGraph
+                from telex.flamegraph import FlameGraph
 
                 # Read the folded file
                 with open(output_file) as f:
@@ -529,7 +529,7 @@ def main():
                     f"flamegraph module - {e}"
                 )
                 err_console.print(
-                    "SVG generation skipped. Make sure telepy is properly installed."
+                    "SVG generation skipped. Make sure telex is properly installed."
                 )
             except Exception as e:
                 err_console.print(
@@ -551,7 +551,7 @@ def main():
         logger.log_error_panel(
             f"Unexpected error: {e}\n\n"
             f"Please report this issue at: "
-            f"https://github.com/Chang-LeHung/telepy/issues"
+            f"https://github.com/Chang-LeHung/telex/issues"
         )
         sys.exit(1)
 

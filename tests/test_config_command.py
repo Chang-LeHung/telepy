@@ -20,10 +20,10 @@ class TestConfigCommand(CommandTemplate):
         timeout: int = 10,
         exit_code: int = 0,
     ):
-        """Run command without TELEPY_SUPPRESS_OUTPUT to see output messages."""
-        # Create environment without TELEPY_SUPPRESS_OUTPUT
+        """Run command without TELEX_SUPPRESS_OUTPUT to see output messages."""
+        # Create environment without TELEX_SUPPRESS_OUTPUT
         env = os.environ.copy()
-        env.pop("TELEPY_SUPPRESS_OUTPUT", None)
+        env.pop("TELEX_SUPPRESS_OUTPUT", None)
 
         if "coverage" in sys.modules:
             cmd_line = [
@@ -31,13 +31,13 @@ class TestConfigCommand(CommandTemplate):
                 "run",
                 "--parallel-mode",
                 "--source",
-                "telepy",
+                "telex",
                 "-m",
-                "telepy",
+                "telex",
                 *options,
             ]
         else:
-            cmd_line = ["telepy", *options]
+            cmd_line = ["telex", *options]
 
         output = subprocess.run(cmd_line, capture_output=True, timeout=timeout, env=env)
         self.assertEqual(output.returncode, exit_code)
@@ -52,19 +52,19 @@ class TestConfigCommand(CommandTemplate):
     def test_create_config_command(self):
         """Test --create-config command line option."""
         # Use real home directory
-        config_dir = Path.home() / ".telepy"
-        config_file = config_dir / ".telepyrc"
+        config_dir = Path.home() / ".telex"
+        config_file = config_dir / ".telexrc"
 
         # Remove existing config file if it exists
         if config_file.exists():
             config_file.unlink()
 
-        # Run telepy with --create-config (without TELEPY_SUPPRESS_OUTPUT)
+        # Run telex with --create-config (without TELEX_SUPPRESS_OUTPUT)
         self.run_command_with_output(
             ["--create-config"],
             stdout_check_list=[
                 "Created example configuration file",
-                r"\.telepy.*\.telepyrc",
+                r"\.telex.*.telexrc",
             ],
             exit_code=0,
         )
@@ -87,8 +87,8 @@ class TestConfigCommand(CommandTemplate):
     def test_config_file_loading_with_debug(self):
         """Test that config file is loaded and applied."""
         # Use real home directory
-        config_dir = Path.home() / ".telepy"
-        config_file = config_dir / ".telepyrc"
+        config_dir = Path.home() / ".telex"
+        config_file = config_dir / ".telexrc"
 
         # Create config file with debug enabled
         config_dir.mkdir(exist_ok=True)
@@ -102,7 +102,7 @@ class TestConfigCommand(CommandTemplate):
                 ["-c", "print('hello')"],
                 stdout_check_list=[
                     "hello",
-                    "TelePySampler Metrics",  # This appears when debug is True
+                    "TeleXSampler Metrics",  # This appears when debug is True
                 ],
                 exit_code=0,
             )
@@ -114,8 +114,8 @@ class TestConfigCommand(CommandTemplate):
     def test_command_line_overrides_config(self):
         """Test that command line arguments override config file."""
         # Use real home directory
-        config_dir = Path.home() / ".telepy"
-        config_file = config_dir / ".telepyrc"
+        config_dir = Path.home() / ".telex"
+        config_file = config_dir / ".telexrc"
 
         # Create config file without debug (empty args or args without --debug)
         config_dir.mkdir(exist_ok=True)
@@ -129,7 +129,7 @@ class TestConfigCommand(CommandTemplate):
                 ["--debug", "-c", "print('hello')"],
                 stdout_check_list=[
                     "hello",
-                    "TelePySampler Metrics",  # This appears when debug is True
+                    "TeleXSampler Metrics",  # This appears when debug is True
                 ],
                 exit_code=0,
             )
@@ -141,8 +141,8 @@ class TestConfigCommand(CommandTemplate):
     def test_config_with_invalid_json(self):
         """Test behavior with invalid JSON in config file."""
         # Use real home directory
-        config_dir = Path.home() / ".telepy"
-        config_file = config_dir / ".telepyrc"
+        config_dir = Path.home() / ".telex"
+        config_file = config_dir / ".telexrc"
 
         # Create invalid JSON config file
         config_dir.mkdir(exist_ok=True)

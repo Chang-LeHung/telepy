@@ -179,3 +179,8 @@ result.html
 test_sampler.stack
 *.svg
 *.folded
+
+# Test binaries and debug symbols
+**/tree_test
+**/tree_test.dSYM/
+tests/demo

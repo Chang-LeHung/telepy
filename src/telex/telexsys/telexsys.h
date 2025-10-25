@@ -1,6 +1,6 @@
-// Only for telepysys.c
-#ifndef TelepySys_h
-#define TelepySys_h
+// Only for telexsys.c
+#ifndef TelexSys_h
+#define TelexSys_h
 
 #include "tree.h"
 #include <Python.h>
@@ -14,19 +14,19 @@ extern "C" {
 
 #define BUF_SIZE 16 KiB
 
-typedef unsigned long long Telepy_time;
+typedef unsigned long long Telex_time;
 
-#define TELEPYSYS_CHECK(arg, ret)                                             \
+#define TELEXSYS_CHECK(arg, ret)                                              \
     do {                                                                      \
         if (!(arg)) {                                                         \
             return ret;                                                       \
         }                                                                     \
     } while (0)
 
-typedef struct TelePySysState {
+typedef struct TeleXSysState {
     PyTypeObject* sampler_type;
     PyTypeObject* async_sampler_type;
-} TelePySysState;
+} TeleXSysState;
 
 #define BIT_SET(x, n) (x |= (1 << n))
 #define BIT_CLEAR(x, n) (x &= ~(1 << n))
@@ -71,8 +71,7 @@ typedef struct TelePySysState {
 #define CHECK_FALG(s, flag) (BIT_CHECK((s)->flags, flag))
 
 typedef struct SamplerObject {
-    PyObject_HEAD
-    PyObject* sampling_thread;
+    PyObject_HEAD PyObject* sampling_thread;
     PyObject* sampling_interval;  // in microseconds
 
     struct StackTree* tree;
@@ -81,10 +80,10 @@ typedef struct SamplerObject {
     unsigned long sampling_times;
 
     // profiling data
-    Telepy_time acc_sampling_time;  // accumulated sampling time
-    Telepy_time life_time;          // sampling thread life time
-    Telepy_time start_time;         // start time in microseconds
-    Telepy_time end_time;           // end time in microseconds
+    Telex_time acc_sampling_time;  // accumulated sampling time
+    Telex_time life_time;          // sampling thread life time
+    Telex_time start_time;         // start time in microseconds
+    Telex_time end_time;           // end time in microseconds
 
     // filtering options
     PyObject* regex_patterns;  // list of compiled regex patterns

@@ -6,22 +6,22 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from telepy.config import (
-    TelePyConfig,
-    TelePySamplerConfig,
+from telex.config import (
+    TeleXConfig,
+    TeleXSamplerConfig,
     load_config_if_exists,
     merge_config_with_args,
 )
 
 
-class TestTelePyConfig(unittest.TestCase):
-    """Test cases for TelePy configuration functionality."""
+class TestTeleXConfig(unittest.TestCase):
+    """Test cases for TeleX configuration functionality."""
 
     def setUp(self):
         """Set up test environment."""
         self.temp_dir = tempfile.mkdtemp()
-        self.config_dir = Path(self.temp_dir) / ".telepy"
-        self.config_file = self.config_dir / ".telepyrc"
+        self.config_dir = Path(self.temp_dir) / ".telex"
+        self.config_file = self.config_dir / ".telexrc"
 
     def tearDown(self):
         """Clean up test environment."""
@@ -31,23 +31,23 @@ class TestTelePyConfig(unittest.TestCase):
             self.config_dir.rmdir()
         os.rmdir(self.temp_dir)
 
-    @patch("telepy.config.Path.home")
+    @patch("telex.config.Path.home")
     def test_get_config_path(self, mock_home):
         """Test that config path is constructed correctly."""
         mock_home.return_value = Path(self.temp_dir)
-        config = TelePyConfig()
-        expected_path = Path(self.temp_dir) / ".telepy" / ".telepyrc"
+        config = TeleXConfig()
+        expected_path = Path(self.temp_dir) / ".telex" / ".telexrc"
         self.assertEqual(config.config_path, expected_path)
 
-    @patch("telepy.config.Path.home")
+    @patch("telex.config.Path.home")
     def test_load_config_file_not_exists(self, mock_home):
         """Test loading config when file doesn't exist."""
         mock_home.return_value = Path(self.temp_dir)
-        config = TelePyConfig()
+        config = TeleXConfig()
         result = config.load_config()
         self.assertEqual(result, {})
 
-    @patch("telepy.config.Path.home")
+    @patch("telex.config.Path.home")
     def test_load_config_valid_json(self, mock_home):
         """Test loading valid JSON config file."""
         mock_home.return_value = Path(self.temp_dir)
@@ -58,11 +58,11 @@ class TestTelePyConfig(unittest.TestCase):
         with open(self.config_file, "w", encoding="utf-8") as f:
             json.dump(test_config, f)
 
-        config = TelePyConfig()
+        config = TeleXConfig()
         result = config.load_config()
         self.assertEqual(result, test_config)
 
-    @patch("telepy.config.Path.home")
+    @patch("telex.config.Path.home")
     def test_load_config_invalid_json(self, mock_home):
         """Test loading invalid JSON config file."""
         mock_home.return_value = Path(self.temp_dir)
@@ -72,11 +72,11 @@ class TestTelePyConfig(unittest.TestCase):
         with open(self.config_file, "w", encoding="utf-8") as f:
             f.write("{ invalid json }")
 
-        config = TelePyConfig()
+        config = TeleXConfig()
         result = config.load_config()
         self.assertEqual(result, {})
 
-    @patch("telepy.config.Path.home")
+    @patch("telex.config.Path.home")
     def test_load_config_not_dict(self, mock_home):
         """Test loading config file that doesn't contain a dictionary."""
         mock_home.return_value = Path(self.temp_dir)
@@ -86,20 +86,20 @@ class TestTelePyConfig(unittest.TestCase):
         with open(self.config_file, "w", encoding="utf-8") as f:
             json.dump([1, 2, 3], f)
 
-        config = TelePyConfig()
+        config = TeleXConfig()
         result = config.load_config()
         self.assertEqual(result, {})
 
     def test_merge_with_args_empty_config(self):
         """Test merging with empty config."""
-        config = TelePyConfig()
+        config = TeleXConfig()
         cmd_args = ["--debug", "--interval", "1000"]
         result = config.merge_with_args({}, cmd_args)
         self.assertEqual(result, cmd_args)
 
     def test_merge_with_args_with_config_args(self):
         """Test merging config args with command line args."""
-        config = TelePyConfig()
+        config = TeleXConfig()
         test_config = {"args": ["--debug", "--interval", "5000"]}
         cmd_args = ["--output", "test.svg"]
         result = config.merge_with_args(test_config, cmd_args)
@@ -110,7 +110,7 @@ class TestTelePyConfig(unittest.TestCase):
 
     def test_merge_with_args_command_line_precedence(self):
         """Test that command line args take precedence over config."""
-        config = TelePyConfig()
+        config = TeleXConfig()
         test_config = {"args": ["--interval", "5000"]}
         cmd_args = ["--interval", "1000"]  # Should override config
         result = config.merge_with_args(test_config, cmd_args)
@@ -121,7 +121,7 @@ class TestTelePyConfig(unittest.TestCase):
 
     def test_merge_with_args_invalid_args_type(self):
         """Test handling of invalid args type in config."""
-        config = TelePyConfig()
+        config = TeleXConfig()
         test_config = {"args": "not a list"}  # Invalid type
         cmd_args = ["--debug"]
         result = config.merge_with_args(test_config, cmd_args)
@@ -131,7 +131,7 @@ class TestTelePyConfig(unittest.TestCase):
 
     def test_merge_with_args_no_args_key(self):
         """Test config without args key."""
-        config = TelePyConfig()
+        config = TeleXConfig()
         test_config = {"other": "value"}  # No "args" key
         cmd_args = ["--debug"]
         result = config.merge_with_args(test_config, cmd_args)
@@ -141,7 +141,7 @@ class TestTelePyConfig(unittest.TestCase):
 
     def test_merge_with_args_boolean_flags(self):
         """Test merging with boolean flags."""
-        config = TelePyConfig()
+        config = TeleXConfig()
         test_config = {"args": ["--debug", "--ignore-frozen", "--no-merge"]}
         cmd_args = ["--interval", "1000"]
         result = config.merge_with_args(test_config, cmd_args)
@@ -151,7 +151,7 @@ class TestTelePyConfig(unittest.TestCase):
 
     def test_merge_with_args_mixed_args(self):
         """Test merging with mixed argument types."""
-        config = TelePyConfig()
+        config = TeleXConfig()
         test_config = {
             "args": [
                 "--debug",
@@ -178,11 +178,11 @@ class TestTelePyConfig(unittest.TestCase):
         ]
         self.assertEqual(result, expected)
 
-    @patch("telepy.config.Path.home")
+    @patch("telex.config.Path.home")
     def test_create_example_config(self, mock_home):
         """Test creating example config file."""
         mock_home.return_value = Path(self.temp_dir)
-        config = TelePyConfig()
+        config = TeleXConfig()
         config.create_example_config()
 
         # Check that file was created
@@ -196,15 +196,15 @@ class TestTelePyConfig(unittest.TestCase):
         self.assertIn("args", data)
         self.assertIsInstance(data["args"], list)
 
-    @patch("telepy.config.Path.home")
-    @patch("telepy.config.input")
+    @patch("telex.config.Path.home")
+    @patch("telex.config.input")
     def test_create_example_config_overwrite_yes(self, mock_input, mock_home):
         """Test creating example config file when file exists and user
         chooses to overwrite."""
         mock_home.return_value = Path(self.temp_dir)
         mock_input.return_value = "y"
 
-        config = TelePyConfig()
+        config = TeleXConfig()
 
         # Create existing config file
         self.config_dir.mkdir(exist_ok=True)
@@ -222,15 +222,15 @@ class TestTelePyConfig(unittest.TestCase):
         self.assertIn("args", data)
         self.assertNotEqual(data["args"], ["--existing"])
 
-    @patch("telepy.config.Path.home")
-    @patch("telepy.config.input")
+    @patch("telex.config.Path.home")
+    @patch("telex.config.input")
     def test_create_example_config_overwrite_no(self, mock_input, mock_home):
         """Test creating example config file when file exists and user
         chooses not to overwrite."""
         mock_home.return_value = Path(self.temp_dir)
         mock_input.return_value = "n"
 
-        config = TelePyConfig()
+        config = TeleXConfig()
 
         # Create existing config file
         self.config_dir.mkdir(exist_ok=True)
@@ -248,7 +248,7 @@ class TestTelePyConfig(unittest.TestCase):
         # Should still contain the original config
         self.assertEqual(data, original_config)
 
-    @patch("telepy.config.TelePyConfig.load_config")
+    @patch("telex.config.TeleXConfig.load_config")
     def test_load_config_if_exists(self, mock_load):
         """Test convenience function load_config_if_exists."""
         test_config = {"args": ["--debug"]}
@@ -258,8 +258,8 @@ class TestTelePyConfig(unittest.TestCase):
         self.assertEqual(result, test_config)
         mock_load.assert_called_once()
 
-    @patch("telepy.config.TelePyConfig.load_config")
-    @patch("telepy.config.TelePyConfig.merge_with_args")
+    @patch("telex.config.TeleXConfig.load_config")
+    @patch("telex.config.TeleXConfig.merge_with_args")
     def test_merge_config_with_args(self, mock_merge, mock_load):
         """Test convenience function merge_config_with_args."""
         test_config = {"args": ["--debug"]}
@@ -276,12 +276,12 @@ class TestTelePyConfig(unittest.TestCase):
         mock_merge.assert_called_once_with(test_config, test_args)
 
 
-class TestTelePySamplerConfig(unittest.TestCase):
-    """Test cases for TelePySamplerConfig functionality."""
+class TestTeleXSamplerConfig(unittest.TestCase):
+    """Test cases for TeleXSamplerConfig functionality."""
 
     def test_init_with_keyword_arguments(self):
-        """Test creating TelePySamplerConfig with keyword arguments."""
-        config = TelePySamplerConfig(
+        """Test creating TeleXSamplerConfig with keyword arguments."""
+        config = TeleXSamplerConfig(
             interval=5000,
             debug=True,
             full_path=False,
@@ -304,8 +304,8 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertEqual(config.folded_file, "result.folded")  # default
 
     def test_init_with_defaults(self):
-        """Test creating TelePySamplerConfig with all default values."""
-        config = TelePySamplerConfig()
+        """Test creating TeleXSamplerConfig with all default values."""
+        config = TeleXSamplerConfig()
 
         # Check all default values
         self.assertEqual(config.interval, 8000)
@@ -316,7 +316,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertFalse(config.inverted)
         self.assertFalse(config.reverse)
         self.assertFalse(config.ignore_frozen)
-        self.assertFalse(config.include_telepy)
+        self.assertFalse(config.include_telex)
         self.assertEqual(config.output, "result.svg")
         self.assertEqual(config.folded_file, "result.folded")
         self.assertFalse(config.folded_save)
@@ -332,7 +332,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
     def test_init_prohibits_positional_arguments(self):
         """Test that positional arguments are prohibited."""
         with self.assertRaises(TypeError) as context:
-            TelePySamplerConfig(5000, True, "test.svg")
+            TeleXSamplerConfig(5000, True, "test.svg")
 
         error_message = str(context.exception)
         self.assertIn("takes 1 positional argument", error_message)
@@ -348,7 +348,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         args.inverted = True
         args.reverse = True
         args.ignore_frozen = True
-        args.include_telepy = False
+        args.include_telex = False
         args.output = "namespace.svg"
         args.folded_file = "namespace.folded"
         args.folded_save = True
@@ -361,7 +361,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         args.cmd = "print('test')"
         args.module = "test_module"
 
-        config = TelePySamplerConfig.from_namespace(args)
+        config = TeleXSamplerConfig.from_namespace(args)
 
         # Verify all attributes are correctly transferred
         self.assertEqual(config.interval, 6000)
@@ -372,7 +372,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertTrue(config.inverted)
         self.assertTrue(config.reverse)
         self.assertTrue(config.ignore_frozen)
-        self.assertFalse(config.include_telepy)
+        self.assertFalse(config.include_telex)
         self.assertEqual(config.output, "namespace.svg")
         self.assertEqual(config.folded_file, "namespace.folded")
         self.assertTrue(config.folded_save)
@@ -393,7 +393,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         args.debug = True
         args.output = "minimal.svg"
 
-        config = TelePySamplerConfig.from_namespace(args)
+        config = TeleXSamplerConfig.from_namespace(args)
 
         # Check set values
         self.assertEqual(config.interval, 7000)
@@ -413,7 +413,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         """Test from_namespace with completely empty namespace."""
         args = argparse.Namespace()
 
-        config = TelePySamplerConfig.from_namespace(args)
+        config = TeleXSamplerConfig.from_namespace(args)
 
         # Should get all defaults
         self.assertEqual(config.interval, 8000)
@@ -425,7 +425,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
 
     def test_parameter_types(self):
         """Test that parameters accept correct types."""
-        config = TelePySamplerConfig(
+        config = TeleXSamplerConfig(
             interval=5000,  # int
             timeout=15.5,  # float
             debug=True,  # bool
@@ -443,7 +443,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
 
     def test_comprehensive_configuration(self):
         """Test a comprehensive configuration covering all parameters."""
-        config = TelePySamplerConfig(
+        config = TeleXSamplerConfig(
             # Sampler configuration
             interval=4000,
             timeout=20.0,
@@ -454,7 +454,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
             reverse=False,
             # Filtering options
             ignore_frozen=True,
-            include_telepy=True,
+            include_telex=True,
             # Output configuration
             output="comprehensive.svg",
             folded_file="comprehensive.folded",
@@ -482,7 +482,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
         self.assertTrue(config.inverted)
         self.assertFalse(config.reverse)
         self.assertTrue(config.ignore_frozen)
-        self.assertTrue(config.include_telepy)
+        self.assertTrue(config.include_telex)
         self.assertEqual(config.output, "comprehensive.svg")
         self.assertEqual(config.folded_file, "comprehensive.folded")
         self.assertTrue(config.folded_save)
@@ -499,12 +499,12 @@ class TestTelePySamplerConfig(unittest.TestCase):
     def test_new_interface_parameters(self):
         """Test the newly added interface parameters."""
         # Test default values
-        config = TelePySamplerConfig()
+        config = TeleXSamplerConfig()
         self.assertFalse(config.disable_traceback)
         self.assertFalse(config.create_config)
 
         # Test explicit values
-        config = TelePySamplerConfig(disable_traceback=True, create_config=True)
+        config = TeleXSamplerConfig(disable_traceback=True, create_config=True)
         self.assertTrue(config.disable_traceback)
         self.assertTrue(config.create_config)
 
@@ -523,7 +523,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
                 self.inverted = False
                 self.reverse = False
                 self.ignore_frozen = False
-                self.include_telepy = False
+                self.include_telex = False
                 self.output = "result.svg"
                 self.folded_file = "result.folded"
                 self.folded_save = False
@@ -539,7 +539,7 @@ class TestTelePySamplerConfig(unittest.TestCase):
                 self.module = None
 
         mock_args = MockNamespace()
-        config = TelePySamplerConfig.from_namespace(mock_args)
+        config = TeleXSamplerConfig.from_namespace(mock_args)
 
         # Verify new parameters are correctly set
         self.assertTrue(config.disable_traceback)
@@ -548,22 +548,22 @@ class TestTelePySamplerConfig(unittest.TestCase):
     def test_time_parameter_validation(self):
         """Test that time parameter validates correctly."""
         # Test valid values
-        config_cpu = TelePySamplerConfig(time="cpu")
+        config_cpu = TeleXSamplerConfig(time="cpu")
         self.assertEqual(config_cpu.time, "cpu")
 
-        config_wall = TelePySamplerConfig(time="wall")
+        config_wall = TeleXSamplerConfig(time="wall")
         self.assertEqual(config_wall.time, "wall")
 
         # Test invalid value raises ValueError
         with self.assertRaises(ValueError) as context:
-            TelePySamplerConfig(time="invalid")
+            TeleXSamplerConfig(time="invalid")
         self.assertIn("must be either 'cpu' or 'wall'", str(context.exception))
 
         # Test case insensitive handling
-        config_cpu_upper = TelePySamplerConfig(time="CPU")
+        config_cpu_upper = TeleXSamplerConfig(time="CPU")
         self.assertEqual(config_cpu_upper.time, "cpu")
 
-        config_wall_mixed = TelePySamplerConfig(time="Wall")
+        config_wall_mixed = TeleXSamplerConfig(time="Wall")
         self.assertEqual(config_wall_mixed.time, "wall")
 
     def test_from_namespace_time_parameter(self):
@@ -574,19 +574,19 @@ class TestTelePySamplerConfig(unittest.TestCase):
         namespace.interval = 5000
         namespace.debug = True
 
-        config = TelePySamplerConfig.from_namespace(namespace)
+        config = TeleXSamplerConfig.from_namespace(namespace)
         self.assertEqual(config.time, "wall")
         self.assertEqual(config.interval, 5000)
         self.assertEqual(config.debug, True)
 
         # Test default time value when not provided
         namespace_no_time = argparse.Namespace()
-        config_default = TelePySamplerConfig.from_namespace(namespace_no_time)
+        config_default = TeleXSamplerConfig.from_namespace(namespace_no_time)
         self.assertEqual(config_default.time, "cpu")
 
     def test_to_cli_args_time_parameter(self):
         """Test that to_cli_args includes time parameter."""
-        config = TelePySamplerConfig(time="wall", interval=1000)
+        config = TeleXSamplerConfig(time="wall", interval=1000)
         args = config.to_cli_args()
 
         self.assertIn("--time", args)

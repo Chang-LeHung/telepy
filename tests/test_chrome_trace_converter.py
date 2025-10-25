@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from telepy.chrome_trace_converter import (
+from telex.chrome_trace_converter import (
     ChromeTraceConverter,
     convert_chrome_trace_to_folded,
 )
@@ -225,7 +225,7 @@ class TestChromeTraceConverter(TestBase):
     def test_svg_generation_with_default_params(self):
         """Test SVG generation with default parameters."""
         try:
-            from telepy.flamegraph import FlameGraph
+            from telex.flamegraph import FlameGraph
         except ImportError:
             self.skipTest("FlameGraph module not available")
 
@@ -261,7 +261,7 @@ class TestChromeTraceConverter(TestBase):
     def test_svg_generation_with_custom_params(self):
         """Test SVG generation with custom FlameGraph parameters."""
         try:
-            from telepy.flamegraph import FlameGraph
+            from telex.flamegraph import FlameGraph
         except ImportError:
             self.skipTest("FlameGraph module not available")
 
@@ -304,7 +304,7 @@ class TestChromeTraceConverter(TestBase):
     def test_folded_format_compatibility_with_flamegraph(self):
         """Test that generated folded format is compatible with FlameGraph."""
         try:
-            from telepy.flamegraph import FlameGraph
+            from telex.flamegraph import FlameGraph
         except ImportError:
             self.skipTest("FlameGraph module not available")
 
@@ -611,7 +611,7 @@ class TestChromeTraceConverter(TestBase):
         """Test CLI help display."""
         from io import StringIO
 
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         old_argv = sys.argv
         old_stdout = sys.stdout
@@ -633,7 +633,7 @@ class TestChromeTraceConverter(TestBase):
 
     def test_cli_missing_trace_file(self):
         """Test CLI with missing trace file argument."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         old_argv = sys.argv
 
@@ -648,7 +648,7 @@ class TestChromeTraceConverter(TestBase):
 
     def test_cli_basic_conversion(self):
         """Test CLI basic conversion."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         output_file = "tests/test_files/trace_cli_test.folded"
         self.__class__.temp_files.append(output_file)
@@ -665,7 +665,7 @@ class TestChromeTraceConverter(TestBase):
 
     def test_cli_verbose_mode(self):
         """Test CLI with verbose flag."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         output_file = "tests/test_files/trace_cli_verbose_test.folded"
         self.__class__.temp_files.append(output_file)
@@ -684,7 +684,7 @@ class TestChromeTraceConverter(TestBase):
 
     def test_cli_svg_generation(self):
         """Test CLI with SVG generation."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         output_folded = "tests/test_files/trace_cli_svg_test.folded"
         output_svg = "tests/test_files/trace_cli_svg_test.svg"
@@ -710,7 +710,7 @@ class TestChromeTraceConverter(TestBase):
 
     def test_cli_svg_with_custom_params(self):
         """Test CLI SVG generation with custom parameters."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         output_folded = "tests/test_files/trace_cli_custom_svg_test.folded"
         output_svg = "tests/test_files/trace_cli_custom_svg_test.svg"
@@ -752,7 +752,7 @@ class TestChromeTraceConverter(TestBase):
 
     def test_cli_nonexistent_file(self):
         """Test CLI with non-existent trace file."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         old_argv = sys.argv
 
@@ -767,7 +767,7 @@ class TestChromeTraceConverter(TestBase):
 
     def test_cli_invalid_json(self):
         """Test CLI with invalid JSON file."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         # Create invalid JSON file
         invalid_json = "tests/test_files/invalid.json"
@@ -789,7 +789,7 @@ class TestChromeTraceConverter(TestBase):
 
     def test_cli_with_all_svg_options(self):
         """Test CLI with all SVG customization options."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         output_folded = "tests/test_files/trace_all_options_test.folded"
         output_svg = "tests/test_files/trace_all_options_test.svg"
@@ -842,7 +842,7 @@ class TestChromeTraceConverter(TestBase):
         # We can verify the code structure includes error handling
         import inspect
 
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         source = inspect.getsource(main)
         self.assertIn("except ImportError", source, "Should handle ImportError")
@@ -867,7 +867,7 @@ class TestChromeTraceConverter(TestBase):
         import sys
         from unittest.mock import MagicMock, patch
 
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         output_folded = "tests/test_files/trace_runtime_error_test.folded"
         output_svg = "tests/test_files/trace_runtime_error_test.svg"
@@ -886,7 +886,7 @@ class TestChromeTraceConverter(TestBase):
             ]
 
             # Mock FlameGraph.generate_svg to raise exception
-            with patch("telepy.flamegraph.FlameGraph") as mock_fg_class:
+            with patch("telex.flamegraph.FlameGraph") as mock_fg_class:
                 mock_fg = MagicMock()
                 mock_fg.generate_svg.side_effect = RuntimeError("Test error")
                 mock_fg_class.return_value = mock_fg
@@ -903,7 +903,7 @@ class TestChromeTraceConverter(TestBase):
         import json
         import sys
 
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         # Create a JSON file with wrong structure (no traceEvents)
         malformed_json = "tests/test_files/malformed_structure.json"
@@ -932,7 +932,7 @@ class TestChromeTraceConverter(TestBase):
         import sys
         from unittest.mock import patch
 
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         old_argv = sys.argv
 
@@ -941,7 +941,7 @@ class TestChromeTraceConverter(TestBase):
 
             # Mock ChromeTraceConverter to raise unexpected exception
             with patch(
-                "telepy.chrome_trace_converter.ChromeTraceConverter"
+                "telex.chrome_trace_converter.ChromeTraceConverter"
             ) as mock_converter_class:
                 mock_converter_class.side_effect = ValueError("Unexpected test error")
 

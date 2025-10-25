@@ -4,7 +4,7 @@ import functools
 import threading
 from collections.abc import Callable
 
-from . import _telepysys
+from . import _telexsys
 
 
 class PyMainTrampoline:
@@ -28,7 +28,7 @@ class PyMainTrampoline:
             self.func(*args, **kwds)
             return
         # coverage can not detect this line
-        _telepysys.register_main(self.main_thread, *args, **kwds)  # pragma: no cover
+        _telexsys.register_main(self.main_thread, *args, **kwds)  # pragma: no cover
         # wait for the main thread to finish
         self.event.wait()  # pragma: no cover
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 
-from telepy import TelePyMonitor
+from telex import TeleXMonitor
 
 from .base import TestBase
 
@@ -11,12 +11,12 @@ from .base import TestBase
 class MonitorSession:
     def __init__(self, port: int = 9000):
         self.port = port
-        self.monitor: None | TelePyMonitor = None
+        self.monitor: None | TeleXMonitor = None
 
     def __enter__(self):
         import time
 
-        from telepy import install_monitor
+        from telex import install_monitor
 
         self.monitor = install_monitor(port=self.port, in_thread=False)
         time.sleep(0.5)
@@ -53,11 +53,11 @@ class MonitorSession:
 
 class TestMonitor(TestBase):
     def setUp(self):
-        TelePyMonitor.enable_address_reuse()
+        TeleXMonitor.enable_address_reuse()
         return super().setUp()
 
     def tearDown(self):
-        TelePyMonitor.disable_address_reuse()
+        TeleXMonitor.disable_address_reuse()
 
         return super().tearDown()
 
@@ -69,7 +69,7 @@ class TestMonitor(TestBase):
         import time
         from urllib import error, request
 
-        from telepy import install_monitor
+        from telex import install_monitor
 
         def server():
             monitor = install_monitor(port=port, in_thread=True)
@@ -144,7 +144,7 @@ class TestMonitor(TestBase):
         import time
         from urllib import error, request
 
-        from telepy import install_monitor
+        from telex import install_monitor
 
         def client():
             # Wait for server to be ready with retry logic
@@ -204,7 +204,7 @@ class TestMonitor(TestBase):
     def test_stack(self):
         """Test stack command basic functionality."""
         self.compound_template_command(
-            "stack", expected_data=["MainThread", "daemon", "telepy"]
+            "stack", expected_data=["MainThread", "daemon", "telex"]
         )
 
     def test_stack_help(self):
@@ -225,7 +225,7 @@ class TestMonitor(TestBase):
         self.compound_template_command(
             "stack",
             args=["--strip-site-packages"],
-            expected_data=["MainThread", "daemon", "telepy"],
+            expected_data=["MainThread", "daemon", "telex"],
         )
 
     def test_stack_strip_site_packages_short(self):
@@ -233,7 +233,7 @@ class TestMonitor(TestBase):
         self.compound_template_command(
             "stack",
             args=["-s"],
-            expected_data=["MainThread", "daemon", "telepy"],
+            expected_data=["MainThread", "daemon", "telex"],
         )
 
     def test_stack_strip_cwd(self):
@@ -241,7 +241,7 @@ class TestMonitor(TestBase):
         self.compound_template_command(
             "stack",
             args=["--strip-cwd"],
-            expected_data=["MainThread", "daemon", "telepy"],
+            expected_data=["MainThread", "daemon", "telex"],
         )
 
     def test_stack_strip_cwd_short(self):
@@ -249,7 +249,7 @@ class TestMonitor(TestBase):
         self.compound_template_command(
             "stack",
             args=["-c"],
-            expected_data=["MainThread", "daemon", "telepy"],
+            expected_data=["MainThread", "daemon", "telex"],
         )
 
     def test_stack_combined_flags(self):
@@ -257,11 +257,11 @@ class TestMonitor(TestBase):
         self.compound_template_command(
             "stack",
             args=["-s", "-c"],
-            expected_data=["MainThread", "daemon", "telepy"],
+            expected_data=["MainThread", "daemon", "telex"],
         )
 
     def launch_server(self, port: int = 6666, in_thread: bool = False) -> None:
-        from telepy import install_monitor
+        from telex import install_monitor
 
         monitor = install_monitor(port=port, in_thread=in_thread)
         while monitor.is_alive:
@@ -320,7 +320,7 @@ class TestMonitor(TestBase):
             self.assertEqual(response.status, 200)
             data = json.loads(response.read().decode())
             self.assertIn("stopped", data["data"])
-            filename = f"telepy-monitor-{pid}.svg"
+            filename = f"telex-monitor-{pid}.svg"
             self.assertIn(filename, data["data"])
             self.assertIn(filename + ".folded", data["data"])
             os.unlink(filename)
@@ -394,7 +394,7 @@ class TestMonitor(TestBase):
                 self.assertEqual(response.status, 200)
                 data = json.loads(response.read().decode())
                 self.assertIn("stopped", data["data"])
-                filename = f"telepy-monitor-{os.getppid()}.svg"
+                filename = f"telex-monitor-{os.getppid()}.svg"
                 self.assertIn(filename, data["data"])
                 self.assertIn(filename + ".folded", data["data"])
                 os.unlink(filename)
@@ -443,7 +443,7 @@ class TestMonitor(TestBase):
         import time
         from urllib import request
 
-        from telepy import install_monitor
+        from telex import install_monitor
 
         port = 4533
         monitor = install_monitor(port=port)
@@ -485,7 +485,7 @@ class TestMonitor(TestBase):
             self.assertEqual(response.status, 200)
             data = json.loads(response.read().decode())
             self.assertIn("stopped", data["data"])
-            filename = f"telepy-monitor-{pid}.svg"
+            filename = f"telex-monitor-{pid}.svg"
             self.assertIn(filename, data["data"])
 
             # Verify the SVG contains inverted orientation metadata
@@ -794,7 +794,7 @@ class TestMonitor(TestBase):
         """Test gc-objects ValueError exception handling from analyzer."""
         from unittest.mock import MagicMock, patch
 
-        from telepy.monitor import gc_objects
+        from telex.monitor import gc_objects
 
         # Create mock request and response objects
         req = MagicMock()
@@ -802,7 +802,7 @@ class TestMonitor(TestBase):
         resp = MagicMock()
 
         # Mock the analyzer to raise ValueError
-        with patch("telepy.monitor.get_analyzer") as mock_get_analyzer:
+        with patch("telex.monitor.get_analyzer") as mock_get_analyzer:
             mock_analyzer = mock_get_analyzer.return_value
             mock_analyzer.get_object_stats_formatted.side_effect = ValueError(
                 "Test ValueError from analyzer"
@@ -824,14 +824,14 @@ class TestRegisterEndpoint(TestBase):
     def setUp(self):
         """Save the current endpoint registry state."""
         super().setUp()
-        from telepy.monitor import ENDPOINT_REGISTRY
+        from telex.monitor import ENDPOINT_REGISTRY
 
         # Save current registry state
         self.original_registry = ENDPOINT_REGISTRY.copy()
 
     def tearDown(self):
         """Restore the original endpoint registry state."""
-        from telepy.monitor import ENDPOINT_REGISTRY
+        from telex.monitor import ENDPOINT_REGISTRY
 
         # Restore original registry
         ENDPOINT_REGISTRY.clear()
@@ -840,7 +840,7 @@ class TestRegisterEndpoint(TestBase):
 
     def test_register_endpoint_success(self):
         """Test successfully registering a new endpoint."""
-        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+        from telex.monitor import ENDPOINT_REGISTRY, register_endpoint
 
         @register_endpoint("/test-endpoint")
         def test_handler(req, resp):
@@ -852,7 +852,7 @@ class TestRegisterEndpoint(TestBase):
 
     def test_register_endpoint_duplicate_raises_error(self):
         """Test that registering duplicate endpoint raises ValueError."""
-        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+        from telex.monitor import ENDPOINT_REGISTRY, register_endpoint
 
         # Clear the registry to avoid conflicts with module-level registrations
         ENDPOINT_REGISTRY.clear()
@@ -874,7 +874,7 @@ class TestRegisterEndpoint(TestBase):
 
     def test_register_endpoint_different_paths_success(self):
         """Test registering multiple endpoints with different paths."""
-        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+        from telex.monitor import ENDPOINT_REGISTRY, register_endpoint
 
         @register_endpoint("/endpoint-1")
         def handler1(req, resp):
@@ -892,7 +892,7 @@ class TestRegisterEndpoint(TestBase):
 
     def test_register_endpoint_prevents_overwrite_existing(self):
         """Test that existing endpoints cannot be overwritten."""
-        from telepy.monitor import ENDPOINT_REGISTRY, register_endpoint
+        from telex.monitor import ENDPOINT_REGISTRY, register_endpoint
 
         # Clear the registry to avoid conflicts with module-level registrations
         ENDPOINT_REGISTRY.clear()

@@ -18,7 +18,7 @@ def prepare_flags():
     """Prepare compiler flags based on platform"""
     if IS_WINDOWS:
         # MSVC flags
-        flags = os.environ.get("TELEPY_FLAGS", "").split(" ")
+        flags = os.environ.get("TELEX_FLAGS", "").split(" ")
         # Add Windows-specific flags if not present
         default_flags = ["/W4", "/EHsc", "/O2"]
         for flag in default_flags:
@@ -27,7 +27,7 @@ def prepare_flags():
         return [f for f in flags if f != ""]
     else:
         # GCC/Clang flags for Unix-like systems
-        flags = os.environ.get("TELEPY_FLAGS", "").split(" ")
+        flags = os.environ.get("TELEX_FLAGS", "").split(" ")
         if "-g" not in flags:
             flags.append("-O2")
 
@@ -67,7 +67,7 @@ class Builder(build_ext):
 
             # Compile tree.cc
             objects = compiler.compile(
-                ["src/telepy/telepysys/tree.cc"],
+                ["src/telex/telexsys/tree.cc"],
                 output_dir="build/temp",
                 extra_postargs=extra_args,
             )
@@ -80,7 +80,7 @@ class Builder(build_ext):
                 "-c",
                 "-std=c++11",
                 "-fPIC",
-                "src/telepy/telepysys/tree.cc",
+                "src/telex/telexsys/tree.cc",
                 "-pthread",
                 "-o",
                 "build/tree.o",
@@ -91,10 +91,10 @@ class Builder(build_ext):
         super().run()
 
     def build_extensions(self):
-        # Add tree object files to the telepysys extension
+        # Add tree object files to the telexsys extension
         if hasattr(self, "tree_objects"):
             for ext in self.extensions:
-                if ext.name == "telepy._telepysys":
+                if ext.name == "telex._telexsys":
                     if IS_WINDOWS:
                         # On Windows, add as extra objects
                         if not hasattr(ext, "extra_objects"):
@@ -108,26 +108,26 @@ class Builder(build_ext):
 
 ext_modules = [
     Extension(
-        name="telepy._telepysys",
+        name="telex._telexsys",
         sources=[
-            "src/telepy/telepysys/telepysys.c",
-            "src/telepy/telepysys/inject.c",
+            "src/telex/telexsys/telexsys.c",
+            "src/telex/telexsys/inject.c",
         ],
-        include_dirs=["src/telepy/telepysys"],
+        include_dirs=["src/telex/telexsys"],
         extra_compile_args=flags,
         language="c++",
     ),
     Extension(
-        name="telepy._gc_stats",
-        sources=["src/telepy/telepysys/gc_stats.c"],
-        include_dirs=["src/telepy/telepysys"],
+        name="telex._gc_stats",
+        sources=["src/telex/telexsys/gc_stats.c"],
+        include_dirs=["src/telex/telexsys"],
         extra_compile_args=flags,
         language="c",
     ),
 ]
 
 setup(
-    name="telepy",
+    name="telex",
     description="A Python diagnostic tool.",
     author="changlehung",
     author_email="changlehung@gmail.com",

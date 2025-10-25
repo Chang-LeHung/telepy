@@ -17,7 +17,7 @@ from prompt_toolkit.output import Output
 from pygments.lexers.python import PythonLexer  # type: ignore
 from rich import print
 
-from ._telepysys import __version__
+from ._telexsys import __version__
 from .commands import COMMAND_REGISTRY, CommandManager
 
 MAX_HISTORY_SIZE: Final = 10000
@@ -26,13 +26,12 @@ MAX_UNIQUE_COMMANDS: Final = 1000
 
 EXIT_COMMANDS: Final = ["exit", "quit", "q"]
 
-PROMPT: Final = rf"""Welcome to TelePy Shell {__version__}
-  ______     __     ____           _____ __         ____
- /_  __/__  / /__  / __ \__  __   / ___// /_  ___  / / /
-  / / / _ \/ / _ \/ /_/ / / / /   \__ \/ __ \/ _ \/ / /
- / / /  __/ /  __/ ____/ /_/ /   ___/ / / / /  __/ / /
-/_/  \___/_/\___/_/    \__, /   /____/_/ /_/\___/_/_/
-                      /____/
+PROMPT: Final = rf"""Welcome to TeleX Shell {__version__}
+  ______     __    _  __  _____ __         ____
+ /_  __/__  / /__ | |/ / / ___// /_  ___  / / /
+  / / / _ \/ / _ \|   /  \__ \/ __ \/ _ \/ / /
+ / / /  __/ /  __/   |  ___/ / / / /  __/ / /
+/_/  \___/_/\___/_/|_| /____/_/ /_/\___/_/_/
 """
 
 
@@ -42,12 +41,12 @@ class CaseInsensitiveFrequencyCompleter(Completer):
         registry_commands = list(COMMAND_REGISTRY.keys())
         shell_commands = ["exit", "attach"]  # Commands specific to shell
         self.commands = registry_commands + shell_commands
-        # ensure ~/.telepy exists
-        if not os.path.exists(os.path.join(os.path.expanduser("~"), ".telepy")):
-            os.makedirs(os.path.join(os.path.expanduser("~"), ".telepy"))
+        # ensure ~/.telex exists
+        if not os.path.exists(os.path.join(os.path.expanduser("~"), ".telex")):
+            os.makedirs(os.path.join(os.path.expanduser("~"), ".telex"))
         self.history = history
         if not self.history:
-            self.history = os.path.join(os.path.expanduser("~"), ".telepy", "history")
+            self.history = os.path.join(os.path.expanduser("~"), ".telex", "history")
         if not os.path.exists(self.history):
             open(self.history, "w", encoding="utf-8").close()
 
@@ -96,7 +95,7 @@ class ShellState(Enum):
     DETACHED = 1
 
 
-class TelePyShell:
+class TeleXShell:
     def __init__(
         self,
         input: Input | None = None,

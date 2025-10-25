@@ -16,43 +16,43 @@ from typing import Any, Final, Union
 from rich.table import Table
 
 from . import logger
-from ._telepysys import sched_yield
-from .config import TelePySamplerConfig
+from ._telexsys import sched_yield
+from .config import TeleXSamplerConfig
 from .flamegraph import FlameGraph, process_stack_trace
 from .sampler import (
     PyTorchProfilerMiddleware,
-    TelepySysAsyncWorkerSampler,
-    TelepySysSampler,
+    TelexSysAsyncWorkerSampler,
+    TelexSysSampler,
 )
 
 # Detect platform
 IS_WINDOWS = sys.platform == "win32" or platform.system() == "Windows"
 
 # Type alias for the sampler that can be either type based on platform
-SamplerType = Union[TelepySysAsyncWorkerSampler, TelepySysSampler]  # noqa
+SamplerType = Union[TelexSysAsyncWorkerSampler, TelexSysSampler]  # noqa
 
 # String constants
 CMD_SEPARATOR: Final = "--"
 
 MODULE_MAIN: Final = "__main__"
-MODULE_TELEPY_MAIN: Final = "__telepy_main__"
+MODULE_TELEX_MAIN: Final = "__telex_main__"
 MODULE_FILE: Final = "__file__"
 MODULE_BUILTINS: Final = "__builtins__"
 
 ERROR_SAMPLER_EXISTS: Final = "A sampler instance already exists in this process"
-ERROR_ENV_INITIALIZED: Final = "telepy environment has been initialized."
-ERROR_ENV_NOT_INITIALIZED: Final = "telepy environment is not initialized"
-ERROR_INVALID_CODE_MODE: Final = "telepy: invalid code mode"
+ERROR_ENV_INITIALIZED: Final = "telex environment has been initialized."
+ERROR_ENV_NOT_INITIALIZED: Final = "telex environment is not initialized"
+ERROR_INVALID_CODE_MODE: Final = "telex: invalid code mode"
 
 MESSAGE_FORKSERVER_NO_MERGE: Final = (
     "Because you are using the multiprocessing module with "
     "the forkserver mode, we will not merge the flamegraphs."
 )
 
-TITLE: Final = "TelePy Flame Graph"
-TITLE_SAMPLER_METRICS: Final = "TelePySampler Metrics"
+TITLE: Final = "TeleX Flame Graph"
+TITLE_SAMPLER_METRICS: Final = "TeleXSampler Metrics"
 
-INTERNAL_ARGV: Final = "telepy_argv"
+INTERNAL_ARGV: Final = "telex_argv"
 
 
 def patch_os_fork_in_child():
@@ -98,7 +98,7 @@ def get_child_process_args() -> list[str]:
 
 def patch_multiprocesssing():
     """
-    Patches the multiprocessing spawn mechanism to inject telepy code to profile.
+    Patches the multiprocessing spawn mechanism to inject telex code to profile.
     """
     args = Environment.get_args()
     sampler = Environment.get_sampler()
@@ -115,13 +115,13 @@ def patch_multiprocesssing():
             cmd = args[idx + 1]
 
             if "forkserver" in cmd:
-                # forkserver mode, we need to inject telepy code to profile.
-                # we do not launch telepy in the server process, but we will
+                # forkserver mode, we need to inject telex code to profile.
+                # we do not launch telex in the server process, but we will
                 # hack the fork syscall to sample its child processes.
                 new_args = [
                     *args[:idx],
                     "-m",
-                    "telepy",
+                    "telex",
                     "--fork-server",
                     "--no-merge",
                     *get_child_process_args(),
@@ -138,7 +138,7 @@ def patch_multiprocesssing():
                 new_args = [
                     *args[:idx],
                     "-m",
-                    "telepy",
+                    "telex",
                     "--mp",
                     *get_child_process_args(),
                     *args[idx : idx + 2],
@@ -171,7 +171,7 @@ class Environment:
 
     # Class attributes to store singleton instances
     _sampler: None | SamplerType = None
-    _args: None | TelePySamplerConfig = None
+    _args: None | TeleXSamplerConfig = None
 
     def __new__(cls):
         """Prevent instantiation of Environment class."""
@@ -192,12 +192,12 @@ class Environment:
         cls._sampler = sampler
 
     @classmethod
-    def get_args(cls) -> None | TelePySamplerConfig:
+    def get_args(cls) -> None | TeleXSamplerConfig:
         """Get the singleton args instance."""
         return cls._args
 
     @classmethod
-    def set_args(cls, args: TelePySamplerConfig) -> None:
+    def set_args(cls, args: TeleXSamplerConfig) -> None:
         """Set the singleton args instance."""
         cls._args = args
 
@@ -210,15 +210,15 @@ class Environment:
             cls.initialized = False
 
     @classmethod
-    def _create_sampler(cls, config: TelePySamplerConfig) -> SamplerType:
+    def _create_sampler(cls, config: TeleXSamplerConfig) -> SamplerType:
         """
         Create and configure a sampler instance based on the platform.
 
-        On Windows, creates a TelepySysSampler (main thread only).
-        On Unix platforms, creates a TelepySysAsyncWorkerSampler (worker thread).
+        On Windows, creates a TelexSysSampler (main thread only).
+        On Unix platforms, creates a TelexSysAsyncWorkerSampler (worker thread).
 
         Args:
-            config (TelePySamplerConfig): The configuration for the sampler.
+            config (TeleXSamplerConfig): The configuration for the sampler.
 
         Returns:
             SamplerType: A configured sampler instance appropriate for the platform.
@@ -228,11 +228,11 @@ class Environment:
 
         if IS_WINDOWS:  # pragma: no cover
             # Windows: Use main thread sampler
-            sampler = TelepySysSampler(
+            sampler = TelexSysSampler(
                 config.interval,
                 debug=config.debug,
                 ignore_frozen=config.ignore_frozen,
-                ignore_self=not config.include_telepy,
+                ignore_self=not config.include_telex,
                 tree_mode=config.tree_mode,
                 focus_mode=config.focus_mode,
                 regex_patterns=config.regex_patterns,
@@ -244,11 +244,11 @@ class Environment:
             sampler.adjust()
         else:
             # Unix: Use worker thread sampler
-            sampler = TelepySysAsyncWorkerSampler(
+            sampler = TelexSysAsyncWorkerSampler(
                 config.interval,
                 debug=config.debug,
                 ignore_frozen=config.ignore_frozen,
-                ignore_self=not config.include_telepy,
+                ignore_self=not config.include_telex,
                 tree_mode=config.tree_mode,
                 focus_mode=config.focus_mode,
                 regex_patterns=config.regex_patterns,
@@ -289,7 +289,7 @@ class Environment:
     @classmethod
     def patch_sys_exit(cls, *_args, **kwargs):  # pragma: no cover
         """
-        `telepy_finalize` will not be called when the process exits. We need to stop the
+        `telex_finalize` will not be called when the process exits. We need to stop the
         sampler and save the data.
         """
         sampler = cls.get_sampler()
@@ -298,7 +298,7 @@ class Environment:
             if args.verbose:
                 logger.log_success_panel(
                     f"Process {os.getpid()} exited early via sys.exit(), "
-                    "telepy saved profiling data and terminated. "
+                    "telex saved profiling data and terminated. "
                     "(You might be using the multiprocessing module)"
                 )
             # forserver mode will not start the sampler.
@@ -310,7 +310,7 @@ class Environment:
     @classmethod
     def patch_os__exit(cls, *_args, **kwargs):  # pragma: no cover
         """
-        `telepy_finalize` will not be called when the process exits. We need to stop the
+        `telex_finalize` will not be called when the process exits. We need to stop the
         sampler and save the data.
         """
         sampler = cls.get_sampler()
@@ -319,7 +319,7 @@ class Environment:
             if args.verbose:
                 logger.log_success_panel(
                     f"Process {os.getpid()} exited early via os._exit(), "
-                    "telepy saved profiling data and terminated."
+                    "telex saved profiling data and terminated."
                     "(You might be using the multiprocessing module)"
                 )
             # forserver mode will not start the sampler.
@@ -329,14 +329,14 @@ class Environment:
         cls._os_exit(*_args, **kwargs)
 
     @classmethod
-    def init_telepy_environment(
-        cls, config: TelePySamplerConfig, mode: CodeMode = CodeMode.PyFile
+    def init_telex_environment(
+        cls, config: TeleXSamplerConfig, mode: CodeMode = CodeMode.PyFile
     ) -> dict[str, Any]:
         """
-        Initialize telepy environment from TelePySamplerConfig.
+        Initialize telex environment from TeleXSamplerConfig.
 
         Args:
-            config (TelePySamplerConfig): The configuration for the process.
+            config (TeleXSamplerConfig): The configuration for the process.
             mode (CodeMode): The code execution mode.
         """
         cls.code_mode = mode
@@ -374,7 +374,7 @@ class Environment:
                     setattr(main_mod, MODULE_FILE, "<unknown>")
                     file_name = "<unknown>"
                 setattr(main_mod, MODULE_BUILTINS, globals()[MODULE_BUILTINS])
-                sys.modules[MODULE_TELEPY_MAIN] = sys.modules[MODULE_MAIN]
+                sys.modules[MODULE_TELEX_MAIN] = sys.modules[MODULE_MAIN]
                 sys.modules[MODULE_MAIN] = main_mod
                 old_arg = sys.argv
                 setattr(sys, INTERNAL_ARGV, old_arg)
@@ -389,7 +389,7 @@ class Environment:
                 string_mod = types.ModuleType(MODULE_MAIN)
                 setattr(string_mod, MODULE_FILE, "<string>")
                 setattr(string_mod, MODULE_BUILTINS, globals()[MODULE_BUILTINS])
-                sys.modules[MODULE_TELEPY_MAIN] = sys.modules[MODULE_MAIN]
+                sys.modules[MODULE_TELEX_MAIN] = sys.modules[MODULE_MAIN]
                 sys.modules[MODULE_MAIN] = string_mod
                 old_arg = sys.argv
                 setattr(sys, INTERNAL_ARGV, old_arg)
@@ -413,11 +413,11 @@ class Environment:
             raise RuntimeError(ERROR_INVALID_CODE_MODE)  # pragma: no cover
 
     @classmethod
-    def destory_telepy_enviroment(cls):
+    def destory_telex_enviroment(cls):
         """
-        Cleans up and restores the environment set up by Telepy.
+        Cleans up and restores the environment set up by Telex.
 
-        This method reverses the changes made during the initialization of the Telepy environment.
+        This method reverses the changes made during the initialization of the Telex environment.
         It restores the original `sys.exit` and `os._exit` functions, resets `sys.modules` and `sys.argv`
         if code was executed in file or string mode, and removes the current working directory from `sys.path`.
         It also marks the environment as uninitialized.
@@ -432,8 +432,8 @@ class Environment:
             os._exit = cls._os_exit
             util.spawnv_passfds = cls._spawnv_passfds
             if cls.code_mode in (CodeMode.PyFile, CodeMode.PyString):
-                sys.modules[MODULE_MAIN] = sys.modules[MODULE_TELEPY_MAIN]
-                del sys.modules[MODULE_TELEPY_MAIN]
+                sys.modules[MODULE_MAIN] = sys.modules[MODULE_TELEX_MAIN]
+                del sys.modules[MODULE_TELEX_MAIN]
                 sys.argv = getattr(sys, INTERNAL_ARGV)
                 delattr(sys, INTERNAL_ARGV)
                 sys.path.remove(os.getcwd())
@@ -445,12 +445,12 @@ class Environment:
 
 
 @contextlib.contextmanager
-def telepy_env(config: TelePySamplerConfig, code_mode: CodeMode = CodeMode.PyFile):
+def telex_env(config: TeleXSamplerConfig, code_mode: CodeMode = CodeMode.PyFile):
     """
-    Context manager that prepares the TelePy environment for sampling and restores it afterwards.
+    Context manager that prepares the TeleX environment for sampling and restores it afterwards.
 
     Args:
-        config (TelePySamplerConfig): The configuration object used to bootstrap TelePy.
+        config (TeleXSamplerConfig): The configuration object used to bootstrap TeleX.
         code_mode (CodeMode, optional): Execution mode for the profiled code. Defaults to ``CodeMode.PyFile``.
 
     Yields:
@@ -462,17 +462,17 @@ def telepy_env(config: TelePySamplerConfig, code_mode: CodeMode = CodeMode.PyFil
     Notes:
         After the context exits, the process-wide hooks are reverted but the singleton sampler state
         remains. Explicitly call `Environment.clear_instances` (or the helper `clear_resources`)
-        when you no longer need the sampler to fully release TelePy resources.
+        when you no longer need the sampler to fully release TeleX resources.
     """  # noqa: E501
-    global_dict = Environment.init_telepy_environment(config, code_mode)
+    global_dict = Environment.init_telex_environment(config, code_mode)
     current_sampler = Environment.get_sampler()
     try:
         yield global_dict, current_sampler
     except Exception:
-        telepy_finalize()
+        telex_finalize()
         raise
     finally:
-        Environment.destory_telepy_enviroment()
+        Environment.destory_telex_enviroment()
 
 
 # read only, if the sample count is less than this value, telely will print warning info.
@@ -724,15 +724,15 @@ def clear_resources():
     the environment state and release any held resources.
 
     This function should be called to reset the environment and free up any resources
-    if you do not want to call `telepy_finalize`.
+    if you do not want to call `telex_finalize`.
     """
     Environment.clear_instances()
 
 
-def telepy_finalize(save: bool = True) -> None:
+def telex_finalize(save: bool = True) -> None:
     """Stop and clean up the global sampler resource.
 
-    This function should be called to properly finalize the telepy environment
+    This function should be called to properly finalize the telex environment
     by stopping the global sampler instance and save the profiling data.
     """
     if not Environment.sampler_created:
@@ -798,8 +798,8 @@ def _do_save():
         table.add_row(
             "Sampling Time Rate (Versus Program Time)", f"{acc / (end - start):.2%}"
         )
-        table.add_row("TelePy Sampler Start Time (Monotonic Mircoseconds)", f"{start}")
-        table.add_row("TelePy Sampler End Time (Monotonic Mircoseconds)", f"{end}")
+        table.add_row("TeleX Sampler Start Time (Monotonic Mircoseconds)", f"{start}")
+        table.add_row("TeleX Sampler End Time (Monotonic Mircoseconds)", f"{end}")
         table.add_row("Sampling Count", str(current_sampler.sampling_times))
 
         console.print(table)
