@@ -155,6 +155,13 @@ is_stdlib_or_third_party(SamplerObject* sampler, PyObject* filename) {
     size_t filepath_len = strlen(filepath);
     size_t std_path_len = strlen(sampler->std_path);
 
+    printf("filepath: %s, std_path: %s\n", filepath, sampler->std_path);
+
+    // Safety check for buffer overflow
+    if (filepath_len < std_path_len) {
+        return 0;
+    }
+
     // Check if filepath contains std_path (case-insensitive)
     for (size_t i = 0; i <= filepath_len - std_path_len; i++) {
         if (_strnicmp(filepath + i, sampler->std_path, std_path_len) == 0) {
