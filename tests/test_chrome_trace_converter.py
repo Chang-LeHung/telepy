@@ -12,6 +12,7 @@ from telepy.chrome_trace_converter import (
     ChromeTraceConverter,
     convert_chrome_trace_to_folded,
 )
+
 from tests.base import TestBase
 
 

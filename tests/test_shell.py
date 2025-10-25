@@ -7,7 +7,6 @@ import time
 import unittest
 
 from prompt_toolkit.input.defaults import create_pipe_input
-
 from telepy import TelePyShell, install_monitor
 from telepy.shell import (
     MAX_HISTORY_SIZE,
