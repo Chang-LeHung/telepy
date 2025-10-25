@@ -23,7 +23,7 @@ from . import _telepysys
 from .thread import in_main_thread
 
 # Check if we're on Windows
-IS_WINDOWS = sys.platform == "win32" or platform.system() == "Windows"
+IS_WINDOWS = sys.platform == "win32"
 
 
 class SamplerMiddleware(ABC):
