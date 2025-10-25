@@ -1,5 +1,5 @@
 """
-TelePy command entry point.
+TeleX command entry point.
 """
 
 from __future__ import annotations
@@ -28,11 +28,11 @@ from rich.traceback import Traceback, install
 from rich_argparse import RichHelpFormatter
 
 from . import logger
-from ._telepysys import __version__
-from .config import TelePyConfig, TelePySamplerConfig, merge_config_with_args
-from .environment import CodeMode, telepy_env, telepy_finalize
+from ._telexsys import __version__
+from .config import TeleXConfig, TeleXSamplerConfig, merge_config_with_args
+from .environment import CodeMode, telex_env, telex_finalize
 from .flamegraph import FlameGraph
-from .shell import TelePyShell
+from .shell import TeleXShell
 
 console = logger.console
 err_console = logger.err_console
@@ -224,8 +224,8 @@ class PythonFileProfilingHandler(ArgsHandler):
         if not filename.endswith(".py"):
             return False
 
-        config = TelePySamplerConfig.from_namespace(args)
-        with telepy_env(config, CodeMode.PyFile) as (global_dict, sampler):
+        config = TeleXSamplerConfig.from_namespace(args)
+        with telex_env(config, CodeMode.PyFile) as (global_dict, sampler):
             assert sampler is not None
             assert global_dict is not None
             code = args.input[0].read()
@@ -233,7 +233,7 @@ class PythonFileProfilingHandler(ArgsHandler):
             sampler.start()
             exec(pyc, global_dict)
         # Always call finalize after exec completes
-        telepy_finalize()
+        telex_finalize()
         return True
 
 
@@ -251,8 +251,8 @@ class PyCommandStringProfilingHandler(ArgsHandler):
         if args.cmd is None:
             return False
         str_code = args.cmd
-        config = TelePySamplerConfig.from_namespace(args)
-        with telepy_env(config, CodeMode.PyString) as (global_dict, sampler):
+        config = TeleXSamplerConfig.from_namespace(args)
+        with telex_env(config, CodeMode.PyString) as (global_dict, sampler):
             assert sampler is not None
             assert global_dict is not None
             pyc = compile(str_code, "<string>", "exec")
@@ -261,7 +261,7 @@ class PyCommandStringProfilingHandler(ArgsHandler):
                 sampler.start()
             exec(pyc, global_dict)
         # Always call finalize after exec completes
-        telepy_finalize()
+        telex_finalize()
         return True
 
 
@@ -279,8 +279,8 @@ class PyCommandModuleProfilingHandler(ArgsHandler):
         if args.module is None:
             return False
         module_name = args.module
-        config = TelePySamplerConfig.from_namespace(args)
-        with telepy_env(config, CodeMode.PyModule) as (global_dict, sampler):
+        config = TeleXSamplerConfig.from_namespace(args)
+        with telex_env(config, CodeMode.PyModule) as (global_dict, sampler):
             assert sampler is not None
             assert global_dict is not None
             import runpy
@@ -295,7 +295,7 @@ class PyCommandModuleProfilingHandler(ArgsHandler):
                 sampler.start()
             exec(pyc, global_dict)
         # Always call finalize after exec completes
-        telepy_finalize()
+        telex_finalize()
         return True
 
 
@@ -312,7 +312,7 @@ class ShellHandler(ArgsHandler):
     def handle(self, args: argparse.Namespace) -> bool:  # pragma: no cover
         if len(sys.argv) > 1:
             return False
-        shell = TelePyShell()
+        shell = TeleXShell()
         shell.run()
         return True
 
@@ -327,7 +327,7 @@ def dispatch(args: argparse.Namespace) -> None:
     )
 
 
-def telepy_help(parser: argparse.ArgumentParser):
+def telex_help(parser: argparse.ArgumentParser):
     parser.print_help()
     table = Table(title="Recommended Interval", show_lines=True)
 
@@ -335,7 +335,7 @@ def telepy_help(parser: argparse.ArgumentParser):
     table.add_column("Unit", style="green")
     table.add_column("Recommended Interval (μs)", style="magenta")
 
-    table.add_row("< 1ms", "ms", "Uninstall TelePy, you do not need it at all.")
+    table.add_row("< 1ms", "ms", "Uninstall TeleX, you do not need it at all.")
     table.add_row("< 100ms", "ms", "10")
     table.add_row("x seconds", "s", "1000")
     table.add_row("x minutes", "m", "10000")
@@ -346,15 +346,15 @@ def telepy_help(parser: argparse.ArgumentParser):
 
 def _pre_checks(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if args.help:
-        telepy_help(parser)
+        telex_help(parser)
         sys.exit(0)
 
     if args.version:
-        print(f"TelePy version {__version__}")
+        print(f"TeleX version {__version__}")
         sys.exit(0)
 
     if args.create_config:
-        config_manager = TelePyConfig()
+        config_manager = TeleXConfig()
         config_manager.create_example_config()
         sys.exit(0)
 
@@ -368,8 +368,8 @@ def main():
     arguments = merge_config_with_args(arguments)
 
     parser = argparse.ArgumentParser(
-        description="TelePy is a very powerful python profiler and dignostic tool."
-        " Report bugs here https://github.com/Chang-LeHung/telepy",
+        description="TeleX is a very powerful python profiler and dignostic tool."
+        " Report bugs here https://github.com/Chang-LeHung/telex",
         add_help=False,
         formatter_class=RichHelpFormatter,
     )
@@ -396,8 +396,8 @@ def main():
         "--parse",
         action="store_true",
         help="Parse stack trace data to generate a flamegraph svg file, "
-        "such as `telepy -p result.folded`. Multiple input files are supported, "
-        "TelePy will merge them into a single SVG file.",
+        "such as `telex -p result.folded`. Multiple input files are supported, "
+        "TeleX will merge them into a single SVG file.",
     )
     parser.add_argument(
         "-i",
@@ -407,7 +407,7 @@ def main():
         help="Sampling interval in microseconds (default: 8000, i.e., 8 ms). "
         "The minimum value is 5; if a smaller value is specified, it will be"
         " set to 5. The larger the value, the higher the overhead. Howerever, if you "
-        "enable debug mode, telepy will not check the value.",
+        "enable debug mode, telex will not check the value.",
     )
     parser.add_argument(
         "--debug",
@@ -432,9 +432,9 @@ def main():
         help="Ignore frozen modules (default: False).",
     )
     parser.add_argument(
-        "--include-telepy",
+        "--include-telex",
         action="store_true",
-        help="Whether to include telepy in the stack trace (default: False).",
+        help="Whether to include telex in the stack trace (default: False).",
     )
     parser.add_argument(
         "--focus-mode",
@@ -521,7 +521,7 @@ def main():
     parser.add_argument(
         "--create-config",
         action="store_true",
-        help="Create an example configuration file at ~/.telepy/.telepyrc and exit.",
+        help="Create an example configuration file at ~/.telex/.telexrc and exit.",
     )
     # PyTorch profiler arguments
     parser.add_argument(
@@ -595,8 +595,8 @@ def main():
             console.print(
                 Panel(
                     "[bold red]The following traceback may be useful for debugging.[/bold red]"  # noqa: E501
-                    " If [bold cyan]telepy[/bold cyan] leads to this error, please report it at:"  # noqa: E501
-                    " [underline blue]https://github.com/Chang-LeHung/telepy/issues[/underline blue]",  # noqa: E501
+                    " If [bold cyan]telex[/bold cyan] leads to this error, please report it at:"  # noqa: E501
+                    " [underline blue]https://github.com/Chang-LeHung/telex/issues[/underline blue]",  # noqa: E501
                     title="[bold yellow]⚠ Error Traceback[/bold yellow]",
                     style="red",
                     border_style="bright_red",

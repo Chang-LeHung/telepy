@@ -28,7 +28,7 @@ class TestChromeTraceCLI(TestBase):
 
     def test_cli_help_display(self):
         """Test CLI help display."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         old_argv = sys.argv
         old_stdout = sys.stdout
@@ -50,7 +50,7 @@ class TestChromeTraceCLI(TestBase):
 
     def test_cli_missing_trace_file(self):
         """Test CLI with missing trace file argument."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         old_argv = sys.argv
 
@@ -65,7 +65,7 @@ class TestChromeTraceCLI(TestBase):
 
     def test_cli_basic_conversion(self):
         """Test CLI basic conversion."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         output_file = "tests/test_files/trace_cli_test.folded"
         self.__class__.temp_files.append(output_file)
@@ -82,7 +82,7 @@ class TestChromeTraceCLI(TestBase):
 
     def test_cli_verbose_mode(self):
         """Test CLI with verbose flag."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         output_file = "tests/test_files/trace_cli_verbose_test.folded"
         self.__class__.temp_files.append(output_file)
@@ -101,7 +101,7 @@ class TestChromeTraceCLI(TestBase):
 
     def test_cli_svg_generation(self):
         """Test CLI with SVG generation."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         output_folded = "tests/test_files/trace_cli_svg_test.folded"
         output_svg = "tests/test_files/trace_cli_svg_test.svg"
@@ -127,7 +127,7 @@ class TestChromeTraceCLI(TestBase):
 
     def test_cli_svg_with_custom_params(self):
         """Test CLI SVG generation with custom parameters."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         output_folded = "tests/test_files/trace_cli_custom_svg_test.folded"
         output_svg = "tests/test_files/trace_cli_custom_svg_test.svg"
@@ -169,7 +169,7 @@ class TestChromeTraceCLI(TestBase):
 
     def test_cli_nonexistent_file(self):
         """Test CLI with non-existent trace file."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         old_argv = sys.argv
 
@@ -184,7 +184,7 @@ class TestChromeTraceCLI(TestBase):
 
     def test_cli_invalid_json(self):
         """Test CLI with invalid JSON file."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         # Create invalid JSON file
         invalid_json = "tests/test_files/invalid.json"
@@ -206,7 +206,7 @@ class TestChromeTraceCLI(TestBase):
 
     def test_cli_with_all_svg_options(self):
         """Test CLI with all SVG customization options."""
-        from telepy.chrome_trace_converter import main
+        from telex.chrome_trace_converter import main
 
         output_folded = "tests/test_files/trace_all_options_test.folded"
         output_svg = "tests/test_files/trace_all_options_test.svg"

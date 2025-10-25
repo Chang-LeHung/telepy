@@ -5,7 +5,7 @@ Unit tests for GC analyzer module.
 import gc
 import unittest
 
-from telepy.gc_analyzer import GCAnalyzer, get_analyzer
+from telex.gc_analyzer import GCAnalyzer, get_analyzer
 
 
 class TestGCAnalyzer(unittest.TestCase):
@@ -352,7 +352,7 @@ class TestGCAnalyzer(unittest.TestCase):
 
     def test_c_extension_availability(self):
         """Test C extension import handling."""
-        from telepy import gc_analyzer
+        from telex import gc_analyzer
 
         # Check if C extension flag is set
         self.assertIsInstance(gc_analyzer._HAS_C_EXTENSION, bool)
@@ -360,7 +360,7 @@ class TestGCAnalyzer(unittest.TestCase):
     def test_c_extension_fallback(self):
         """Test fallback to Python implementation when C extension unavailable."""
         # Save original value
-        from telepy import gc_analyzer
+        from telex import gc_analyzer
 
         original_has_c_ext = gc_analyzer._HAS_C_EXTENSION
 
@@ -387,7 +387,7 @@ class TestGCAnalyzer(unittest.TestCase):
         The actual coverage of lines 18-19 happens during the initial
         module import if the C extension is not installed.
         """
-        from telepy import gc_analyzer
+        from telex import gc_analyzer
 
         # The _HAS_C_EXTENSION flag should be properly set
         # based on whether C extension import succeeded or failed

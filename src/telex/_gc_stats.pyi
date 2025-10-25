@@ -1,5 +1,5 @@
 """
-Type stubs for telepy._gc_stats C extension module.
+Type stubs for telex._gc_stats C extension module.
 
 This module provides high-performance GC statistics collection
 implemented in C for better performance.
@@ -52,7 +52,7 @@ def calculate_stats(
 
     Example:
         >>> import gc
-        >>> from telepy import _gc_stats
+        >>> from telex import _gc_stats
         >>>
         >>> # Get all objects
         >>> objects = gc.get_objects()

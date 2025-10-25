@@ -87,8 +87,8 @@ jobs:
         shell: pwsh
         run: |
           $PKG_NAME = python setup.py --name
-          cd "src/$PKG_NAME/telepysys"
-          cl /EHsc /W4 /std:c++14 /DTELEPY_TEST tree.cc /Fe:tree_test.exe
+          cd "src/$PKG_NAME/telexsys"
+          cl /EHsc /W4 /std:c++14 /DTELEX_TEST tree.cc /Fe:tree_test.exe
           if ($LASTEXITCODE -ne 0) { exit 1 }
           .\tree_test.exe
           if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -96,7 +96,7 @@ jobs:
           $env:PYTHONIOENCODING = "utf-8"
           Get-ChildItem tests\test_*.py | ForEach-Object {
             Write-Host "Running $($_.Name)"
-            $env:TELEPY_SUPPRESS_OUTPUT = "1"
+            $env:TELEX_SUPPRESS_OUTPUT = "1"
             python -m unittest $_.FullName
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
@@ -114,8 +114,8 @@ jobs:
         shell: pwsh
         run: |
           $PKG_NAME = python setup.py --name
-          cd "src/$PKG_NAME/telepysys"
-          cl /EHsc /W4 /std:c++14 /DTELEPY_TEST tree.cc /Fe:tree_test.exe
+          cd "src/$PKG_NAME/telexsys"
+          cl /EHsc /W4 /std:c++14 /DTELEX_TEST tree.cc /Fe:tree_test.exe
           if ($LASTEXITCODE -ne 0) { exit 1 }
           .\tree_test.exe
           if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -123,7 +123,7 @@ jobs:
           $env:PYTHONIOENCODING = "utf-8"
           Get-ChildItem tests\test_*.py | ForEach-Object {
             Write-Host "Running $($_.Name)"
-            $env:TELEPY_SUPPRESS_OUTPUT = "1"
+            $env:TELEX_SUPPRESS_OUTPUT = "1"
             python -m unittest $_.FullName
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
@@ -139,8 +139,8 @@ jobs:
         shell: pwsh
         run: |
           $PKG_NAME = python setup.py --name
-          cd "src/$PKG_NAME/telepysys"
-          cl /EHsc /W4 /std:c++14 /DTELEPY_TEST tree.cc /Fe:tree_test.exe
+          cd "src/$PKG_NAME/telexsys"
+          cl /EHsc /W4 /std:c++14 /DTELEX_TEST tree.cc /Fe:tree_test.exe
           if ($LASTEXITCODE -ne 0) { exit 1 }
           .\tree_test.exe
           if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -148,7 +148,7 @@ jobs:
           $env:PYTHONIOENCODING = "utf-8"
           Get-ChildItem tests\test_*.py | ForEach-Object {
             Write-Host "Running $($_.Name)"
-            $env:TELEPY_SUPPRESS_OUTPUT = "1"
+            $env:TELEX_SUPPRESS_OUTPUT = "1"
             python -m unittest $_.FullName
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }

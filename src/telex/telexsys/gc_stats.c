@@ -10,7 +10,7 @@
 #include <Python.h>
 #include <assert.h>
 
-// Module state structure (currently empty, but following telepysys pattern)
+// Module state structure (currently empty, but following telexsys pattern)
 typedef struct {
     // Reserved for future use
     int initialized;

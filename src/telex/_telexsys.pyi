@@ -1,7 +1,7 @@
-# telepysys.pyi
+# telexsys.pyi
 
 """
-An utility module for telepysys
+An utility module for telexsys
 """
 
 from collections.abc import Callable
@@ -42,17 +42,17 @@ def vm_read(tid: int, name: str, level: int = 0) -> object | None:
 
     Example:
         >>> import threading
-        >>> from telepy import _telepysys
+        >>> from telex import _telexsys
         >>> def worker():
         ...     local_var = "Hello"
         ...     time.sleep(2)
         >>> thread = threading.Thread(target=worker)
         >>> thread.start()
         >>> # Read from top frame (level=0, default)
-        >>> value = _telepysys.vm_read(thread.ident, "local_var")
+        >>> value = _telexsys.vm_read(thread.ident, "local_var")
         >>> print(value)  # "Hello"
         >>> # Read from previous frame (level=1)
-        >>> value = _telepysys.vm_read(thread.ident, "some_var", level=1)
+        >>> value = _telexsys.vm_read(thread.ident, "some_var", level=1)
     """
     ...
 
@@ -81,16 +81,16 @@ def vm_write(tid: int, name: str, value: object) -> bool:
 
     Example:
         >>> import threading
-        >>> from telepy import _telepysys
+        >>> from telex import _telexsys
         >>> global_counter = 0
         >>> def worker():
         ...     global global_counter
         ...     time.sleep(5)
         >>> thread = threading.Thread(target=worker)
         >>> thread.start()
-        >>> success = _telepysys.vm_write(thread.ident, "global_counter", 42)
+        >>> success = _telexsys.vm_write(thread.ident, "global_counter", 42)
         >>> print(success)  # True
-        >>> value = _telepysys.vm_read(thread.ident, "global_counter")
+        >>> value = _telexsys.vm_read(thread.ident, "global_counter")
         >>> print(value)  # 42
     """
     ...
@@ -121,16 +121,16 @@ def top_namespace(
 
     Example:
         >>> import threading
-        >>> from telepy import _telepysys
+        >>> from telex import _telexsys
         >>> def worker():
         ...     local_var = "test"
         ...     global_var = "global"
         ...     time.sleep(5)
         >>> thread = threading.Thread(target=worker)
         >>> thread.start()
-        >>> locals_dict = _telepysys.top_namespace(thread.ident, 0)
-        >>> globals_dict = _telepysys.top_namespace(thread.ident, 1)
-        >>> both = _telepysys.top_namespace(thread.ident, 2)
+        >>> locals_dict = _telexsys.top_namespace(thread.ident, 0)
+        >>> globals_dict = _telexsys.top_namespace(thread.ident, 1)
+        >>> both = _telexsys.top_namespace(thread.ident, 2)
         >>> print(locals_dict.get('local_var'))  # "test"
         >>> print(globals_dict.get('__name__'))  # "__main__"
         >>> print(both[0].get('local_var'))  # "test" (locals)

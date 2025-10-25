@@ -1,25 +1,25 @@
 """
-Jupyter/IPython integration for TelePy using the same sampling pipeline as the CLI.
+Jupyter/IPython integration for TeleX using the same sampling pipeline as the CLI.
 
 Usage:
     1) In a notebook, load the extension once:
-             %load_ext telepy.jupyter
+             %load_ext telex.jupyter
 
     2) Profile a cell with CLI-like options and render SVG inline:
-             %%telepy --interval 8000 --ignore-frozen --focus-mode --width 1200
+             %%telex --interval 8000 --ignore-frozen --focus-mode --width 1200
              # your python code here
 
     3) Optionally store SVG text into a variable (without printing text):
-             %%telepy --var svg_text
+             %%telex --var svg_text
              # your code
          Then access the SVG content via that variable in the notebook.
 
-Supported options (mirroring ``telepy`` CLI flags that affect sampling):
+Supported options (mirroring ``telex`` CLI flags that affect sampling):
     --interval INT         Sampling interval in microseconds (default: 8000)
     --timeout FLOAT        Wait time for child processes (default: 10)
     --verbose/--no-verbose Enable/suppress verbose panels
     --ignore-frozen        Ignore frozen modules
-    --include-telepy       Include TelePy frames in results
+    --include-telex       Include TeleX frames in results
     --focus-mode           Focus on user code only
     --time {cpu,wall}      Select sampling timer: cpu (SIGPROF) or wall (SIGALRM)
     --regex-patterns P     Regex pattern to filter stacks (repeatable)
@@ -50,8 +50,8 @@ from IPython.core.interactiveshell import InteractiveShell
 from IPython.core.magic import Magics, cell_magic, magics_class
 from IPython.display import SVG, display
 
-from .config import TelePySamplerConfig
-from .environment import CodeMode, clear_resources, telepy_env, telepy_finalize
+from .config import TeleXSamplerConfig
+from .environment import CodeMode, clear_resources, telex_env, telex_finalize
 
 _RESERVED_GLOBAL_KEYS = {
     "__name__",
@@ -88,7 +88,7 @@ def _build_parser() -> argparse.ArgumentParser:
         group.add_argument("--no-verbose", action="store_false", dest="verbose")
         parser.set_defaults(verbose=None)
     parser.add_argument("--ignore-frozen", action="store_true", default=False)
-    parser.add_argument("--include-telepy", action="store_true", default=False)
+    parser.add_argument("--include-telex", action="store_true", default=False)
     parser.add_argument("--focus-mode", action="store_true", default=False)
     parser.add_argument("--tree-mode", action="store_true", default=False)
     parser.add_argument("--inverted", action="store_true", default=False)
@@ -117,14 +117,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 @magics_class
-class TelePyMagics(Magics):
+class TeleXMagics(Magics):
     def __init__(self, shell: InteractiveShell) -> None:
         super().__init__(shell)
         self._parser = _build_parser()
 
     @cell_magic
-    def telepy(self, line: str, cell: str) -> None:
-        """Profile the cell with TelePy and render SVG inline.
+    def telex(self, line: str, cell: str) -> None:
+        """Profile the cell with TeleX and render SVG inline.
 
         Displays SVG inline only. If --var is given, also stores the SVG string
         into the specified user variable. Does not print or return text.
@@ -142,17 +142,17 @@ class TelePyMagics(Magics):
                 # shlex parsing error (e.g., unmatched quotes)
                 raise ValueError(f"Invalid quote syntax in arguments: {e}")
             raise ValueError(
-                "Invalid arguments for %%telepy. Check options or run with "
+                "Invalid arguments for %%telex. Check options or run with "
                 "no args for defaults."
             )
 
-        defaults = TelePySamplerConfig()
+        defaults = TeleXSamplerConfig()
         if getattr(args, "verbose", None) is None:
             args.verbose = defaults.verbose
         if getattr(args, "merge", None) is None:
             args.merge = defaults.merge
 
-        config = TelePySamplerConfig.from_namespace(args)
+        config = TeleXSamplerConfig.from_namespace(args)
         config.verbose = getattr(args, "verbose", True)
 
         config.folded_save = False
@@ -164,7 +164,7 @@ class TelePyMagics(Magics):
         finalize_exc: Exception | None = None
         finalize_needed = False
         try:
-            with telepy_env(config, CodeMode.PyString) as (global_dict, sampler):
+            with telex_env(config, CodeMode.PyString) as (global_dict, sampler):
                 finalize_needed = True
                 assert sampler is not None
                 assert global_dict is not None
@@ -177,7 +177,7 @@ class TelePyMagics(Magics):
                     {key: value for key, value in preserved.items() if value is not None}
                 )
 
-                pyc = compile(cell, "<telepy-cell>", "exec")
+                pyc = compile(cell, "<telex-cell>", "exec")
                 if not config.fork_server:
                     sampler.start()
                 exec(pyc, global_dict, global_dict)
@@ -190,7 +190,7 @@ class TelePyMagics(Magics):
         finally:
             try:
                 if finalize_needed:
-                    telepy_finalize()
+                    telex_finalize()
             except Exception as exc:  # pragma: no cover - defensive safeguard
                 finalize_exc = exc
             finally:
@@ -213,8 +213,8 @@ class TelePyMagics(Magics):
 
 
 def load_ipython_extension(ipython: InteractiveShell) -> None:
-    """IPython entrypoint: %load_ext telepy.jupyter"""
-    ipython.register_magics(TelePyMagics)
+    """IPython entrypoint: %load_ext telex.jupyter"""
+    ipython.register_magics(TeleXMagics)
 
 
 def unload_ipython_extension(ipython: InteractiveShell) -> None:  # pragma: no cover

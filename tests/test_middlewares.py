@@ -6,8 +6,8 @@ import tempfile
 import threading
 import unittest
 
-import telepy
-from telepy.sampler import SamplerMiddleware
+import telex
+from telex.sampler import SamplerMiddleware
 
 from .base import TestBase  # type: ignore
 from .test_command import CommandTemplate  # type: ignore
@@ -118,7 +118,7 @@ class TestSamplerMiddleware(TestBase):
 
     def test_middleware_registration(self):
         """Test middleware registration and unregistration."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         # Initially no middleware
         self.assertEqual(len(sampler._middleware), 0)
@@ -151,7 +151,7 @@ class TestSamplerMiddleware(TestBase):
 
     def test_middleware_lifecycle_calls(self):
         """Test that middleware lifecycle methods are called correctly."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
         middleware = TestMiddleware()
         sampler.register_middleware(middleware)
 
@@ -182,7 +182,7 @@ class TestSamplerMiddleware(TestBase):
 
     def test_process_dump_middleware(self):
         """Test process_dump middleware functionality."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         # Start sampling to get some data
         sampler.start()
@@ -208,7 +208,7 @@ class TestSamplerMiddleware(TestBase):
 
     def test_null_middleware(self):
         """Test middleware that returns None (uses original output)."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         # Start sampling to get some data
         sampler.start()
@@ -230,7 +230,7 @@ class TestSamplerMiddleware(TestBase):
 
     def test_middleware_chain(self):
         """Test multiple middleware processing in sequence."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         # Start sampling to get some data
         sampler.start()
@@ -257,7 +257,7 @@ class TestSamplerMiddleware(TestBase):
 
     def test_middleware_exception_handling(self):
         """Test that middleware exceptions don't break the sampler."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         # Start sampling to get some data
         sampler.start()
@@ -281,7 +281,7 @@ class TestSamplerMiddleware(TestBase):
 
     def test_save_with_middleware(self):
         """Test that save() method uses middleware-processed dumps."""
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         # Start sampling to get some data
         sampler.start()
@@ -335,15 +335,15 @@ class TestAsyncSamplerMiddleware(TestBase):
         return result
 
     @unittest.skipIf(
-        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+        sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
     )
     def test_async_sampler_middleware(self):
-        """Test middleware with TelepySysAsyncSampler."""
+        """Test middleware with TelexSysAsyncSampler."""
         # Skip if not in main thread (async sampler requirement)
         if threading.current_thread() != threading.main_thread():
             self.skipTest("AsyncSampler requires main thread")
 
-        sampler = telepy.TelepySysAsyncSampler(sampling_interval=1000)
+        sampler = telex.TelexSysAsyncSampler(sampling_interval=1000)
         middleware = TestMiddleware("ASYNC")
         sampler.register_middleware(middleware)
 
@@ -366,10 +366,10 @@ class TestAsyncSamplerMiddleware(TestBase):
         sys.platform == "win32", "AsyncWorkerSampler not supported on Windows"
     )
     def test_worker_sampler_middleware(self):
-        """Test middleware with TelepySysAsyncWorkerSampler."""
+        """Test middleware with TelexSysAsyncWorkerSampler."""
 
         def worker_function():
-            sampler = telepy.TelepySysAsyncWorkerSampler(sampling_interval=1000)
+            sampler = telex.TelexSysAsyncWorkerSampler(sampling_interval=1000)
             middleware = TestMiddleware("WORKER")
             sampler.register_middleware(middleware)
 
@@ -474,7 +474,7 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if self.torch_available:
             self.skipTest("PyTorch is available, skipping import error test")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         with self.assertRaises(ImportError):
             PyTorchProfilerMiddleware()
@@ -484,7 +484,7 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
 
@@ -523,10 +523,10 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
         middleware = PyTorchProfilerMiddleware(output_dir=temp_dir, verbose=False)
 
         sampler.register_middleware(middleware)
@@ -537,10 +537,10 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
         middleware = PyTorchProfilerMiddleware(
             output_dir=temp_dir, activities=["cpu"], verbose=False
         )
@@ -577,10 +577,10 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
         middleware = PyTorchProfilerMiddleware(
             output_dir=temp_dir,
             activities=["cpu"],
@@ -621,10 +621,10 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         # Request CUDA profiling
         middleware = PyTorchProfilerMiddleware(
@@ -645,10 +645,10 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
 
         # Request XPU profiling
         middleware = PyTorchProfilerMiddleware(
@@ -669,10 +669,10 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
         middleware = PyTorchProfilerMiddleware(
             output_dir=temp_dir,
             activities=["cpu"],
@@ -701,10 +701,10 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
         middleware = PyTorchProfilerMiddleware(
             output_dir=temp_dir,
             activities=["cpu"],
@@ -728,7 +728,7 @@ class TestPyTorchProfilerMiddleware(TestBase):
         self.assertGreater(len(content), 0, "Statistics file should not be empty")
 
     @unittest.skipIf(
-        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+        sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
     )
     def test_pytorch_middleware_with_async_sampler(self):
         """Test PyTorchProfilerMiddleware with async sampler."""
@@ -739,10 +739,10 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if threading.current_thread() != threading.main_thread():
             self.skipTest("AsyncSampler requires main thread")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
-        sampler = telepy.TelepySysAsyncSampler(sampling_interval=1000)
+        sampler = telex.TelexSysAsyncSampler(sampling_interval=1000)
         middleware = PyTorchProfilerMiddleware(
             output_dir=temp_dir, activities=["cpu"], verbose=False
         )
@@ -762,7 +762,7 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
         middleware = PyTorchProfilerMiddleware(output_dir=temp_dir)
@@ -775,10 +775,10 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
         middleware = PyTorchProfilerMiddleware(
             output_dir=temp_dir, activities=["cpu"], verbose=False
         )
@@ -811,10 +811,10 @@ class TestPyTorchProfilerMiddleware(TestBase):
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 
-        from telepy.sampler import PyTorchProfilerMiddleware
+        from telex.sampler import PyTorchProfilerMiddleware
 
         temp_dir = self._create_temp_dir()
-        sampler = telepy.TelepySysSampler(sampling_interval=1000)
+        sampler = telex.TelexSysSampler(sampling_interval=1000)
         middleware = PyTorchProfilerMiddleware(
             output_dir=temp_dir, activities=["cpu"], verbose=False
         )
@@ -869,7 +869,7 @@ class TestPyTorchProfilerCLI(CommandTemplate):
 
     @unittest.skipIf(sys.platform == "win32", "Skip PyTorch CLI tests on Windows")
     def test_torch_profile_basic(self):
-        """Test: telepy test_torch.py --torch-profile -- --epochs 1."""
+        """Test: telex test_torch.py --torch-profile -- --epochs 1."""
         if not self.torch_available:
             self.skipTest("PyTorch not available")
 

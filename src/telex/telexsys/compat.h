@@ -1,5 +1,5 @@
-#ifndef TELEPYSYS_COMPAT_H
-#define TELEPYSYS_COMPAT_H
+#ifndef TELEXSYS_COMPAT_H
+#define TELEXSYS_COMPAT_H
 
 #include <Python.h>
 
@@ -123,14 +123,14 @@ PyModule_AddObjectRef(PyObject* module, const char* name, PyObject* value) {
 
 // Platform detection
 #if defined(_WIN32) || defined(_WIN64) || defined(__CYGWIN__)
-#define TELEPY_PLATFORM_WINDOWS 1
-#define TELEPY_PLATFORM_UNIX 0
+#define TELEX_PLATFORM_WINDOWS 1
+#define TELEX_PLATFORM_UNIX 0
 #else
-#define TELEPY_PLATFORM_WINDOWS 0
-#define TELEPY_PLATFORM_UNIX 1
+#define TELEX_PLATFORM_WINDOWS 0
+#define TELEX_PLATFORM_UNIX 1
 #endif
 
-#if TELEPY_PLATFORM_WINDOWS
+#if TELEX_PLATFORM_WINDOWS
 
 // Windows-specific includes
 #include <process.h>
@@ -213,6 +213,6 @@ nanosleep(const struct timespec* req, struct timespec* rem) {
 #include <sched.h>
 #include <unistd.h>
 
-#endif  // TELEPY_PLATFORM_WINDOWS
+#endif  // TELEX_PLATFORM_WINDOWS
 
-#endif  // TELEPYSYS_COMPAT_H
+#endif  // TELEXSYS_COMPAT_H

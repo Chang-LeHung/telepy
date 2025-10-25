@@ -12,7 +12,6 @@
 #include <vector>
 
 
-
 struct Node {
     std::string name;
     unsigned long cnt;      // called count
@@ -179,7 +178,7 @@ AddCallStack(StackTree* tree, const char* callstack) {
 }
 
 
-#ifdef TELEPY_TEST
+#ifdef TELEX_TEST
 
 
 #define Green "\033[32m"
