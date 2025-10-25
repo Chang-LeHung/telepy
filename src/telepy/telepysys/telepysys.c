@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifndef _WIN32
+#include <sched.h>
+#endif
 
 #include "compat.h"
 #include "inject.h"
