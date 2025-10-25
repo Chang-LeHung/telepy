@@ -226,9 +226,7 @@ class TestFocusMode(TestBase):
         self.assertIsNone(sampler.regex_patterns)
 
 
-@unittest.skipIf(
-    sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows"
-)
+@unittest.skipIf(sys.platform == "win32", "TelexSysAsyncSampler not supported on Windows")
 class TestAsyncSamplerFocusMode(TestBase):
     """Test cases specifically for AsyncSampler focus mode functionality."""
 
