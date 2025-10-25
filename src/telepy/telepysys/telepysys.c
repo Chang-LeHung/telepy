@@ -142,15 +142,31 @@ is_stdlib_or_third_party(SamplerObject* sampler, PyObject* filename) {
     }
 
     // Check for site-packages pattern (third-party packages)
-    if (strstr(filepath, "site-packages/") != NULL) {
+    // Support both Unix (/) and Windows (\) path separators
+    if (strstr(filepath, "site-packages/") != NULL ||
+        strstr(filepath, "site-packages\\") != NULL) {
         return 1;
     }
 
     // Check if the file is in standard library using std_path
+    // On Windows, use case-insensitive comparison
+#ifdef _WIN32
+    // Convert both paths to lowercase for comparison
+    size_t filepath_len = strlen(filepath);
+    size_t std_path_len = strlen(sampler->std_path);
+
+    // Check if filepath contains std_path (case-insensitive)
+    for (size_t i = 0; i <= filepath_len - std_path_len; i++) {
+        if (_strnicmp(filepath + i, sampler->std_path, std_path_len) == 0) {
+            return 1;
+        }
+    }
+#else
+    // Unix: use case-sensitive comparison
     if (strstr(filepath, sampler->std_path) != NULL) {
         return 1;
     }
-
+#endif
     return 0;
 }
 
@@ -317,9 +333,12 @@ call_stack(SamplerObject* self,
             continue;
         }
 
+        // Support both Unix (/) and Windows (\) path separators for ignore_self
         if (IGNORE_SELF_ENABLED(self) &&
             (PyUnicode_Contain(filename, "/site-packages/telepy") ||
-             PyUnicode_Contain(filename, "/bin/telepy"))) {
+             PyUnicode_Contain(filename, "\\site-packages\\telepy") ||
+             PyUnicode_Contain(filename, "/bin/telepy") ||
+             PyUnicode_Contain(filename, "\\bin\\telepy"))) {
             Py_DECREF(code);
             continue;
         }
