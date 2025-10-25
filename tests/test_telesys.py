@@ -4,7 +4,7 @@ import sys
 from .base import TestBase  # type: ignore
 
 
-class TestTelePySys(TestBase):
+class TestTeleXSys(TestBase):
     def tearDown(self):
         """Clean up test files after each test."""
         super().tearDown()
@@ -13,13 +13,13 @@ class TestTelePySys(TestBase):
             if os.path.exists(file):
                 os.remove(file)
 
-    def test_telepysys_version(self):
+    def test_telexsys_version(self):
         import telex
 
         v = telex.__version__
         self.assertTrue(v is not None and v != "")
 
-    def test_telepysys_current_stacks(self):
+    def test_telexsys_current_stacks(self):
         import telex
 
         call_stack = telex.current_stacks()
@@ -28,7 +28,7 @@ class TestTelePySys(TestBase):
         for _, val in call_stack.items():
             self.assertTrue(val is not None and len(val) > 0)
 
-    def test_telepysys_pretty_stack(self):
+    def test_telexsys_pretty_stack(self):
         import threading
 
         import telex
@@ -243,7 +243,7 @@ class TestSampler(TestBase):
         self.assertLessEqual(sampler.sampling_time_rate, 1)
 
 
-class TelepyMainThread(TestBase):
+class TelexMainThread(TestBase):
     def test_main_thread(self):
         import io
         import threading
@@ -318,7 +318,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             local_var = "I am a local variable"  # noqa: F841
@@ -328,7 +328,7 @@ class TestVMRead(TestBase):
         worker_thread.start()
         time.sleep(0.3)
 
-        result = _telepysys.vm_read(worker_thread.ident, "local_var")
+        result = _telexsys.vm_read(worker_thread.ident, "local_var")
         self.assertEqual(result, "I am a local variable")
 
         worker_thread.join()
@@ -338,7 +338,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         global test_global_var
         test_global_var = "I am a global variable"
@@ -350,7 +350,7 @@ class TestVMRead(TestBase):
         worker_thread.start()
         time.sleep(0.3)
 
-        result = _telepysys.vm_read(worker_thread.ident, "test_global_var")
+        result = _telexsys.vm_read(worker_thread.ident, "test_global_var")
         self.assertEqual(result, "I am a global variable")
 
         worker_thread.join()
@@ -360,7 +360,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             time.sleep(1)
@@ -369,16 +369,16 @@ class TestVMRead(TestBase):
         worker_thread.start()
         time.sleep(0.3)
 
-        result = _telepysys.vm_read(worker_thread.ident, "nonexistent_var")
+        result = _telexsys.vm_read(worker_thread.ident, "nonexistent_var")
         self.assertIsNone(result)
 
         worker_thread.join()
 
     def test_vm_read_nonexistent_thread(self):
         """Test reading from non-existent thread returns None."""
-        from telex import _telepysys
+        from telex import _telexsys
 
-        result = _telepysys.vm_read(99999, "some_var")
+        result = _telexsys.vm_read(99999, "some_var")
         self.assertIsNone(result)
 
     def test_vm_read_module(self):
@@ -386,7 +386,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             # Reference threading module so it's in the frame's globals
@@ -397,7 +397,7 @@ class TestVMRead(TestBase):
         worker_thread.start()
         time.sleep(0.3)
 
-        result = _telepysys.vm_read(worker_thread.ident, "threading")
+        result = _telexsys.vm_read(worker_thread.ident, "threading")
         self.assertIsNotNone(result)
 
         worker_thread.join()
@@ -407,7 +407,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             int_var = 42  # noqa: F841
@@ -421,19 +421,19 @@ class TestVMRead(TestBase):
         time.sleep(0.3)
 
         # Test int
-        result = _telepysys.vm_read(worker_thread.ident, "int_var")
+        result = _telexsys.vm_read(worker_thread.ident, "int_var")
         self.assertEqual(result, 42)
 
         # Test string
-        result = _telepysys.vm_read(worker_thread.ident, "str_var")
+        result = _telexsys.vm_read(worker_thread.ident, "str_var")
         self.assertEqual(result, "test string")
 
         # Test list
-        result = _telepysys.vm_read(worker_thread.ident, "list_var")
+        result = _telexsys.vm_read(worker_thread.ident, "list_var")
         self.assertEqual(result, [1, 2, 3])
 
         # Test dict
-        result = _telepysys.vm_read(worker_thread.ident, "dict_var")
+        result = _telexsys.vm_read(worker_thread.ident, "dict_var")
         self.assertEqual(result, {"key": "value"})
 
         worker_thread.join()
@@ -443,7 +443,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             test_obj = [1, 2, 3]  # noqa: F841
@@ -454,9 +454,9 @@ class TestVMRead(TestBase):
         time.sleep(0.3)
 
         # Read the same variable multiple times
-        result1 = _telepysys.vm_read(worker_thread.ident, "test_obj")
-        result2 = _telepysys.vm_read(worker_thread.ident, "test_obj")
-        result3 = _telepysys.vm_read(worker_thread.ident, "test_obj")
+        result1 = _telexsys.vm_read(worker_thread.ident, "test_obj")
+        result2 = _telexsys.vm_read(worker_thread.ident, "test_obj")
+        result3 = _telexsys.vm_read(worker_thread.ident, "test_obj")
 
         # All should be the same object
         self.assertIs(result1, result2)
@@ -469,7 +469,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def inner_function():
             inner_var = "inner_value"  # noqa: F841
@@ -484,15 +484,15 @@ class TestVMRead(TestBase):
         time.sleep(0.3)
 
         # Read from top frame (level=0, inside inner_function)
-        result = _telepysys.vm_read(worker_thread.ident, "inner_var", 0)
+        result = _telexsys.vm_read(worker_thread.ident, "inner_var", 0)
         self.assertEqual(result, "inner_value")
 
         # Read from previous frame (level=1, inside outer_function)
-        result = _telepysys.vm_read(worker_thread.ident, "outer_var", 1)
+        result = _telexsys.vm_read(worker_thread.ident, "outer_var", 1)
         self.assertEqual(result, "outer_value")
 
         # inner_var should not be accessible from level=1
-        result = _telepysys.vm_read(worker_thread.ident, "inner_var", 1)
+        result = _telexsys.vm_read(worker_thread.ident, "inner_var", 1)
         self.assertIsNone(result)
 
         worker_thread.join()
@@ -502,7 +502,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             test_var = "test_value"  # noqa: F841
@@ -513,9 +513,9 @@ class TestVMRead(TestBase):
         time.sleep(0.3)
 
         # Call without level argument (should default to 0)
-        result1 = _telepysys.vm_read(worker_thread.ident, "test_var")
+        result1 = _telexsys.vm_read(worker_thread.ident, "test_var")
         # Call with explicit level=0
-        result2 = _telepysys.vm_read(worker_thread.ident, "test_var", 0)
+        result2 = _telexsys.vm_read(worker_thread.ident, "test_var", 0)
         print(f"{result1 = } {result2 = }")
 
         self.assertEqual(result1, result2)
@@ -528,7 +528,7 @@ class TestVMRead(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             local_var = "value"  # noqa: F841
@@ -539,40 +539,40 @@ class TestVMRead(TestBase):
         time.sleep(0.3)
 
         # Try to read from a very deep level (should return None)
-        result = _telepysys.vm_read(worker_thread.ident, "local_var", 100)
+        result = _telexsys.vm_read(worker_thread.ident, "local_var", 100)
         self.assertIsNone(result)
 
         worker_thread.join()
 
     def test_vm_read_level_validation(self):
         """Test level parameter validation."""
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Test with negative level
         with self.assertRaises(ValueError):
-            _telepysys.vm_read(123, "var", -1)
+            _telexsys.vm_read(123, "var", -1)
 
         # Test with non-integer level
         with self.assertRaises(TypeError):
-            _telepysys.vm_read(123, "var", "not_an_int")
+            _telexsys.vm_read(123, "var", "not_an_int")
 
     def test_vm_read_parameter_validation(self):
         """Test parameter validation."""
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Test with wrong number of arguments
         with self.assertRaises(TypeError):
-            _telepysys.vm_read(123)  # Missing name argument
+            _telexsys.vm_read(123)  # Missing name argument
 
         with self.assertRaises(TypeError):
-            _telepysys.vm_read(123, "var", 0, "extra")  # Too many arguments
+            _telexsys.vm_read(123, "var", 0, "extra")  # Too many arguments
 
         # Test with wrong types
         with self.assertRaises(TypeError):
-            _telepysys.vm_read("not_an_int", "var")  # tid must be int
+            _telexsys.vm_read("not_an_int", "var")  # tid must be int
 
         with self.assertRaises(TypeError):
-            _telepysys.vm_read(123, 456)  # name must be string
+            _telexsys.vm_read(123, 456)  # name must be string
 
 
 class TestVMWrite(TestBase):
@@ -587,7 +587,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             local_var = "initial_value"  # noqa: F841
@@ -598,11 +598,11 @@ class TestVMWrite(TestBase):
         time.sleep(0.3)
 
         # Try to write to a local variable (should fail)
-        success = _telepysys.vm_write(worker_thread.ident, "local_var", "updated_value")
+        success = _telexsys.vm_write(worker_thread.ident, "local_var", "updated_value")
         self.assertFalse(success)  # Local variables cannot be modified
 
         # Verify the local was not modified
-        result = _telepysys.vm_read(worker_thread.ident, "local_var")
+        result = _telexsys.vm_read(worker_thread.ident, "local_var")
         self.assertEqual(result, "initial_value")
 
         worker_thread.join()
@@ -612,7 +612,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Create a unique global variable for this test
         globals()["test_vm_write_global_var"] = "initial_global"
@@ -625,13 +625,13 @@ class TestVMWrite(TestBase):
         time.sleep(0.3)
 
         # Write to the global variable
-        success = _telepysys.vm_write(
+        success = _telexsys.vm_write(
             worker_thread.ident, "test_vm_write_global_var", "updated_global"
         )
         self.assertTrue(success)
 
         # Verify the write was successful
-        result = _telepysys.vm_read(worker_thread.ident, "test_vm_write_global_var")
+        result = _telexsys.vm_read(worker_thread.ident, "test_vm_write_global_var")
         self.assertEqual(result, "updated_global")
 
         worker_thread.join()
@@ -644,7 +644,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             time.sleep(1)
@@ -654,24 +654,24 @@ class TestVMWrite(TestBase):
         time.sleep(0.3)
 
         # Try to write to a variable that doesn't exist
-        success = _telepysys.vm_write(
+        success = _telexsys.vm_write(
             worker_thread.ident, "nonexistent_global_var", "some_value"
         )
         self.assertFalse(success)
 
         # Verify the nonexistent variable still doesn't exist
-        result = _telepysys.vm_read(worker_thread.ident, "nonexistent_global_var")
+        result = _telexsys.vm_read(worker_thread.ident, "nonexistent_global_var")
         self.assertIsNone(result)
 
         worker_thread.join()
 
     def test_vm_write_nonexistent_thread(self):
         """Test writing to nonexistent thread returns False."""
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Use a thread ID that definitely doesn't exist
         nonexistent_tid = 999999999
-        success = _telepysys.vm_write(nonexistent_tid, "some_var", "some_value")
+        success = _telexsys.vm_write(nonexistent_tid, "some_var", "some_value")
         self.assertFalse(success)
 
     def test_vm_write_various_types(self):
@@ -679,7 +679,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Create global variables for testing
         globals()["test_int_var"] = 0
@@ -696,35 +696,35 @@ class TestVMWrite(TestBase):
         time.sleep(0.3)
 
         # Test int
-        success = _telepysys.vm_write(worker_thread.ident, "test_int_var", 42)
+        success = _telexsys.vm_write(worker_thread.ident, "test_int_var", 42)
         self.assertTrue(success)
-        result = _telepysys.vm_read(worker_thread.ident, "test_int_var")
+        result = _telexsys.vm_read(worker_thread.ident, "test_int_var")
         self.assertEqual(result, 42)
 
         # Test string
-        success = _telepysys.vm_write(worker_thread.ident, "test_str_var", "test string")
+        success = _telexsys.vm_write(worker_thread.ident, "test_str_var", "test string")
         self.assertTrue(success)
-        result = _telepysys.vm_read(worker_thread.ident, "test_str_var")
+        result = _telexsys.vm_read(worker_thread.ident, "test_str_var")
         self.assertEqual(result, "test string")
 
         # Test list
-        success = _telepysys.vm_write(worker_thread.ident, "test_list_var", [1, 2, 3])
+        success = _telexsys.vm_write(worker_thread.ident, "test_list_var", [1, 2, 3])
         self.assertTrue(success)
-        result = _telepysys.vm_read(worker_thread.ident, "test_list_var")
+        result = _telexsys.vm_read(worker_thread.ident, "test_list_var")
         self.assertEqual(result, [1, 2, 3])
 
         # Test dict
-        success = _telepysys.vm_write(
+        success = _telexsys.vm_write(
             worker_thread.ident, "test_dict_var", {"key": "value"}
         )
         self.assertTrue(success)
-        result = _telepysys.vm_read(worker_thread.ident, "test_dict_var")
+        result = _telexsys.vm_read(worker_thread.ident, "test_dict_var")
         self.assertEqual(result, {"key": "value"})
 
         # Test None
-        success = _telepysys.vm_write(worker_thread.ident, "test_none_var", None)
+        success = _telexsys.vm_write(worker_thread.ident, "test_none_var", None)
         self.assertTrue(success)
-        result = _telepysys.vm_read(worker_thread.ident, "test_none_var")
+        result = _telexsys.vm_read(worker_thread.ident, "test_none_var")
         self.assertIsNone(result)
 
         worker_thread.join()
@@ -741,7 +741,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Create a global variable
         globals()["test_counter_var"] = 0
@@ -755,9 +755,9 @@ class TestVMWrite(TestBase):
 
         # Write multiple times
         for i in range(1, 6):
-            success = _telepysys.vm_write(worker_thread.ident, "test_counter_var", i * 10)
+            success = _telexsys.vm_write(worker_thread.ident, "test_counter_var", i * 10)
             self.assertTrue(success)
-            result = _telepysys.vm_read(worker_thread.ident, "test_counter_var")
+            result = _telexsys.vm_read(worker_thread.ident, "test_counter_var")
             self.assertEqual(result, i * 10)
 
         worker_thread.join()
@@ -770,7 +770,7 @@ class TestVMWrite(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Create a global variable
         globals()["test_shadowed_var"] = "global_value"
@@ -784,13 +784,13 @@ class TestVMWrite(TestBase):
         time.sleep(0.3)
 
         # Write to the global (will succeed - writes to f_globals, not f_locals)
-        success = _telepysys.vm_write(
+        success = _telexsys.vm_write(
             worker_thread.ident, "test_shadowed_var", "updated_value"
         )
         self.assertTrue(success)  # Should succeed - writes to globals
 
         # vm_read will return the local value (locals take priority in read)
-        result = _telepysys.vm_read(worker_thread.ident, "test_shadowed_var")
+        result = _telexsys.vm_read(worker_thread.ident, "test_shadowed_var")
         self.assertEqual(result, "local_value")
 
         # But the global was actually updated
@@ -803,28 +803,28 @@ class TestVMWrite(TestBase):
 
     def test_vm_write_parameter_validation(self):
         """Test parameter validation."""
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Test with wrong number of arguments
         with self.assertRaises(TypeError):
-            _telepysys.vm_write(123, "var")  # Missing value argument
+            _telexsys.vm_write(123, "var")  # Missing value argument
 
         with self.assertRaises(TypeError):
-            _telepysys.vm_write(123, "var", "value", "extra")  # Too many arguments
+            _telexsys.vm_write(123, "var", "value", "extra")  # Too many arguments
 
         # Test with wrong types
         with self.assertRaises(TypeError):
-            _telepysys.vm_write("not_an_int", "var", "value")  # tid must be int
+            _telexsys.vm_write("not_an_int", "var", "value")  # tid must be int
 
         with self.assertRaises(TypeError):
-            _telepysys.vm_write(123, 456, "value")  # name must be string
+            _telexsys.vm_write(123, 456, "value")  # name must be string
 
     def test_vm_write_read_roundtrip(self):
         """Test write followed by read to verify data integrity for globals."""
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Create a global variable
         globals()["test_roundtrip_data"] = None
@@ -850,11 +850,11 @@ class TestVMWrite(TestBase):
         ]
 
         for test_value in test_cases:
-            success = _telepysys.vm_write(
+            success = _telexsys.vm_write(
                 worker_thread.ident, "test_roundtrip_data", test_value
             )
             self.assertTrue(success, f"Failed to write {test_value}")
-            result = _telepysys.vm_read(worker_thread.ident, "test_roundtrip_data")
+            result = _telexsys.vm_read(worker_thread.ident, "test_roundtrip_data")
             self.assertEqual(result, test_value, f"Roundtrip failed for {test_value}")
 
         worker_thread.join()
@@ -872,7 +872,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             local_var1 = "test"  # noqa: F841
@@ -884,7 +884,7 @@ class TestTopNamespace(TestBase):
         time.sleep(0.3)
 
         # Get locals (flag=0)
-        locals_dict = _telepysys.top_namespace(worker_thread.ident, 0)
+        locals_dict = _telexsys.top_namespace(worker_thread.ident, 0)
         self.assertIsNotNone(locals_dict)
         if sys.version < "3.13":
             self.assertIsInstance(locals_dict, dict)
@@ -900,7 +900,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             time.sleep(1)
@@ -910,7 +910,7 @@ class TestTopNamespace(TestBase):
         time.sleep(0.3)
 
         # Get globals (flag=1)
-        globals_dict = _telepysys.top_namespace(worker_thread.ident, 1)
+        globals_dict = _telexsys.top_namespace(worker_thread.ident, 1)
         self.assertIsNotNone(globals_dict)
         self.assertIsInstance(globals_dict, dict)
         # Should have standard globals like __name__, __builtins__, etc.
@@ -921,46 +921,46 @@ class TestTopNamespace(TestBase):
 
     def test_top_namespace_nonexistent_thread(self):
         """Test with nonexistent thread returns None."""
-        from telex import _telepysys
+        from telex import _telexsys
 
         nonexistent_tid = 999999999
-        result = _telepysys.top_namespace(nonexistent_tid, 0)
+        result = _telexsys.top_namespace(nonexistent_tid, 0)
         self.assertIsNone(result)
 
-        result = _telepysys.top_namespace(nonexistent_tid, 1)
+        result = _telexsys.top_namespace(nonexistent_tid, 1)
         self.assertIsNone(result)
 
     def test_top_namespace_parameter_validation(self):
         """Test parameter validation."""
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Test with wrong number of arguments
         with self.assertRaises(TypeError):
-            _telepysys.top_namespace(123)  # Missing flag argument
+            _telexsys.top_namespace(123)  # Missing flag argument
 
         with self.assertRaises(TypeError):
-            _telepysys.top_namespace(123, 0, "extra")  # Too many arguments
+            _telexsys.top_namespace(123, 0, "extra")  # Too many arguments
 
         # Test with wrong types
         with self.assertRaises(TypeError):
-            _telepysys.top_namespace("not_an_int", 0)  # tid must be int
+            _telexsys.top_namespace("not_an_int", 0)  # tid must be int
 
         with self.assertRaises(TypeError):
-            _telepysys.top_namespace(123, "not_an_int")  # flag must be int
+            _telexsys.top_namespace(123, "not_an_int")  # flag must be int
 
         # Test with invalid flag value
         with self.assertRaises(ValueError):
-            _telepysys.top_namespace(123, 3)  # flag must be 0, 1, or 2
+            _telexsys.top_namespace(123, 3)  # flag must be 0, 1, or 2
 
         with self.assertRaises(ValueError):
-            _telepysys.top_namespace(123, -1)  # flag must be 0, 1, or 2
+            _telexsys.top_namespace(123, -1)  # flag must be 0, 1, or 2
 
     def test_top_namespace_locals_vs_globals(self):
         """Test that locals and globals are different."""
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             local_only = "local"  # noqa: F841
@@ -970,8 +970,8 @@ class TestTopNamespace(TestBase):
         worker_thread.start()
         time.sleep(0.3)
 
-        locals_dict = _telepysys.top_namespace(worker_thread.ident, 0)
-        globals_dict = _telepysys.top_namespace(worker_thread.ident, 1)
+        locals_dict = _telexsys.top_namespace(worker_thread.ident, 0)
+        globals_dict = _telexsys.top_namespace(worker_thread.ident, 1)
 
         # Local variable should be in locals but not in globals
         self.assertIn("local_only", locals_dict)
@@ -988,7 +988,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Create a global variable
         globals()["test_top_namespace_var"] = "initial"
@@ -1001,14 +1001,14 @@ class TestTopNamespace(TestBase):
         time.sleep(0.3)
 
         # Get globals and modify it
-        globals_dict = _telepysys.top_namespace(worker_thread.ident, 1)
+        globals_dict = _telexsys.top_namespace(worker_thread.ident, 1)
         self.assertEqual(globals_dict["test_top_namespace_var"], "initial")
 
         # Modify through the returned dict
         globals_dict["test_top_namespace_var"] = "modified"
 
         # Verify the modification took effect
-        result = _telepysys.vm_read(worker_thread.ident, "test_top_namespace_var")
+        result = _telexsys.vm_read(worker_thread.ident, "test_top_namespace_var")
         self.assertEqual(result, "modified")
 
         worker_thread.join()
@@ -1021,7 +1021,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             int_var = 42  # noqa: F841
@@ -1035,7 +1035,7 @@ class TestTopNamespace(TestBase):
         worker_thread.start()
         time.sleep(0.3)
 
-        locals_dict = _telepysys.top_namespace(worker_thread.ident, 0)
+        locals_dict = _telexsys.top_namespace(worker_thread.ident, 0)
 
         self.assertEqual(locals_dict["int_var"], 42)
         self.assertEqual(locals_dict["str_var"], "test")
@@ -1050,7 +1050,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Create a global variable for this test
         globals()["test_both_global_var"] = "global_value"
@@ -1065,7 +1065,7 @@ class TestTopNamespace(TestBase):
         time.sleep(0.3)
 
         # Get both locals and globals (flag=2)
-        result = _telepysys.top_namespace(worker_thread.ident, 2)
+        result = _telexsys.top_namespace(worker_thread.ident, 2)
         self.assertIsNotNone(result)
         self.assertIsInstance(result, tuple)
         self.assertEqual(len(result), 2)
@@ -1092,10 +1092,10 @@ class TestTopNamespace(TestBase):
 
     def test_top_namespace_flag2_nonexistent_thread(self):
         """Test flag=2 with nonexistent thread returns None."""
-        from telex import _telepysys
+        from telex import _telexsys
 
         nonexistent_tid = 999999999
-        result = _telepysys.top_namespace(nonexistent_tid, 2)
+        result = _telexsys.top_namespace(nonexistent_tid, 2)
         self.assertIsNone(result)
 
     def test_top_namespace_flag2_locals_vs_globals(self):
@@ -1103,7 +1103,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         def worker():
             local_only = "local_value"  # noqa: F841
@@ -1113,7 +1113,7 @@ class TestTopNamespace(TestBase):
         worker_thread.start()
         time.sleep(0.3)
 
-        result = _telepysys.top_namespace(worker_thread.ident, 2)
+        result = _telexsys.top_namespace(worker_thread.ident, 2)
         self.assertIsNotNone(result)
         self.assertIsInstance(result, tuple)
 
@@ -1134,7 +1134,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Create a global variable
         globals()["test_flag2_modify_var"] = "initial"
@@ -1147,7 +1147,7 @@ class TestTopNamespace(TestBase):
         time.sleep(0.3)
 
         # Get both locals and globals
-        result = _telepysys.top_namespace(worker_thread.ident, 2)
+        result = _telexsys.top_namespace(worker_thread.ident, 2)
         _locals_dict, globals_dict = result
 
         self.assertEqual(globals_dict["test_flag2_modify_var"], "initial")
@@ -1156,7 +1156,7 @@ class TestTopNamespace(TestBase):
         globals_dict["test_flag2_modify_var"] = "modified"
 
         # Verify the modification took effect
-        read_result = _telepysys.vm_read(worker_thread.ident, "test_flag2_modify_var")
+        read_result = _telexsys.vm_read(worker_thread.ident, "test_flag2_modify_var")
         self.assertEqual(read_result, "modified")
 
         worker_thread.join()
@@ -1169,7 +1169,7 @@ class TestTopNamespace(TestBase):
         import threading
         import time
 
-        from telex import _telepysys
+        from telex import _telexsys
 
         # Create a global variable
         globals()["test_consistency_var"] = "consistent"
@@ -1183,13 +1183,13 @@ class TestTopNamespace(TestBase):
         time.sleep(0.3)
 
         # Get locals only (flag=0)
-        locals_only = _telepysys.top_namespace(worker_thread.ident, 0)
+        locals_only = _telexsys.top_namespace(worker_thread.ident, 0)
 
         # Get globals only (flag=1)
-        globals_only = _telepysys.top_namespace(worker_thread.ident, 1)
+        globals_only = _telexsys.top_namespace(worker_thread.ident, 1)
 
         # Get both (flag=2)
-        both = _telepysys.top_namespace(worker_thread.ident, 2)
+        both = _telexsys.top_namespace(worker_thread.ident, 2)
         locals_from_both, globals_from_both = both
 
         # Verify consistency

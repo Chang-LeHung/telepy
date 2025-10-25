@@ -14,14 +14,14 @@ from telex.config import (
 )
 
 
-class TestTelePyConfig(unittest.TestCase):
+class TestTeleXConfig(unittest.TestCase):
     """Test cases for TeleX configuration functionality."""
 
     def setUp(self):
         """Set up test environment."""
         self.temp_dir = tempfile.mkdtemp()
-        self.config_dir = Path(self.temp_dir) / ".telepy"
-        self.config_file = self.config_dir / ".telepyrc"
+        self.config_dir = Path(self.temp_dir) / ".telex"
+        self.config_file = self.config_dir / ".telexrc"
 
     def tearDown(self):
         """Clean up test environment."""
@@ -36,7 +36,7 @@ class TestTelePyConfig(unittest.TestCase):
         """Test that config path is constructed correctly."""
         mock_home.return_value = Path(self.temp_dir)
         config = TeleXConfig()
-        expected_path = Path(self.temp_dir) / ".telepy" / ".telepyrc"
+        expected_path = Path(self.temp_dir) / ".telex" / ".telexrc"
         self.assertEqual(config.config_path, expected_path)
 
     @patch("telex.config.Path.home")

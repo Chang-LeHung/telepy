@@ -52,8 +52,8 @@ class TestConfigCommand(CommandTemplate):
     def test_create_config_command(self):
         """Test --create-config command line option."""
         # Use real home directory
-        config_dir = Path.home() / ".telepy"
-        config_file = config_dir / ".telepyrc"
+        config_dir = Path.home() / ".telex"
+        config_file = config_dir / ".telexrc"
 
         # Remove existing config file if it exists
         if config_file.exists():
@@ -87,8 +87,8 @@ class TestConfigCommand(CommandTemplate):
     def test_config_file_loading_with_debug(self):
         """Test that config file is loaded and applied."""
         # Use real home directory
-        config_dir = Path.home() / ".telepy"
-        config_file = config_dir / ".telepyrc"
+        config_dir = Path.home() / ".telex"
+        config_file = config_dir / ".telexrc"
 
         # Create config file with debug enabled
         config_dir.mkdir(exist_ok=True)
@@ -114,8 +114,8 @@ class TestConfigCommand(CommandTemplate):
     def test_command_line_overrides_config(self):
         """Test that command line arguments override config file."""
         # Use real home directory
-        config_dir = Path.home() / ".telepy"
-        config_file = config_dir / ".telepyrc"
+        config_dir = Path.home() / ".telex"
+        config_file = config_dir / ".telexrc"
 
         # Create config file without debug (empty args or args without --debug)
         config_dir.mkdir(exist_ok=True)
@@ -141,8 +141,8 @@ class TestConfigCommand(CommandTemplate):
     def test_config_with_invalid_json(self):
         """Test behavior with invalid JSON in config file."""
         # Use real home directory
-        config_dir = Path.home() / ".telepy"
-        config_file = config_dir / ".telepyrc"
+        config_dir = Path.home() / ".telex"
+        config_file = config_dir / ".telexrc"
 
         # Create invalid JSON config file
         config_dir.mkdir(exist_ok=True)

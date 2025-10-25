@@ -23,10 +23,10 @@ typedef unsigned long long Telex_time;
         }                                                                     \
     } while (0)
 
-typedef struct TelePySysState {
+typedef struct TeleXSysState {
     PyTypeObject* sampler_type;
     PyTypeObject* async_sampler_type;
-} TelePySysState;
+} TeleXSysState;
 
 #define BIT_SET(x, n) (x |= (1 << n))
 #define BIT_CLEAR(x, n) (x &= ~(1 << n))

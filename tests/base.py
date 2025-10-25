@@ -12,8 +12,15 @@ logging.basicConfig(
 class TestBase(TestCase):
     @staticmethod
     def truncate(filename: str) -> str:
-        idx = filename.index("telex")
-        return filename[idx:]
+        # Support both "telex" (new name) and "telepy" (old directory name)
+        for name in ["telex", "telepy"]:
+            try:
+                idx = filename.index(name)
+                return filename[idx:]
+            except ValueError:
+                continue
+        # If neither found, return the basename
+        return filename.split("/")[-1] if "/" in filename else filename
 
     def setUp(self):
         clazz = type(self)

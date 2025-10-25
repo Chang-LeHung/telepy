@@ -377,9 +377,8 @@ call_stack(SamplerObject* self,
                            lineno);
             if (ret >= (int)buf_size - pos) {
                 overflow = 1;
-                PyErr_Format(
-                    PyExc_RuntimeError,
-                    "telexsys: buffer overflow, call stack too deep");
+                PyErr_Format(PyExc_RuntimeError,
+                             "telexsys: buffer overflow, call stack too deep");
                 Py_DECREF(code);
                 goto error;
             }
@@ -413,7 +412,9 @@ get_thread_name(PyObject* threads, PyObject* thread_id) {
         }
         Py_DECREF(ident);
     }
-    return NULL;
+
+    // threads may be inconsistent with frames due to data race
+    return (PyObject*)(void*)-1;
 }
 
 
@@ -482,8 +483,7 @@ _sampling_routine(SamplerObject* self, PyObject* Py_UNUSED(ignore)) {
             }
             PyObject* name = get_thread_name(threads, key);
             if (name == NULL) {
-                PyErr_Format(PyExc_RuntimeError,
-                             "telexsys: failed to get thread name");
+                // Error occurred in get_thread_name
                 Py_DECREF(frames);
                 Py_DECREF(threads);
                 goto error;
@@ -1377,9 +1377,14 @@ AsyncSampler_async_routine(AsyncSamplerObject* self,
         }
         PyObject* name = get_thread_name(threads, key);
         if (name == NULL) {
-            PyErr_Format(PyExc_RuntimeError,
-                         "telexsys: failed to get thread name");
+            // Error occurred in get_thread_name
             goto error;
+        }
+        if (name == (PyObject*)(void*)-1) {
+            // Thread may have exited but frame still exists (data race)
+            // Print error and skip this thread
+            PyErr_Print();
+            continue;
         }
 
         // Check again before processing this frame
@@ -2165,7 +2170,7 @@ telepysys_exec(PyObject* m) {
     if (PyModule_AddStringConstant(m, "__version__", TELEXSYS_VERSION)) {
         return -1;
     }
-    TelePySysState* state = PyModule_GetState(m);
+    TeleXSysState* state = PyModule_GetState(m);
     PyObject* sampler_type = PyType_FromSpec(&sampler_spec);
     if (sampler_type == NULL) {
         return -1;
@@ -2191,7 +2196,7 @@ telepysys_exec(PyObject* m) {
 
 static int
 telepysys_clear(PyObject* module) {
-    TelePySysState* state = PyModule_GetState(module);
+    TeleXSysState* state = PyModule_GetState(module);
     Py_CLEAR(state->sampler_type);
     Py_CLEAR(state->async_sampler_type);
     return 0;
@@ -2199,7 +2204,7 @@ telepysys_clear(PyObject* module) {
 
 static int
 telepysys_traverse(PyObject* module, visitproc visit, void* arg) {
-    TelePySysState* state = PyModule_GetState(module);
+    TeleXSysState* state = PyModule_GetState(module);
     Py_VISIT(state->sampler_type);
     Py_VISIT(state->async_sampler_type);
     return 0;
@@ -2221,7 +2226,7 @@ static struct PyModuleDef telepysys = {
     PyModuleDef_HEAD_INIT,
     .m_name = "_telexsys",
     .m_doc = telepysys_doc,
-    .m_size = sizeof(TelePySysState),
+    .m_size = sizeof(TeleXSysState),
     .m_slots = telepysys_slots,
     .m_clear = telepysys_clear,
     .m_free = telepysys_free,
