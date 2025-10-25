@@ -67,7 +67,7 @@ class Builder(build_ext):
 
             # Compile tree.cc
             objects = compiler.compile(
-                ["src/telepy/telepysys/tree.cc"],
+                ["src/telex/telexsys/tree.cc"],
                 output_dir="build/temp",
                 extra_postargs=extra_args,
             )
@@ -80,7 +80,7 @@ class Builder(build_ext):
                 "-c",
                 "-std=c++11",
                 "-fPIC",
-                "src/telepy/telepysys/tree.cc",
+                "src/telex/telexsys/tree.cc",
                 "-pthread",
                 "-o",
                 "build/tree.o",
