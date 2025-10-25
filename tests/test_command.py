@@ -700,8 +700,13 @@ MainThread;Users/huchang/miniconda3/bin/coverage:<module>:1;coverage/cmdline.py:
 
             # Should contain user-defined functions like test_focus_and_regex
             self.assertRegex(folded_content, r"test_focus_and_regex")
-            # Should NOT contain many standard library calls due to focus mode
-            self.assertNotRegex(folded_content, r"threading\.py")
+            # Should NOT contain standard library calls due to focus mode
+            # Check for threading module paths (Unix/Windows compatible)
+            threading_pattern = (
+                r"(?:threading\.py|Lib[/\\]threading\.py|"
+                r"lib[/\\]threading\.py)"
+            )
+            self.assertNotRegex(folded_content, threading_pattern)
         finally:
             # Clean up the temporary files
             for temp_file in [svg_file, folded_file]:
