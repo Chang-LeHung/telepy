@@ -113,6 +113,7 @@ class TestFocusMode(TestBase):
             debug=False,
         )
 
+        sampler_normal.adjust()
         sampler_normal.start()
         simple_function()
         sampler_normal.stop()
@@ -127,6 +128,7 @@ class TestFocusMode(TestBase):
             debug=False,
         )
 
+        sampler_focus.adjust()
         sampler_focus.start()
         simple_function()
         sampler_focus.stop()
@@ -176,6 +178,7 @@ class TestFocusMode(TestBase):
             debug=False,
         )
 
+        sampler.adjust()
         sampler.start()
         test_function()
         sampler.stop()
