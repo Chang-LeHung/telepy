@@ -6,7 +6,7 @@ build:
 	@python -m build
 
 build_debug: compile_commands
-	@export TELEPY_FLAGS="-g -O0 -DDEBUG" && export CFLAGS="-g -O0" && export CXXFLAGS="-g -O0" && python -m build
+	@export TELEX_FLAGS="-g -O0 -DDEBUG" && export CFLAGS="-g -O0" && export CXXFLAGS="-g -O0" && python -m build
 
 
 clean: uninstall
@@ -26,7 +26,7 @@ clear_docs:
 	@make -C docs clean
 
 compile_commands:
-	@export TELEPY_FLAGS="-DTELEPY_TEST -g -O0" && bear -- python setup.py build_ext --inplace
+	@export TELEX_FLAGS="-DTELEX_TEST -g -O0" && bear -- python setup.py build_ext --inplace
 
 TEST_DIR := tests
 TEST_FILES := $(shell find $(TEST_DIR) -maxdepth 1 -name 'test_*.py')
@@ -35,7 +35,7 @@ coverage:
 	@start=$$(date +%s.%N); \
 	for file in $(TEST_FILES); do \
 		echo "Running $$file"; \
-		TELEPY_SUPPRESS_OUTPUT=1 coverage run --parallel-mode --source=telepy -m unittest $$file || exit 1; \
+		TELEX_SUPPRESS_OUTPUT=1 coverage run --parallel-mode --source=telex -m unittest $$file || exit 1; \
 	done; \
 	coverage combine; \
 	coverage report; \
@@ -50,7 +50,7 @@ test:
 	make -C src/$(PKG_DIR)/telexsys test || exit 1; \
 	for file in $(TEST_FILES); do \
 		echo "Running $$file"; \
-		TELEPY_SUPPRESS_OUTPUT=1 python -m unittest $$file || exit 1; \
+		TELEX_SUPPRESS_OUTPUT=1 python -m unittest $$file || exit 1; \
 	done; \
 	end=$$(date +%s.%N); \
 	elapsed=$$(echo "$$end - $$start" | bc); \

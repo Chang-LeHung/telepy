@@ -18,7 +18,7 @@ def prepare_flags():
     """Prepare compiler flags based on platform"""
     if IS_WINDOWS:
         # MSVC flags
-        flags = os.environ.get("TELEPY_FLAGS", "").split(" ")
+        flags = os.environ.get("TELEX_FLAGS", "").split(" ")
         # Add Windows-specific flags if not present
         default_flags = ["/W4", "/EHsc", "/O2"]
         for flag in default_flags:
@@ -27,7 +27,7 @@ def prepare_flags():
         return [f for f in flags if f != ""]
     else:
         # GCC/Clang flags for Unix-like systems
-        flags = os.environ.get("TELEPY_FLAGS", "").split(" ")
+        flags = os.environ.get("TELEX_FLAGS", "").split(" ")
         if "-g" not in flags:
             flags.append("-O2")
 
@@ -94,7 +94,7 @@ class Builder(build_ext):
         # Add tree object files to the telexsys extension
         if hasattr(self, "tree_objects"):
             for ext in self.extensions:
-                if ext.name == "telepy._telexsys":
+                if ext.name == "telex._telexsys":
                     if IS_WINDOWS:
                         # On Windows, add as extra objects
                         if not hasattr(ext, "extra_objects"):
@@ -108,7 +108,7 @@ class Builder(build_ext):
 
 ext_modules = [
     Extension(
-        name="telepy._telexsys",
+        name="telex._telexsys",
         sources=[
             "src/telex/telexsys/telexsys.c",
             "src/telex/telexsys/inject.c",
@@ -118,7 +118,7 @@ ext_modules = [
         language="c++",
     ),
     Extension(
-        name="telepy._gc_stats",
+        name="telex._gc_stats",
         sources=["src/telex/telexsys/gc_stats.c"],
         include_dirs=["src/telex/telexsys"],
         extra_compile_args=flags,
@@ -127,7 +127,7 @@ ext_modules = [
 ]
 
 setup(
-    name="telepy",
+    name="telex",
     description="A Python diagnostic tool.",
     author="changlehung",
     author_email="changlehung@gmail.com",

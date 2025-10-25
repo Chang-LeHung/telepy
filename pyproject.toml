@@ -1,5 +1,5 @@
 [project]
-name = "telepy"
+name = "telex"
 version = "0.1.0"
 description = "A Python diagnostic tool."
 authors = [{ name = "changlehung", email = "changlehung@gmail.com" }]
