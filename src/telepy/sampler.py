@@ -21,6 +21,9 @@ except ImportError:
 from . import _telepysys
 from .thread import in_main_thread
 
+# Check if we're on Windows
+IS_WINDOWS = sys.platform == "win32"
+
 
 class SamplerMiddleware(ABC):
     """Abstract base class for sampler middleware."""
@@ -344,12 +347,6 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         if normalized_time_mode not in {"cpu", "wall"}:
             raise ValueError("time_mode must be either 'cpu' or 'wall'")
         self.time_mode = cast(Literal["cpu", "wall"], normalized_time_mode)
-        if self.time_mode == "cpu":
-            self._timer_signal = signal.SIGPROF
-            self._timer_type = signal.ITIMER_PROF
-        else:
-            self._timer_signal = signal.SIGALRM  # type: ignore[assignment]
-            self._timer_type = signal.ITIMER_REAL
 
     def adjust_interval(self) -> bool:
         """
@@ -365,8 +362,21 @@ class TelepySysSampler(_telepysys.Sampler, SamplerMixin, MultiProcessEnv):
         return False
 
     @override
-    def adjust(self):
-        return self.adjust_interval()
+    def adjust(self) -> bool:
+        """Adjust the switch interval to match the sampling interval.
+
+        This method adjusts the thread switch interval to be equal to the
+        sampling interval when the sampling interval is smaller than the
+        current switch interval. This ensures more accurate sampling.
+
+        Returns:
+            bool: True if the switch interval was adjusted, False otherwise.
+        """
+        interval = self.sampling_interval / 1000_000
+        if interval < sys.getswitchinterval():
+            sys.setswitchinterval(interval)
+            return True
+        return False
 
     @property
     def sampling_time_rate(self):

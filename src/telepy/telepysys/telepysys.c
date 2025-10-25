@@ -1,10 +1,12 @@
 
 #include <Python.h>
 #include <assert.h>
-#include <sched.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifndef _WIN32
+#include <sched.h>
+#endif
 
 #include "compat.h"
 #include "inject.h"
@@ -16,6 +18,10 @@
 
 #define TELEPYSYS_VERSION "0.1.0"
 
+// Forward declaration
+static Telepy_time
+unix_micro_time(void);
+
 
 static PyObject*
 Sampler_start(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
@@ -25,6 +31,9 @@ Sampler_start(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
                      "telepysys is already enabled, call disable first");
         return NULL;
     }
+
+    // Set start time
+    self->start_time = unix_micro_time();
 
     PyObject* threading_module = PyImport_ImportModule("threading");
 
@@ -92,6 +101,10 @@ Sampler_stop(SamplerObject* self, PyObject* Py_UNUSED(ignored)) {
         return NULL;
     }
     Sample_Disable(self);  // signal the sampling routine to stop first
+
+    // Set end time
+    self->end_time = unix_micro_time();
+
     // join the thread
     PyObject* result =
         PyObject_CallMethod(self->sampling_thread, "join", NULL);
@@ -132,15 +145,36 @@ is_stdlib_or_third_party(SamplerObject* sampler, PyObject* filename) {
     }
 
     // Check for site-packages pattern (third-party packages)
-    if (strstr(filepath, "site-packages/") != NULL) {
+    // Support both Unix (/) and Windows (\) path separators
+    if (strstr(filepath, "site-packages/") != NULL ||
+        strstr(filepath, "site-packages\\") != NULL) {
         return 1;
     }
 
     // Check if the file is in standard library using std_path
+    // On Windows, use case-insensitive comparison
+#ifdef _WIN32
+    // Convert both paths to lowercase for comparison
+    size_t filepath_len = strlen(filepath);
+    size_t std_path_len = strlen(sampler->std_path);
+
+    // Safety check for buffer overflow
+    if (filepath_len < std_path_len) {
+        return 0;
+    }
+
+    // Check if filepath contains std_path (case-insensitive)
+    for (size_t i = 0; i <= filepath_len - std_path_len; i++) {
+        if (_strnicmp(filepath + i, sampler->std_path, std_path_len) == 0) {
+            return 1;
+        }
+    }
+#else
+    // Unix: use case-sensitive comparison
     if (strstr(filepath, sampler->std_path) != NULL) {
         return 1;
     }
-
+#endif
     return 0;
 }
 
@@ -307,9 +341,12 @@ call_stack(SamplerObject* self,
             continue;
         }
 
+        // Support both Unix (/) and Windows (\) path separators for ignore_self
         if (IGNORE_SELF_ENABLED(self) &&
             (PyUnicode_Contain(filename, "/site-packages/telepy") ||
-             PyUnicode_Contain(filename, "/bin/telepy"))) {
+             PyUnicode_Contain(filename, "\\site-packages\\telepy") ||
+             PyUnicode_Contain(filename, "/bin/telepy") ||
+             PyUnicode_Contain(filename, "\\bin\\telepy"))) {
             Py_DECREF(code);
             continue;
         }
@@ -649,6 +686,19 @@ Sampler_get_acc_sampling_time(SamplerObject* self, void* Py_UNUSED(closure)) {
     return PyLong_FromLongLong(self->acc_sampling_time);
 }
 
+
+static PyObject*
+Sampler_get_start_time(SamplerObject* self, void* Py_UNUSED(closure)) {
+    return PyLong_FromLongLong(self->start_time);
+}
+
+
+static PyObject*
+Sampler_get_end_time(SamplerObject* self, void* Py_UNUSED(closure)) {
+    return PyLong_FromLongLong(self->end_time);
+}
+
+
 static PyObject*
 Sampler_get_debug(SamplerObject* self, void* Py_UNUSED(closure)) {
     if (CHECK_FALG(self, VERBOSE))
@@ -840,6 +890,20 @@ static PyGetSetDef Sampler_getset[] = {
         NULL,
     },
     {
+        "start_time",
+        (getter)Sampler_get_start_time,
+        NULL,
+        "start time in microseconds (monotonic)",
+        NULL,
+    },
+    {
+        "end_time",
+        (getter)Sampler_get_end_time,
+        NULL,
+        "end time in microseconds (monotonic)",
+        NULL,
+    },
+    {
         "debug",
         (getter)Sampler_get_debug,
         (setter)Sampler_set_debug,
@@ -1020,13 +1084,13 @@ AsyncSampler_set_sampling_tid(SamplerObject* self,
 static PyObject*
 AsyncSampler_get_start_time(AsyncSamplerObject* self,
                             void* Py_UNUSED(closure)) {
-    return PyLong_FromLong(self->start);
+    return PyLong_FromLongLong(self->base.start_time);
 }
 
 
 static PyObject*
 AsyncSampler_get_end_time(AsyncSamplerObject* self, void* Py_UNUSED(closure)) {
-    return PyLong_FromLong(self->end);
+    return PyLong_FromLongLong(self->base.end_time);
 }
 
 
@@ -1373,7 +1437,7 @@ static PyObject*
 AsyncSampler_start(AsyncSamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     SamplerObject* base = (SamplerObject*)self;
     Sample_Enable(base);
-    self->start = unix_micro_time();
+    base->start_time = unix_micro_time();
     Py_RETURN_NONE;
 }
 
@@ -1381,8 +1445,8 @@ static PyObject*
 AsyncSampler_stop(AsyncSamplerObject* self, PyObject* Py_UNUSED(ignore)) {
     SamplerObject* base = (SamplerObject*)self;
     Sample_Disable(base);
-    self->end = unix_micro_time();
-    base->life_time = self->end - self->start;
+    base->end_time = unix_micro_time();
+    base->life_time = base->end_time - base->start_time;
     Py_RETURN_NONE;
 }
 

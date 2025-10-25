@@ -1,11 +1,16 @@
 import os
+import sys
 import threading
+import unittest
 
 import telepy
 
 from .base import TestBase  # type: ignore
 
 
+@unittest.skipIf(
+    sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+)
 class TestAsyncSampler(TestBase):
     def tearDown(self):
         """Clean up test files after each test."""
@@ -155,6 +160,9 @@ class TestSamplerContextManager(TestBase):
         # Should be stopped after context
         self.assertFalse(sampler.started)
 
+    @unittest.skipIf(
+        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    )
     def test_telepysys_async_sampler_context_manager(self):
         """Test TelepySysAsyncSampler as context manager."""
         sampler = telepy.TelepySysAsyncSampler(sampling_interval=1000)
@@ -255,6 +263,9 @@ class TestSamplerContextManager(TestBase):
         self.assertGreater(result1, 0)
         self.assertGreater(result2, 0)
 
+    @unittest.skipIf(
+        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    )
     def test_async_sampler_exception_handling(self):
         """Test async sampler exception handling in context manager."""
         sampler = telepy.TelepySysAsyncSampler(sampling_interval=1000)
@@ -268,6 +279,9 @@ class TestSamplerContextManager(TestBase):
 
         self.assertFalse(sampler.started)
 
+    @unittest.skipIf(
+        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    )
     def test_time_mode_cpu(self):
         """Test CPU time mode sampler initialization and signal selection."""
         sampler = telepy.TelepySysAsyncSampler(time_mode="cpu")
@@ -278,6 +292,9 @@ class TestSamplerContextManager(TestBase):
         self.assertEqual(sampler._timer_signal, signal.SIGPROF)
         self.assertEqual(sampler._timer_type, signal.ITIMER_PROF)
 
+    @unittest.skipIf(
+        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    )
     def test_time_mode_wall(self):
         """Test wall time mode sampler initialization and signal selection."""
         sampler = telepy.TelepySysAsyncSampler(time_mode="wall")
@@ -288,12 +305,18 @@ class TestSamplerContextManager(TestBase):
         self.assertEqual(sampler._timer_signal, signal.SIGALRM)
         self.assertEqual(sampler._timer_type, signal.ITIMER_REAL)
 
+    @unittest.skipIf(
+        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    )
     def test_time_mode_invalid(self):
         """Test that invalid time mode raises ValueError."""
         with self.assertRaises(ValueError) as context:
             telepy.TelepySysAsyncSampler(time_mode="invalid")
         self.assertIn("time_mode must be either 'cpu' or 'wall'", str(context.exception))
 
+    @unittest.skipIf(
+        sys.platform == "win32", "AsyncWorkerSampler not supported on Windows"
+    )
     def test_worker_sampler_time_mode(self):
         """Test that worker sampler also supports time mode parameter."""
         worker_sampler = telepy.TelepySysAsyncWorkerSampler(time_mode="wall")

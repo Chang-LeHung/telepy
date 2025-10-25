@@ -47,7 +47,11 @@ class TestTelePySys(TestBase):
         call_stack = telepy.current_stacks()
         for key, value in telepy.join_current_stacks(call_stack).items():
             self.assertIn("fib", value)
-            self.assertIn("tests/test_telesys.py", value)
+            # Check for both Unix and Windows path separators
+            self.assertTrue(
+                "tests/test_telesys.py" in value or "tests\\test_telesys.py" in value,
+                f"Expected path not found in: {value}",
+            )
             break
         t.join()
         # Check that our threads are in the call stack (may have other system threads)
@@ -195,12 +199,23 @@ class TestSampler(TestBase):
         import telepy
 
         sampler = telepy.TelepySysSampler()
-        sampler.sampling_interval = 1000  # 1ms
+        sampler.sampling_interval = 1000  # 1ms = 0.001s
+
+        # Test adjust_interval (old behavior with /4 logic)
         sys.setswitchinterval(0.005)  # 5ms
         self.assertTrue(sampler.adjust_interval())
+        self.assertAlmostEqual(sys.getswitchinterval(), 0.001 / 4, places=6)
 
         sys.setswitchinterval(0.001 / 4)
         self.assertFalse(sampler.adjust_interval())
+
+        # Test adjust (new behavior matching AsyncSampler)
+        sys.setswitchinterval(0.005)  # 5ms - larger than sampling interval
+        self.assertTrue(sampler.adjust())
+        self.assertAlmostEqual(sys.getswitchinterval(), 0.001, places=6)
+
+        sys.setswitchinterval(0.0001)  # 0.1ms - smaller than sampling interval
+        self.assertFalse(sampler.adjust())
 
     def test_ignore_froze(self):
         import threading

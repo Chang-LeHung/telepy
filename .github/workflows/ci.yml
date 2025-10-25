@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
@@ -64,8 +64,13 @@ jobs:
       - name: Install package
         run: pip install .
 
-      - name: Run tests with retry (Attempt 1)
-        id: test_attempt_1
+      - name: Setup MSVC (Windows only)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Run tests with retry (Attempt 1) - Unix
+        if: runner.os != 'Windows'
+        id: test_attempt_1_unix
         continue-on-error: true
         run: |
           PKG_NAME=$(python setup.py --name)
@@ -79,9 +84,30 @@ jobs:
             TELEPY_SUPPRESS_OUTPUT=1 python -m unittest $file || exit 1
           done
 
-      - name: Run tests with retry (Attempt 2)
-        id: test_attempt_2
-        if: steps.test_attempt_1.outcome == 'failure'
+      - name: Run tests with retry (Attempt 1) - Windows
+        if: runner.os == 'Windows'
+        id: test_attempt_1_windows
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $PKG_NAME = python setup.py --name
+          cd "src/$PKG_NAME/telepysys"
+          cl /EHsc /W4 /std:c++14 /DTELEPY_TEST tree.cc /Fe:tree_test.exe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          .\tree_test.exe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cd ..\..\..
+          $env:PYTHONIOENCODING = "utf-8"
+          Get-ChildItem tests\test_*.py | ForEach-Object {
+            Write-Host "Running $($_.Name)"
+            $env:TELEPY_SUPPRESS_OUTPUT = "1"
+            python -m unittest $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+
+      - name: Run tests with retry (Attempt 2) - Unix
+        if: runner.os != 'Windows' && steps.test_attempt_1_unix.outcome == 'failure'
+        id: test_attempt_2_unix
         continue-on-error: true
         run: |
           PKG_NAME=$(python setup.py --name)
@@ -95,9 +121,30 @@ jobs:
             TELEPY_SUPPRESS_OUTPUT=1 python -m unittest $file || exit 1
           done
 
-      - name: Run tests with retry (Attempt 3)
-        id: test_attempt_3
-        if: steps.test_attempt_2.outcome == 'failure'
+      - name: Run tests with retry (Attempt 2) - Windows
+        if: runner.os == 'Windows' && steps.test_attempt_1_windows.outcome == 'failure'
+        id: test_attempt_2_windows
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $PKG_NAME = python setup.py --name
+          cd "src/$PKG_NAME/telepysys"
+          cl /EHsc /W4 /std:c++14 /DTELEPY_TEST tree.cc /Fe:tree_test.exe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          .\tree_test.exe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cd ..\..\..
+          $env:PYTHONIOENCODING = "utf-8"
+          Get-ChildItem tests\test_*.py | ForEach-Object {
+            Write-Host "Running $($_.Name)"
+            $env:TELEPY_SUPPRESS_OUTPUT = "1"
+            python -m unittest $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+
+      - name: Run tests with retry (Attempt 3) - Unix
+        if: runner.os != 'Windows' && steps.test_attempt_2_unix.outcome == 'failure'
+        id: test_attempt_3_unix
         run: |
           PKG_NAME=$(python setup.py --name)
           cd src/$PKG_NAME/telepysys
@@ -110,10 +157,37 @@ jobs:
             TELEPY_SUPPRESS_OUTPUT=1 python -m unittest $file || exit 1
           done
 
-      - name: Check test results
-        if: steps.test_attempt_1.outcome == 'failure' && steps.test_attempt_2.outcome == 'failure' && steps.test_attempt_3.outcome == 'failure'
+      - name: Run tests with retry (Attempt 3) - Windows
+        if: runner.os == 'Windows' && steps.test_attempt_2_windows.outcome == 'failure'
+        id: test_attempt_3_windows
+        shell: pwsh
+        run: |
+          $PKG_NAME = python setup.py --name
+          cd "src/$PKG_NAME/telepysys"
+          cl /EHsc /W4 /std:c++14 /DTELEPY_TEST tree.cc /Fe:tree_test.exe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          .\tree_test.exe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cd ..\..\..
+          $env:PYTHONIOENCODING = "utf-8"
+          Get-ChildItem tests\test_*.py | ForEach-Object {
+            Write-Host "Running $($_.Name)"
+            $env:TELEPY_SUPPRESS_OUTPUT = "1"
+            python -m unittest $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+
+      - name: Check test results - Unix
+        if: runner.os != 'Windows' && steps.test_attempt_1_unix.outcome == 'failure' && steps.test_attempt_2_unix.outcome == 'failure' && steps.test_attempt_3_unix.outcome == 'failure'
         run: |
           echo "Tests failed after 3 attempts"
+          exit 1
+
+      - name: Check test results - Windows
+        if: runner.os == 'Windows' && steps.test_attempt_1_windows.outcome == 'failure' && steps.test_attempt_2_windows.outcome == 'failure' && steps.test_attempt_3_windows.outcome == 'failure'
+        shell: pwsh
+        run: |
+          Write-Host "Tests failed after 3 attempts"
           exit 1
 
   coverage:

@@ -62,7 +62,10 @@ class TestConfigCommand(CommandTemplate):
         # Run telepy with --create-config (without TELEPY_SUPPRESS_OUTPUT)
         self.run_command_with_output(
             ["--create-config"],
-            stdout_check_list=["Created example configuration file", ".telepy/.telepyrc"],
+            stdout_check_list=[
+                "Created example configuration file",
+                r"\.telepy.*\.telepyrc",
+            ],
             exit_code=0,
         )
 

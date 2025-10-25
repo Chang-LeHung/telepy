@@ -139,7 +139,7 @@ class TestCaseInsensitiveFrequencyCompleter(unittest.TestCase):
         for cmd in unicode_commands:
             self.completer.add_command(cmd)
 
-        with open(self.history_file.name) as f:
+        with open(self.history_file.name, encoding="utf-8") as f:
             lines = [line.strip() for line in f.readlines()]
 
         for cmd in unicode_commands:

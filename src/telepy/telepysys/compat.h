@@ -116,4 +116,103 @@ PyModule_AddObjectRef(PyObject* module, const char* name, PyObject* value) {
 // Python 3.13 specific compatibility if needed
 #endif
 
+/*
+ * Platform-specific compatibility
+ * Windows vs Unix differences
+ */
+
+// Platform detection
+#if defined(_WIN32) || defined(_WIN64) || defined(__CYGWIN__)
+#define TELEPY_PLATFORM_WINDOWS 1
+#define TELEPY_PLATFORM_UNIX 0
+#else
+#define TELEPY_PLATFORM_WINDOWS 0
+#define TELEPY_PLATFORM_UNIX 1
+#endif
+
+#if TELEPY_PLATFORM_WINDOWS
+
+// Windows-specific includes
+#include <process.h>
+#include <windows.h>
+
+// Include time.h before defining timespec to avoid conflicts
+#include <time.h>
+
+/*
+ * sched_yield() equivalent for Windows
+ * On Windows, use SwitchToThread() which yields execution to another thread
+ */
+static inline int
+sched_yield(void) {
+    SwitchToThread();
+    return 0;
+}
+
+/*
+ * clock_gettime() implementation for Windows
+ * Windows doesn't have clock_gettime, so we implement it using QueryPerformanceCounter
+ */
+
+// Note: Modern Windows 10+ SDKs define struct timespec in time.h
+// We don't need to define it ourselves for recent SDK versions.
+// Only define timespec for very old Windows SDKs that don't have it.
+// The guards below prevent redefinition errors.
+
+// Define CLOCK_MONOTONIC for Windows
+#ifndef CLOCK_MONOTONIC
+#define CLOCK_MONOTONIC 1
+#endif
+
+static inline int
+clock_gettime(int clk_id, struct timespec* tp) {
+    (void)clk_id;  // Unused on Windows
+
+    static LARGE_INTEGER frequency = {0};
+    LARGE_INTEGER counter;
+
+    // Initialize frequency on first call
+    if (frequency.QuadPart == 0) {
+        QueryPerformanceFrequency(&frequency);
+    }
+
+    QueryPerformanceCounter(&counter);
+
+    // Convert to seconds and nanoseconds
+    tp->tv_sec = (time_t)(counter.QuadPart / frequency.QuadPart);
+    tp->tv_nsec =
+        (long)(((counter.QuadPart % frequency.QuadPart) * 1000000000LL) /
+               frequency.QuadPart);
+
+    return 0;
+}
+
+/*
+ * nanosleep() implementation for Windows
+ * Windows doesn't have nanosleep, so we implement it using Sleep
+ */
+static inline int
+nanosleep(const struct timespec* req, struct timespec* rem) {
+    (void)rem;  // Windows Sleep doesn't support remaining time
+
+    // Convert to milliseconds
+    DWORD milliseconds = (DWORD)(req->tv_sec * 1000 + req->tv_nsec / 1000000);
+
+    // Sleep for at least 1ms if any time was requested
+    if (milliseconds == 0 && (req->tv_sec > 0 || req->tv_nsec > 0)) {
+        milliseconds = 1;
+    }
+
+    Sleep(milliseconds);
+    return 0;
+}
+#else  // Unix platforms
+
+// Unix-specific includes
+#include <pthread.h>
+#include <sched.h>
+#include <unistd.h>
+
+#endif  // TELEPY_PLATFORM_WINDOWS
+
 #endif  // TELEPYSYS_COMPAT_H

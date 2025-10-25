@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import threading
+import unittest
 
 import telepy
 from telepy.sampler import SamplerMiddleware
@@ -332,6 +334,9 @@ class TestAsyncSamplerMiddleware(TestBase):
             result += i * i
         return result
 
+    @unittest.skipIf(
+        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    )
     def test_async_sampler_middleware(self):
         """Test middleware with TelepySysAsyncSampler."""
         # Skip if not in main thread (async sampler requirement)
@@ -357,6 +362,9 @@ class TestAsyncSamplerMiddleware(TestBase):
         sampler.dumps()  # This should trigger middleware
         self.assertEqual(middleware.calls["process_dump"], 1)
 
+    @unittest.skipIf(
+        sys.platform == "win32", "AsyncWorkerSampler not supported on Windows"
+    )
     def test_worker_sampler_middleware(self):
         """Test middleware with TelepySysAsyncWorkerSampler."""
 
@@ -719,6 +727,9 @@ class TestPyTorchProfilerMiddleware(TestBase):
             content = f.read()
         self.assertGreater(len(content), 0, "Statistics file should not be empty")
 
+    @unittest.skipIf(
+        sys.platform == "win32", "TelepySysAsyncSampler not supported on Windows"
+    )
     def test_pytorch_middleware_with_async_sampler(self):
         """Test PyTorchProfilerMiddleware with async sampler."""
         if not self.torch_available:
@@ -856,6 +867,7 @@ class TestPyTorchProfilerCLI(CommandTemplate):
         self.temp_dirs.append(temp_dir)
         return temp_dir
 
+    @unittest.skipIf(sys.platform == "win32", "Skip PyTorch CLI tests on Windows")
     def test_torch_profile_basic(self):
         """Test: telepy test_torch.py --torch-profile -- --epochs 1."""
         if not self.torch_available:
@@ -895,6 +907,7 @@ class TestPyTorchProfilerCLI(CommandTemplate):
         stats_files = [f for f in files if f.startswith("profiler_stats_")]
         self.assertGreater(len(stats_files), 0, "No profiler statistics files found")
 
+    @unittest.skipIf(sys.platform == "win32", "Skip PyTorch CLI tests on Windows")
     def test_torch_profile_with_verbose(self):
         """Test torch profiler with --debug --verbose flags."""
         if not self.torch_available:
@@ -932,6 +945,7 @@ class TestPyTorchProfilerCLI(CommandTemplate):
         stats_files = [f for f in files if f.startswith("profiler_stats_")]
         self.assertGreater(len(stats_files), 0, "No stats files found")
 
+    @unittest.skipIf(sys.platform == "win32", "Skip PyTorch CLI tests on Windows")
     def test_torch_profile_without_chrome_trace(self):
         """Test PyTorch profiler with chrome trace disabled."""
         if not self.torch_available:
@@ -968,6 +982,7 @@ class TestPyTorchProfilerCLI(CommandTemplate):
         stats_files = [f for f in files if f.startswith("profiler_stats_")]
         self.assertGreater(len(stats_files), 0, "Stats files should exist")
 
+    @unittest.skipIf(sys.platform == "win32", "Skip PyTorch CLI tests on Windows")
     def test_torch_profile_custom_activities(self):
         """Test PyTorch profiler with custom activities."""
         if not self.torch_available:
