@@ -104,7 +104,7 @@ class TestFocusMode(TestBase):
         def simple_function():
             """A simple function to sample."""
             s = 0
-            for i in range(10000):
+            for i in range(100000):
                 for j in range(1000):
                     s += 1
             return s
